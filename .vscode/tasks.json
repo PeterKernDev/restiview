@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Clean, Get, Run",
+      "type": "shell",
+      "command": "flutter clean && flutter pub get && flutter run",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

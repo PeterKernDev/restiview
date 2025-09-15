@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "898612151216",
+    "firebase_url": "https://restiview-bb851.firebaseio.com",
+    "project_id": "restiview-bb851",
+    "storage_bucket": "restiview-bb851.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:898612151216:android:c11983eef0e0ec38",
+        "android_client_info": {
+          "package_name": "com.example.restiview"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:898612151216:android:f954df5584c4b4a2694c75",
+        "android_client_info": {
+          "package_name": "com.example.restiview2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
