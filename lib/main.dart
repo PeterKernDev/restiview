@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'landing_screen.dart';
 import 'signin_screen.dart';
 import 'help_screen.dart';
-import 'main_screen.dart'; // ✅ Import the MainScreen
+import 'top_screen.dart'; // ✅ Import the MainScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
             final userName = settings.arguments as String? ?? 'Guest';
             debugPrint('🟢 Routing to MainScreen with userName: $userName');
             return MaterialPageRoute(
-              builder: (_) => MainScreen(userName: userName),
+              builder: (_) => TopScreen(userName: userName),
             );
 
           default:

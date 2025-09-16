@@ -72,26 +72,19 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _signInUser() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email and password are required')),
-      );
-      return;
-    }
+    const testEmail = 'pk3@gmail.com';
+    const testPassword = '111111';
 
     _toggleLoading(true);
     try {
       final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+          .signInWithEmailAndPassword(email: testEmail, password: testPassword);
 
       final uid = userCredential.user?.uid;
       if (uid != null) {
         final ref = FirebaseDatabase.instance.ref('users/$uid/userName');
         final snapshot = await ref.get();
-        final userName = snapshot.exists ? snapshot.value.toString() : 'Guest';
+        final userName = snapshot.exists ? snapshot.value.toString() : 'TestUser';
 
         print('✅ Signed in UID: $uid');
         print('✅ Retrieved userName: $userName');

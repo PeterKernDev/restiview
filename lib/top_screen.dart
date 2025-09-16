@@ -1,14 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'general_screen.dart';
+import 'list_screen.dart';
+import 'sub_preview_screen/review_context.dart';
 
-class MainScreen extends StatelessWidget {
+class TopScreen extends StatefulWidget {
   final String userName;
 
-  const MainScreen({super.key, required this.userName});
+  const TopScreen({super.key, required this.userName});
+
+  @override
+  State<TopScreen> createState() => _TopScreenState();
+}
+
+class _TopScreenState extends State<TopScreen> {
+  bool _isLoading = false;
 
   void _signOut(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
     Navigator.pushReplacementNamed(context, '/');
+  }
+
+  Future<void> _handleViewReviews() async {
+    setState(() => _isLoading = true);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    final reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
+    final snapshot = await reviewsRef.get();
+    setState(() => _isLoading = false);
+
+    if (snapshot.exists && snapshot.value is Map) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ReviewListScreen()),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('No Reviews Found'),
+          content: const Text('You haven’t submitted any reviews yet.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _startNewReview() {
+    final newContext = ReviewContext(
+      reviewMap: {},
+      isEditing: false,
+      reviewKey: null,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GeneralScreen(context: newContext),
+      ),
+    );
   }
 
   @override
@@ -16,10 +79,7 @@ class MainScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.green,
-        title: Text(
-          'RestiView : $userName',
-          style: const TextStyle(color: Colors.white),
-        ),
+        title: Text('RestiView : ${widget.userName}', style: const TextStyle(color: Colors.white)),
         centerTitle: true,
       ),
       body: Padding(
@@ -28,11 +88,7 @@ class MainScreen extends StatelessWidget {
           children: [
             const Text(
               '*** Restaurant Reviews ***',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.red),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -42,7 +98,7 @@ class MainScreen extends StatelessWidget {
                 foregroundColor: Colors.black,
                 minimumSize: const Size(double.infinity, 48),
               ),
-              onPressed: () => Navigator.pushNamed(context, '/addReview'),
+              onPressed: _startNewReview,
               child: const Text('ADD REVIEW'),
             ),
             const SizedBox(height: 16),
@@ -52,8 +108,10 @@ class MainScreen extends StatelessWidget {
                 foregroundColor: Colors.black,
                 minimumSize: const Size(double.infinity, 48),
               ),
-              onPressed: () => Navigator.pushNamed(context, '/viewReviews'),
-              child: const Text('VIEW REVIEWS'),
+              onPressed: _isLoading ? null : _handleViewReviews,
+              child: _isLoading
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('VIEW REVIEWS'),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
