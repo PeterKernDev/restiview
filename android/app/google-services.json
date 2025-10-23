@@ -43,6 +43,44 @@
           "other_platform_oauth_client": []
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:898612151216:android:9245a2ede82ef3d7694c75",
+        "android_client_info": {
+          "package_name": "com.restiview.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:898612151216:android:ef38e0d530f7f0f5694c75",
+        "android_client_info": {
+          "package_name": "com.restiview2.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
   ],
   "configuration_version": "1"

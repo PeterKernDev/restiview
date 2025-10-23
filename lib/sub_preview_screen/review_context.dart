@@ -1,9 +1,11 @@
-// lib/models/review_context.dart
+// review_context.dart
+//
+// Holds review data and editing state for navigation between screens.
 
 class ReviewContext {
-  final Map<String, dynamic> reviewMap;
-  final bool isEditing;
-  final String? reviewKey;
+  Map<String, dynamic> reviewMap;
+  bool isEditing; // ✅ Now mutable
+  String? reviewKey; // ✅ No longer final
 
   ReviewContext({
     required this.reviewMap,

@@ -1,4 +1,4 @@
-package com.example.restiview
+package com.restiview.app
 
 import io.flutter.embedding.android.FlutterActivity
 

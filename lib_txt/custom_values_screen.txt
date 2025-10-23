@@ -1,0 +1,836 @@
+// custom_values_screen.dart
+// Full file with all uses of BuildContext guarded after async gaps.
+// Each method checks `if (!mounted) return;` before using context, ScaffoldMessenger, or setState.
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/material.dart';
+import 'constants/restiview_constants.dart';
+import 'constants/colours.dart';
+import 'constants/strings.dart';
+import 'settings_screen.dart';
+import 'top_screen.dart';
+import 'services/session_cache.dart';
+
+class CustomValuesScreen extends StatefulWidget {
+  const CustomValuesScreen({super.key});
+
+  @override
+  State<CustomValuesScreen> createState() => _CustomValuesScreenState();
+}
+
+class _CustomValuesScreenState extends State<CustomValuesScreen> {
+  // Cuisine controllers
+  final TextEditingController _cuisineController = TextEditingController();
+  final TextEditingController _cuisineEditController = TextEditingController();
+  bool _isEditingCuisine = false;
+  String _selectedCuisine = '';
+
+  // Occasion controllers (mirrors cuisine)
+  final TextEditingController _occasionController = TextEditingController();
+  final TextEditingController _occasionEditController = TextEditingController();
+  bool _isEditingOccasion = false;
+  String _selectedOccasion = '';
+
+  // Country
+  String _selectedCountry = '';
+
+  bool _isBusy = false;
+
+  Future<T?> _withBusy<T>(Future<T> Function() action) async {
+    if (_isBusy || !mounted) return null;
+    setState(() => _isBusy = true);
+    T? res;
+    try {
+      res = await action();
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+    return res;
+  }
+
+  void printDebug(String msg) => debugPrint('CVS_DEBUG: $msg');
+
+  List<List<dynamic>> _parsePairList(dynamic raw) {
+    if (raw is List) {
+      return raw.map<List<dynamic>>((item) {
+        if (item is List) return List<dynamic>.from(item);
+        if (item is Map) return item.values.toList();
+        return [item, 0];
+      }).toList();
+    }
+    return <List<dynamic>>[];
+  }
+
+  List<String> _mergedAndSorted(List<String> system, List<String> custom) {
+    final merged = <String>[];
+    for (final s in system) if (!merged.contains(s)) merged.add(s);
+    for (final c in custom) if (!merged.contains(c)) merged.add(c);
+    merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return merged;
+  }
+
+  // ---------------- Cuisine handlers ----------------
+  Future<void> _saveEditedCuisine() async {
+    final edited = _cuisineEditController.text.trim();
+    printDebug('saveEditedCuisine entered; selected="$_selectedCuisine" edited="$edited"');
+
+    if (edited.isEmpty || edited.length > 24) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
+      printDebug('saveEditedCuisine: invalid length/empty');
+      return;
+    }
+
+    if (_selectedCuisine.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
+      printDebug('saveEditedCuisine: no selection');
+      return;
+    }
+
+    if (edited == _selectedCuisine) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      printDebug('saveEditedCuisine: value unchanged');
+      return;
+    }
+
+    final mergedList = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
+    final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
+    if (isDuplicate) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
+      printDebug('saveEditedCuisine: duplicate');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      printDebug('saveEditedCuisine: no uid');
+      return;
+    }
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+    if (!snapshot.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
+      printDebug('saveEditedCuisine: no snapshot');
+      return;
+    }
+
+    final data = snapshot.value as Map<dynamic, dynamic>;
+    final cuisineList = _parsePairList(data['cuisine']);
+    final index = cuisineList.indexWhere((pair) => pair[0] == _selectedCuisine);
+    if (index == -1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected cuisine not found')));
+      printDebug('saveEditedCuisine: index -1');
+      return;
+    }
+
+    if (cuisineList[index][1] == 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedCuisine" ${AppStr.usedInReview}')));
+      printDebug('saveEditedCuisine: usedInReview');
+      return;
+    }
+
+    cuisineList[index][0] = edited;
+    await ref.update({'cuisine': cuisineList});
+    if (!mounted) return;
+    printDebug('saveEditedCuisine: DB updated');
+
+    final merged = <String>[];
+    for (final s in systemCuisines) if (!merged.contains(s)) merged.add(s);
+    for (final pair in cuisineList) {
+      final name = pair[0] as String;
+      if (!merged.contains(name)) merged.add(name);
+    }
+    merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    SessionCache.customCuisines = merged;
+
+    if (!mounted) return;
+    setState(() {
+      _isEditingCuisine = false;
+      _selectedCuisine = edited;
+      _cuisineEditController.clear();
+      _cuisineController.clear();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.updatedCuisine}')));
+    printDebug('saveEditedCuisine finished; selected="$edited"');
+  }
+
+  Future<void> _addCustomCuisine() async {
+    final newCuisine = _cuisineController.text.trim();
+    printDebug('addCustomCuisine entered new="$newCuisine"');
+
+    if (newCuisine.isEmpty || newCuisine.length > 24) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
+      printDebug('addCustomCuisine: invalid length/empty');
+      return;
+    }
+
+    final exists = _mergedAndSorted(systemCuisines, SessionCache.customCuisines)
+        .any((c) => c.toLowerCase() == newCuisine.toLowerCase());
+    if (exists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.alreadyExists}')));
+      printDebug('addCustomCuisine: duplicate');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+
+    List<List<dynamic>> updatedCustoms = [];
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+      updatedCustoms = _parsePairList(data['cuisine']);
+      updatedCustoms.add([newCuisine, 0]);
+      await ref.update({'cuisine': updatedCustoms});
+    } else {
+      updatedCustoms = [[newCuisine, 0]];
+      await ref.set({'cuisine': updatedCustoms, 'occasion': [], 'country': []});
+    }
+
+    if (!mounted) return;
+    final merged = <String>[];
+    for (final s in systemCuisines) if (!merged.contains(s)) merged.add(s);
+    for (final pair in updatedCustoms) {
+      final name = pair[0] as String;
+      if (!merged.contains(name)) merged.add(name);
+    }
+    merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    SessionCache.customCuisines = merged;
+
+    if (!mounted) return;
+    setState(() {
+      _selectedCuisine = newCuisine;
+      _cuisineController.clear();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.addedToCuisines}')));
+    printDebug('addCustomCuisine finished; selected="$newCuisine"');
+  }
+
+  Future<void> _removeCustomCuisine() async {
+    final selected = _selectedCuisine;
+    printDebug('removeCustomCuisine entered selected="$selected"');
+
+    if (systemCuisines.contains(selected)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInCuisineBlock)));
+      printDebug('removeCustomCuisine: built-in block');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+    if (!snapshot.exists) return;
+
+    final data = snapshot.value as Map<dynamic, dynamic>;
+    final cuisineList = _parsePairList(data['cuisine']);
+    final index = cuisineList.indexWhere((pair) => pair[0] == selected);
+    if (index == -1) {
+      printDebug('removeCustomCuisine: index -1');
+      return;
+    }
+
+    if (cuisineList[index][1] == 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
+      printDebug('removeCustomCuisine: usedInReview');
+      return;
+    }
+
+    cuisineList.removeAt(index);
+    await ref.update({'cuisine': cuisineList});
+    if (!mounted) return;
+    SessionCache.customCuisines = _mergedAndSorted(systemCuisines, cuisineList.map((p) => p[0] as String).toList());
+
+    if (!mounted) return;
+    setState(() {
+      _selectedCuisine = SessionCache.customCuisines.isNotEmpty ? SessionCache.customCuisines.first : '';
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
+    printDebug('removeCustomCuisine finished; new selected="$_selectedCuisine"');
+  }
+
+  // ---------------- Occasion handlers (mirror cuisine) ----------------
+  Future<void> _saveEditedOccasion() async {
+    final edited = _occasionEditController.text.trim();
+    printDebug('saveEditedOccasion entered; selected="$_selectedOccasion" edited="$edited"');
+
+    if (edited.isEmpty || edited.length > 24) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
+      printDebug('saveEditedOccasion: invalid length/empty');
+      return;
+    }
+
+    if (_selectedOccasion.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
+      printDebug('saveEditedOccasion: no selection');
+      return;
+    }
+
+    if (edited == _selectedOccasion) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      printDebug('saveEditedOccasion: value unchanged');
+      return;
+    }
+
+    final mergedList = _mergedAndSorted(systemOccasions, SessionCache.customOccasions);
+    final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
+    if (isDuplicate) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
+      printDebug('saveEditedOccasion: duplicate');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      printDebug('saveEditedOccasion: no uid');
+      return;
+    }
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+    if (!snapshot.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
+      printDebug('saveEditedOccasion: no snapshot');
+      return;
+    }
+
+    final data = snapshot.value as Map<dynamic, dynamic>;
+    final occasionList = _parsePairList(data['occasion']);
+    final index = occasionList.indexWhere((pair) => pair[0] == _selectedOccasion);
+    if (index == -1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected occasion not found')));
+      printDebug('saveEditedOccasion: index -1');
+      return;
+    }
+
+    if (occasionList[index][1] == 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedOccasion" ${AppStr.usedInReview}')));
+      printDebug('saveEditedOccasion: usedInReview');
+      return;
+    }
+
+    occasionList[index][0] = edited;
+    await ref.update({'occasion': occasionList});
+    if (!mounted) return;
+    printDebug('saveEditedOccasion: DB updated');
+
+    final merged = <String>[];
+    for (final s in systemOccasions) if (!merged.contains(s)) merged.add(s);
+    for (final pair in occasionList) {
+      final name = pair[0] as String;
+      if (!merged.contains(name)) merged.add(name);
+    }
+    merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    SessionCache.customOccasions = merged;
+
+    if (!mounted) return;
+    setState(() {
+      _isEditingOccasion = false;
+      _selectedOccasion = edited;
+      _occasionEditController.clear();
+      _occasionController.clear();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.addedToOccasions}')));
+    printDebug('saveEditedOccasion finished; selected="$edited"');
+  }
+
+  Future<void> _addCustomOccasionLocal() async {
+    final newOccasion = _occasionController.text.trim();
+    printDebug('addCustomOccasion entered new="$newOccasion"');
+
+    if (newOccasion.isEmpty || newOccasion.length > 24) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
+      printDebug('addCustomOccasion: invalid length/empty');
+      return;
+    }
+
+    final exists = _mergedAndSorted(systemOccasions, SessionCache.customOccasions)
+        .any((c) => c.toLowerCase() == newOccasion.toLowerCase());
+    if (exists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')));
+      printDebug('addCustomOccasion: duplicate');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+
+    List<List<dynamic>> updatedOccasions = [];
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+      updatedOccasions = _parsePairList(data['occasion']);
+      updatedOccasions.add([newOccasion, 0]);
+      await ref.update({'occasion': updatedOccasions});
+    } else {
+      updatedOccasions = [[newOccasion, 0]];
+      await ref.set({'cuisine': [], 'occasion': updatedOccasions, 'country': []});
+    }
+
+    if (!mounted) return;
+    final merged = <String>[];
+    for (final s in systemOccasions) if (!merged.contains(s)) merged.add(s);
+    for (final pair in updatedOccasions) {
+      final name = pair[0] as String;
+      if (!merged.contains(name)) merged.add(name);
+    }
+    merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    SessionCache.customOccasions = merged;
+
+    if (!mounted) return;
+    setState(() {
+      _selectedOccasion = newOccasion;
+      _occasionController.clear();
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')));
+    printDebug('addCustomOccasion finished; selected="$newOccasion"');
+  }
+
+  Future<void> _removeCustomOccasionLocal() async {
+    final selected = _selectedOccasion;
+    printDebug('removeCustomOccasion entered selected="$selected"');
+
+    if (systemOccasions.contains(selected)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInValue)));
+      printDebug('removeCustomOccasion: built-in block');
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+    if (!snapshot.exists) return;
+
+    final data = snapshot.value as Map<dynamic, dynamic>;
+    final occasionList = _parsePairList(data['occasion']);
+    final index = occasionList.indexWhere((pair) => pair[0] == selected);
+    if (index == -1) {
+      printDebug('removeCustomOccasion: index -1');
+      return;
+    }
+
+    if (occasionList[index][1] == 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
+      printDebug('removeCustomOccasion: usedInReview');
+      return;
+    }
+
+    occasionList.removeAt(index);
+    await ref.update({'occasion': occasionList});
+    if (!mounted) return;
+    SessionCache.customOccasions = _mergedAndSorted(systemOccasions, occasionList.map((p) => p[0] as String).toList());
+
+    if (!mounted) return;
+    setState(() {
+      _selectedOccasion = SessionCache.customOccasions.isNotEmpty ? SessionCache.customOccasions.first : '';
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
+    printDebug('removeCustomOccasion finished; new selected="$_selectedOccasion"');
+  }
+
+  // ---------------- Country handlers (unchanged) ----------------
+  Future<void> _addCustomCountry() async {
+    final newCountry = _selectedCountry.trim();
+    if (!allCountries.contains(newCountry)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.notApprovedCountry}')));
+      return;
+    }
+    final exists = _mergedAndSorted(getSystemCountryNames(), SessionCache.customCountries)
+        .any((c) => c.toLowerCase() == newCountry.toLowerCase());
+    if (exists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.alreadyInList}')));
+      return;
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final snapshot = await ref.get();
+    if (!mounted) return;
+    List<String> updatedCountries = [];
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+      updatedCountries = List<String>.from(data['country'] ?? []);
+      updatedCountries.add(newCountry);
+      await ref.update({'country': updatedCountries});
+    } else {
+      updatedCountries = [newCountry];
+      await ref.set({'cuisine': [], 'occasion': [], 'country': updatedCountries});
+    }
+    if (!mounted) return;
+    SessionCache.customCountries = _mergedAndSorted(getSystemCountryNames(), updatedCountries);
+    if (!mounted) return;
+    setState(() => _selectedCountry = newCountry);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.addedToCountries}')));
+    printDebug('addCustomCountry finished new="$newCountry"');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCuisine = '';
+    _selectedOccasion = '';
+    _selectedCountry = '';
+  }
+
+  @override
+  void dispose() {
+    _cuisineController.dispose();
+    _cuisineEditController.dispose();
+    _occasionController.dispose();
+    _occasionEditController.dispose();
+    super.dispose();
+  }
+
+  void _goBackToSettings() {
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  }
+
+  void _goToTopScreen() {
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TopScreen()));
+  }
+
+  // ---------------- UI ----------------
+  @override
+  Widget build(BuildContext context) {
+    final extendedCuisines = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
+    final extendedOccasions = _mergedAndSorted(systemOccasions, SessionCache.customOccasions);
+    final countryList = _mergedAndSorted(getSystemCountryNames(), SessionCache.customCountries);
+
+    return Scaffold(
+      backgroundColor: AppColors.beige,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.darkGreen,
+        title: const Text(
+          AppStr.customValuesTitle,
+          style: TextStyle(fontFamily: 'Gelica', fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const SizedBox(height: 8),
+
+            // ---------------- Cuisine UI ----------------
+            TextField(
+              controller: _isEditingCuisine ? _cuisineEditController : _cuisineController,
+              decoration: InputDecoration(labelText: _isEditingCuisine ? AppStr.editCuisineLabel : AppStr.newCuisineLabel),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: extendedCuisines.contains(_selectedCuisine) ? _selectedCuisine : null,
+              hint: const Text('Select cuisine'),
+              items: extendedCuisines.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (value) {
+                if (!mounted) return;
+                setState(() {
+                  _selectedCuisine = value ?? '';
+                  if (_isEditingCuisine) _cuisineEditController.text = _selectedCuisine;
+                });
+              },
+              decoration: const InputDecoration(labelText: AppStr.currentCuisinesLabel),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          printDebug('Add cuisine pressed');
+                          _withBusy(() async => await _addCustomCuisine());
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.darkGreen, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.add, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          printDebug('Remove cuisine pressed; selected="$_selectedCuisine"');
+                          _withBusy(() async => await _removeCustomCuisine());
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.removeButton, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          if (_selectedCuisine.isEmpty) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
+                            return;
+                          }
+                          printDebug('Edit cuisine pressed; selected="$_selectedCuisine"');
+                          setState(() {
+                            _isEditingCuisine = true;
+                            _cuisineEditController.text = _selectedCuisine;
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.edit, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+
+              const SizedBox(width: 24),
+
+              SizedBox(
+                width: 40,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: (!_isEditingCuisine || _isBusy)
+                      ? null
+                      : () {
+                          printDebug('Tick cuisine pressed; selected="$_selectedCuisine" edit="${_cuisineEditController.text}"');
+                          _withBusy(() async => await _saveEditedCuisine()).then((_) => printDebug('Tick cuisine finished'));
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: _isEditingCuisine ? Colors.lightGreenAccent : Colors.grey[300], disabledBackgroundColor: Colors.grey[300], padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+                  child: const Icon(Icons.check, color: Colors.black, size: 20),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              SizedBox(
+                width: 40,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: () {
+                    printDebug('Clear cuisine pressed; clearing EF and DD');
+                    setState(() {
+                      _isEditingCuisine = false;
+                      _cuisineEditController.clear();
+                      _cuisineController.clear();
+                      _selectedCuisine = '';
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade100, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+                  child: const Icon(Icons.close, color: Colors.black, size: 20),
+                ),
+              ),
+            ]),
+
+            const Divider(height: 32, thickness: 1),
+
+            // ---------------- Occasion UI (mirrors Cuisine) ----------------
+            TextField(
+              controller: _isEditingOccasion ? _occasionEditController : _occasionController,
+              decoration: InputDecoration(labelText: _isEditingOccasion ? 'Edit occasion' : AppStr.occasionLabel),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: extendedOccasions.contains(_selectedOccasion) ? _selectedOccasion : null,
+              hint: const Text('Select occasion'),
+              items: extendedOccasions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (value) {
+                if (!mounted) return;
+                setState(() {
+                  _selectedOccasion = value ?? '';
+                  if (_isEditingOccasion) _occasionEditController.text = _selectedOccasion;
+                });
+              },
+              decoration: const InputDecoration(labelText: AppStr.currentOccasionsLabel),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          printDebug('Add occasion pressed');
+                          _withBusy(() async => await _addCustomOccasionLocal());
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.darkGreen, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.addOccasion, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          printDebug('Remove occasion pressed; selected="$_selectedOccasion"');
+                          _withBusy(() async => await _removeCustomOccasionLocal());
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.removeOccasion, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 64,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          if (_selectedOccasion.isEmpty) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
+                            return;
+                          }
+                          printDebug('Edit occasion pressed; selected="$_selectedOccasion"');
+                          setState(() {
+                            _isEditingOccasion = true;
+                            _occasionEditController.text = _selectedOccasion;
+                          });
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text(AppStr.edit, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                ),
+              ),
+
+              const SizedBox(width: 24),
+
+              SizedBox(
+                width: 40,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: (!_isEditingOccasion || _isBusy)
+                      ? null
+                      : () {
+                          printDebug('Tick occasion pressed; selected="$_selectedOccasion" edit="${_occasionEditController.text}"');
+                          _withBusy(() async => await _saveEditedOccasion()).then((_) => printDebug('Tick occasion finished'));
+                        },
+                  style: ElevatedButton.styleFrom(backgroundColor: _isEditingOccasion ? Colors.lightGreenAccent : Colors.grey[300], disabledBackgroundColor: Colors.grey[300], padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+                  child: const Icon(Icons.check, color: Colors.black, size: 20),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              SizedBox(
+                width: 40,
+                height: 36,
+                child: ElevatedButton(
+                  onPressed: () {
+                    printDebug('Clear occasion pressed; clearing EF and DD');
+                    setState(() {
+                      _isEditingOccasion = false;
+                      _occasionEditController.clear();
+                      _occasionController.clear();
+                      _selectedOccasion = '';
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade100, padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
+                  child: const Icon(Icons.close, color: Colors.black, size: 20),
+                ),
+              ),
+            ]),
+
+            const Divider(height: 32, thickness: 1),
+
+            // ---------------- Country UI ----------------
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: countryList.contains(_selectedCountry) ? _selectedCountry : null,
+              hint: const Text('Select country'),
+              items: countryList.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (value) {
+                if (!mounted) return;
+                setState(() => _selectedCountry = value ?? '');
+              },
+              decoration: const InputDecoration(labelText: AppStr.countryLabel),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _isBusy ? null : () => _withBusy(() async => await _addCustomCountry()),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.black87, minimumSize: const Size(double.infinity, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+              child: const Text(AppStr.addCountry, style: TextStyle(fontFamily: 'Gelica')),
+            ),
+
+            const Divider(height: 32, thickness: 1),
+
+            const SizedBox(height: 36),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              ElevatedButton(
+                onPressed: _goBackToSettings,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre, foregroundColor: Colors.black, minimumSize: const Size(100, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                child: const Text(AppStr.back, style: TextStyle(fontFamily: 'Gelica')),
+              ),
+              ElevatedButton(
+                onPressed: _goToTopScreen,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: Colors.white, minimumSize: const Size(100, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                child: const Text(AppStr.done, style: TextStyle(fontFamily: 'Gelica')),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
