@@ -9,7 +9,7 @@ import 'preview_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'sub_preview_screen/review_formatter.dart';
 import 'constants/restiview_constants.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 import 'constants/strings.dart'; // ✅ Centralized strings
 import 'services/session_cache.dart';
 

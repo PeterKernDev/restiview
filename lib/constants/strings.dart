@@ -204,7 +204,11 @@ class AppStr {
   static const edit = 'EDIT';
   static const updateSuccess = 'updated successfully';
   static const updatedCuisine = 'has been updated';
+  static const enterCustomCuisine = 'Please enter a custom cuisine';
+  static const enterCustomOccasion = 'Please enter a custom occasion';
+  static const updatedOccasion = 'has been updated';
+  static const editOccasionLabel = 'Edit occasion';
 
 
-
+  
 }

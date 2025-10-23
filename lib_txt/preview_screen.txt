@@ -1,5 +1,7 @@
 // preview_screen.dart
 //
+// Preview screen for showing a formatted review and allowing save/edit/delete actions.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,7 +17,6 @@ import 'sub_preview_screen/review_context.dart';
 import 'sub_preview_screen/review_formatter.dart' as formatter;
 // 🔔 Reminder: reverseFormatReviewData comes from review_transform.dart — used to restore saved reviews
 import 'sub_preview_screen/review_transform.dart';
-import 'list_screen.dart';
 import 'top_screen.dart';
 import 'general_screen.dart';
 
@@ -28,7 +29,8 @@ class PreviewScreen extends StatefulWidget {
   State<PreviewScreen> createState() => _PreviewScreenState();
 }
 
-  bool _isSaving = false;
+bool _isSaving = false;
+
 /// Extracts tags from binary string or list
 List<String> extractTags(dynamic rawValue, Map<String, dynamic> reviewMap) {
   final tagList = goodForTags;
@@ -107,7 +109,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
     if (!snapshot.exists) return true;
 
-    final data = snapshot.value as Map<dynamic, dynamic>; // ✅ Moved up
+    final data = snapshot.value as Map<dynamic, dynamic>;
 
     final duplicates = data.values.where((review) {
       final reviewMap = Map<String, dynamic>.from(review as Map);
@@ -141,469 +143,473 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
     return proceed ?? false;
   }
+
   //
   // Part 2
   //
   Future<void> saveReview() async {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null || reviewData == null) return;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || reviewData == null) return;
 
-  setState(() => _isSaving = true); // ✅ Show swirl
+    setState(() => _isSaving = true); // ✅ Show swirl
 
-  try {
-    final restName = reviewData?['restname']?.toString().trim() ?? '';
-    final reviewDate = reviewData?['reviewdate']?.toString().trim() ?? '';
-    final shouldProceed = await _checkForDuplicateReview(restName, reviewDate);
+    try {
+      final restName = reviewData?['restname']?.toString().trim() ?? '';
+      final reviewDate = reviewData?['reviewdate']?.toString().trim() ?? '';
+      final shouldProceed = await _checkForDuplicateReview(restName, reviewDate);
 
-    if (!shouldProceed) return;
+      if (!shouldProceed) return;
 
-    final newRef = FirebaseDatabase.instance.ref('users/$userId/reviews').push();
-    await newRef.set(reviewData);
+      final newRef = FirebaseDatabase.instance.ref('users/$userId/reviews').push();
+      await newRef.set(reviewData);
 
-    final cuisine = reviewData!['restcuisine'];
-    final occasion = reviewData!['coccasion'];
+      final cuisine = reviewData!['restcuisine'];
+      final occasion = reviewData!['coccasion'];
 
-    final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
-    final snapshot = await customRef.get();
+      final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
+      final snapshot = await customRef.get();
 
-    if (snapshot.exists) {
-      final data = snapshot.value as Map;
-      final updates = <String, dynamic>{};
+      if (snapshot.exists) {
+        final data = snapshot.value as Map;
+        final updates = <String, dynamic>{};
 
-      if (!systemCuisines.contains(cuisine) && data['cuisine'] is List) {
-        final List<dynamic> cuisines = List.from(data['cuisine']);
-        for (int i = 0; i < cuisines.length; i++) {
-          if (cuisines[i] is List && cuisines[i][0] == cuisine && cuisines[i][1] == 0) {
-            cuisines[i][1] = 1;
-            updates['cuisine'] = cuisines;
-            break;
+        if (!systemCuisines.contains(cuisine) && data['cuisine'] is List) {
+          final List<dynamic> cuisines = List.from(data['cuisine']);
+          for (int i = 0; i < cuisines.length; i++) {
+            if (cuisines[i] is List && cuisines[i][0] == cuisine && cuisines[i][1] == 0) {
+              cuisines[i][1] = 1;
+              updates['cuisine'] = cuisines;
+              break;
+            }
           }
         }
-      }
 
-      if (!systemOccasions.contains(occasion) &&
-          occasion != AppStr.defaultOccasion &&
-          data['occasion'] is List) {
-        final List<dynamic> occasions = List.from(data['occasion']);
-        for (int i = 0; i < occasions.length; i++) {
-          if (occasions[i] is List && occasions[i][0] == occasion && occasions[i][1] == 0) {
-            occasions[i][1] = 1;
-            updates['occasion'] = occasions;
-            break;
+        if (!systemOccasions.contains(occasion) &&
+            occasion != AppStr.defaultOccasion &&
+            data['occasion'] is List) {
+          final List<dynamic> occasions = List.from(data['occasion']);
+          for (int i = 0; i < occasions.length; i++) {
+            if (occasions[i] is List && occasions[i][0] == occasion && occasions[i][1] == 0) {
+              occasions[i][1] = 1;
+              updates['occasion'] = occasions;
+              break;
+            }
           }
         }
-      }
 
-      if (updates.isNotEmpty) {
-        await customRef.update(updates);
-      }
-    }
-
-    if (!mounted) return;
-    setState(() {
-      reviewKey = newRef.key;
-      widget.context.reviewKey = newRef.key;
-    });
-  } finally {
-    if (mounted) setState(() => _isSaving = false); // ✅ Hide swirl
-  }
-}
-
-Future<void> updateReview() async {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null || reviewData == null || reviewKey == null) return;
-
-  setState(() => _isSaving = true);
-
-  try {
-    // Update the review record
-    await FirebaseDatabase.instance
-        .ref('users/$userId/reviews/$reviewKey')
-        .update(reviewData!);
-
-    // Ensure custom cuisine/occasion flags are set to 1 if this edited review uses them
-    final cuisine = reviewData?['restcuisine'];
-    final occasion = reviewData?['coccasion'];
-
-    final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
-    final snapshot = await customRef.get();
-
-    if (snapshot.exists) {
-      final data = snapshot.value as Map;
-      final updates = <String, dynamic>{};
-
-      if (cuisine != null && !systemCuisines.contains(cuisine) && data['cuisine'] is List) {
-        final List<dynamic> cuisines = List.from(data['cuisine']);
-        for (int i = 0; i < cuisines.length; i++) {
-          if (cuisines[i] is List && cuisines[i][0] == cuisine && cuisines[i][1] == 0) {
-            cuisines[i][1] = 1;
-            updates['cuisine'] = cuisines;
-            break;
-          }
+        if (updates.isNotEmpty) {
+          await customRef.update(updates);
         }
       }
-
-      if (occasion != null &&
-          !systemOccasions.contains(occasion) &&
-          occasion != AppStr.defaultOccasion &&
-          data['occasion'] is List) {
-        final List<dynamic> occasions = List.from(data['occasion']);
-        for (int i = 0; i < occasions.length; i++) {
-          if (occasions[i] is List && occasions[i][0] == occasion && occasions[i][1] == 0) {
-            occasions[i][1] = 1;
-            updates['occasion'] = occasions;
-            break;
-          }
-        }
-      }
-
-      if (updates.isNotEmpty) {
-        await customRef.update(updates);
-      }
-    }
-  } finally {
-    if (mounted) setState(() => _isSaving = false);
-  }
-}
-
-Future<void> deleteReview() async {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null) return;
-
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text(AppStr.deleteTitle),
-      content: Text(
-        widget.context.reviewKey == null
-            ? AppStr.deletePendingMessage
-            : AppStr.deletePermanentMessage,
-        style: const TextStyle(fontFamily: 'Gelica'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text(AppStr.cancel),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text(AppStr.confirmDelete),
-        ),
-      ],
-    ),
-  );
-
-  if (confirm ?? false) {
-    if (!mounted) return;
-    if (widget.context.reviewKey == null) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => TopScreen()),
-        (route) => false,
-      );
-    } else {
-      await FirebaseDatabase.instance
-          .ref('users/$userId/reviews/${widget.context.reviewKey}')
-          .remove();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStr.reviewDeleted)),
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const ReviewListScreen()),
-      );
+      setState(() {
+        reviewKey = newRef.key;
+        widget.context.reviewKey = newRef.key;
+      });
+    } finally {
+      if (mounted) setState(() => _isSaving = false); // ✅ Hide swirl
     }
   }
-}
+
+  Future<void> updateReview() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || reviewData == null || reviewKey == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      // Update the review record
+      await FirebaseDatabase.instance
+          .ref('users/$userId/reviews/$reviewKey')
+          .update(reviewData!);
+
+      // Ensure custom cuisine/occasion flags are set to 1 if this edited review uses them
+      final cuisine = reviewData?['restcuisine'];
+      final occasion = reviewData?['coccasion'];
+
+      final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
+      final snapshot = await customRef.get();
+
+      if (snapshot.exists) {
+        final data = snapshot.value as Map;
+        final updates = <String, dynamic>{};
+
+        if (cuisine != null && !systemCuisines.contains(cuisine) && data['cuisine'] is List) {
+          final List<dynamic> cuisines = List.from(data['cuisine']);
+          for (int i = 0; i < cuisines.length; i++) {
+            if (cuisines[i] is List && cuisines[i][0] == cuisine && cuisines[i][1] == 0) {
+              cuisines[i][1] = 1;
+              updates['cuisine'] = cuisines;
+              break;
+            }
+          }
+        }
+
+        if (occasion != null &&
+            !systemOccasions.contains(occasion) &&
+            occasion != AppStr.defaultOccasion &&
+            data['occasion'] is List) {
+          final List<dynamic> occasions = List.from(data['occasion']);
+          for (int i = 0; i < occasions.length; i++) {
+            if (occasions[i] is List && occasions[i][0] == occasion && occasions[i][1] == 0) {
+              occasions[i][1] = 1;
+              updates['occasion'] = occasions;
+              break;
+            }
+          }
+        }
+
+        if (updates.isNotEmpty) {
+          await customRef.update(updates);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> deleteReview() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(AppStr.deleteTitle),
+        content: Text(
+          widget.context.reviewKey == null
+              ? AppStr.deletePendingMessage
+              : AppStr.deletePermanentMessage,
+          style: const TextStyle(fontFamily: 'Gelica'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(AppStr.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(AppStr.confirmDelete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm ?? false) {
+      if (!mounted) return;
+      if (widget.context.reviewKey == null) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => TopScreen()),
+          (route) => false,
+        );
+      } else {
+        await FirebaseDatabase.instance
+            .ref('users/$userId/reviews/${widget.context.reviewKey}')
+            .remove();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.reviewDeleted)),
+        );
+
+        // Use named route to avoid a circular import with list_screen.dart
+        Navigator.pushReplacementNamed(
+          context,
+          '/list',
+          arguments: {'newReviewKey': null},
+        );
+      }
+    }
+  }
 
   void goToList() {
+    // Use named route to avoid a circular import with list_screen.dart
+    Navigator.pushReplacementNamed(
+      context,
+      '/list',
+      arguments: {'newReviewKey': widget.context.reviewKey},
+    );
+  }
+
+  void goToEditFlow() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => ReviewListScreen(newReviewKey: widget.context.reviewKey),
+        builder: (_) => GeneralScreen(context: widget.context),
       ),
     );
   }
 
-void goToEditFlow() {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => GeneralScreen(context: widget.context),
-    ),
-  );
-}
-
-String _formatCost(dynamic value) {
-  if (value == null || value.toString().trim().isEmpty) return '';
-  try {
-    final parsed = double.tryParse(value.toString());
-    return parsed?.toStringAsFixed(2) ?? '';
-  } catch (_) {
-    return '';
+  String _formatCost(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return '';
+    try {
+      final parsed = double.tryParse(value.toString());
+      return parsed?.toStringAsFixed(2) ?? '';
+    } catch (_) {
+      return '';
+    }
   }
-}
 
-Widget _alignedRatingRow(String label, dynamic value) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            '$label:',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica'),
+  Widget _alignedRatingRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica'),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          value?.toString() ?? '',
-          style: const TextStyle(fontFamily: 'Gelica'),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(width: 8),
+          Text(
+            value?.toString() ?? '',
+            style: const TextStyle(fontFamily: 'Gelica'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // 
   // Part 3
   //
-@override
-Widget build(BuildContext context) {
-  if (reviewData == null) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
+  @override
+  Widget build(BuildContext context) {
+    if (reviewData == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-  final int totalRating = int.tryParse(reviewData!['restrating']?.toString() ?? '') ?? 0;
-  final int michelinStars = int.tryParse(reviewData!['rmichlin']?.toString() ?? '0') ?? 0;
-  final goodForTags = extractTags(reviewData!['goodfor'], reviewData!);
-  final dateString = reviewData!['reviewdate']?.toString().trim();
-  final isPending = widget.context.reviewKey == null && widget.context.isEditing;
-  final costValue = reviewData!['cost']?.toString().trim();
-  final dinersValue = reviewData!['cpersons']?.toString().trim();
-  final occasionValue = reviewData!['coccasion']?.toString().trim();
-  final commentsValue = reviewData!['ccomments']?.toString().trim();
-  final photoPath = reviewData!['photoPath'];
+    final int totalRating = int.tryParse(reviewData!['restrating']?.toString() ?? '') ?? 0;
+    final int michelinStars = int.tryParse(reviewData!['rmichlin']?.toString() ?? '0') ?? 0;
+    final goodForTags = extractTags(reviewData!['goodfor'], reviewData!);
+    final dateString = reviewData!['reviewdate']?.toString().trim();
+    final isPending = widget.context.reviewKey == null && widget.context.isEditing;
+    final costValue = reviewData!['cost']?.toString().trim();
+    final dinersValue = reviewData!['cpersons']?.toString().trim();
+    final occasionValue = reviewData!['coccasion']?.toString().trim();
+    final commentsValue = reviewData!['ccomments']?.toString().trim();
+    final photoPath = reviewData!['photoPath'];
 
-  return PopScope(
-    canPop: false,
-    child: Scaffold(
-      backgroundColor: const Color(0xFFF5F0E6),
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text(
-          AppStr.previewTitle,
-          style: TextStyle(
-            fontFamily: 'Gelica',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F0E6),
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text(
+            AppStr.previewTitle,
+            style: TextStyle(
+              fontFamily: 'Gelica',
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
+          backgroundColor: const Color(0xFF2E4F3E),
+          centerTitle: true,
         ),
-        backgroundColor: const Color(0xFF2E4F3E),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: ListView(
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('${AppStr.restaurantLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                        SizedBox(height: 4),
-                        Text('${AppStr.countryLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                        SizedBox(height: 4),
-                        Text('${AppStr.cityLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                        SizedBox(height: 4),
-                        Text('${AppStr.cuisineLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                        SizedBox(height: 4),
-                        Text(AppStr.dateLabel, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                      ],
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+        body: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListView(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            reviewData!['restname'] ?? '',
-                            style: const TextStyle(
-                              fontFamily: 'Gelica',
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(reviewData!['restcountry'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
-                          const SizedBox(height: 4),
-                          Text(reviewData!['restcity'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
-                          const SizedBox(height: 4),
-                          Text(reviewData!['restcuisine'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
-                          const SizedBox(height: 4),
-                          Text(dateString ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                        children: const [
+                          Text('${AppStr.restaurantLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                          SizedBox(height: 4),
+                          Text('${AppStr.countryLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                          SizedBox(height: 4),
+                          Text('${AppStr.cityLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                          SizedBox(height: 4),
+                          Text('${AppStr.cuisineLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                          SizedBox(height: 4),
+                          Text(AppStr.dateLabel, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Center(
-                  child: Text(
-                    AppStr.ratingsHeader,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              reviewData!['restname'] ?? '',
+                              style: const TextStyle(
+                                fontFamily: 'Gelica',
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(reviewData!['restcountry'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                            const SizedBox(height: 4),
+                            Text(reviewData!['restcity'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                            const SizedBox(height: 4),
+                            Text(reviewData!['restcuisine'] ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                            const SizedBox(height: 4),
+                            Text(dateString ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: Text(
+                      AppStr.ratingsHeader,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Gelica',
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _alignedRatingRow(AppStr.foodLabel, reviewData!['rfood']),
-                          _alignedRatingRow(AppStr.serviceLabel, reviewData!['rservice']),
-                          _alignedRatingRow(AppStr.ambianceLabel, reviewData!['rambiance']),
-                        ],
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _alignedRatingRow(AppStr.foodLabel, reviewData!['rfood']),
+                            _alignedRatingRow(AppStr.serviceLabel, reviewData!['rservice']),
+                            _alignedRatingRow(AppStr.ambianceLabel, reviewData!['rambiance']),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _alignedRatingRow(AppStr.drinksLabel, reviewData!['rdrinks']),
-                          _alignedRatingRow(AppStr.vfmsLabel, reviewData!['rvfm']),
-                        ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _alignedRatingRow(AppStr.drinksLabel, reviewData!['rdrinks']),
+                            _alignedRatingRow(AppStr.vfmsLabel, reviewData!['rvfm']),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
 
-                //
-                // Part 4
-                //
+                  //
+                  // Part 4
+                  //
 
-                const SizedBox(height: 12),
-                Center(child: formatter.ratingSummary(totalRating, michelinStars)),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (dinersValue != null && dinersValue.isNotEmpty)
-                            formatter.reviewRow(AppStr.dinersLabel, dinersValue),
-                          if (occasionValue != null && occasionValue.isNotEmpty)
-                            formatter.reviewRow(AppStr.occasionLabel, occasionValue),
-                          if (costValue != null && costValue.isNotEmpty)
-                            formatter.reviewRow(AppStr.costLabel, '${reviewData!['currency']} ${_formatCost(costValue)}'),
-                        ],
+                  const SizedBox(height: 12),
+                  Center(child: formatter.ratingSummary(totalRating, michelinStars)),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (dinersValue != null && dinersValue.isNotEmpty)
+                              formatter.reviewRow(AppStr.dinersLabel, dinersValue),
+                            if (occasionValue != null && occasionValue.isNotEmpty)
+                              formatter.reviewRow(AppStr.occasionLabel, occasionValue),
+                            if (costValue != null && costValue.isNotEmpty)
+                              formatter.reviewRow(AppStr.costLabel, '${reviewData!['currency']} ${_formatCost(costValue)}'),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (photoPath != null && File(photoPath).existsSync())
-                      Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => FullScreenImage(path: photoPath),
+                      if (photoPath != null && File(photoPath).existsSync())
+                        Padding(
+                          padding: const EdgeInsets.only(left: 12),
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => FullScreenImage(path: photoPath),
+                                ),
+                              );
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(photoPath),
+                                height: 100,
+                                width: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Text(AppStr.photoError),
                               ),
-                            );
-                          },
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(photoPath),
-                              height: 100,
-                              width: 100,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Text(AppStr.photoError),
                             ),
                           ),
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (commentsValue != null && commentsValue.isNotEmpty)
+                    formatter.reviewRow(AppStr.commentLabel, commentsValue),
+                  const SizedBox(height: 24),
+                  const Center(
+                    child: Text(
+                      AppStr.goodForHeader,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Gelica',
                       ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (commentsValue != null && commentsValue.isNotEmpty)
-                  formatter.reviewRow(AppStr.commentLabel, commentsValue),
-                const SizedBox(height: 24),
-                const Center(
-                  child: Text(
-                    AppStr.goodForHeader,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                formatter.tagDisplay(goodForTags),
-                const SizedBox(height: 16),
-                formatter.reviewRow(AppStr.addressLabel, reviewData!['restaddress'] ?? ''),
-                formatter.reviewRow(AppStr.phoneLabel, reviewData!['restphone'] ?? ''),
-                const Divider(thickness: 1),
-                const SizedBox(height: 36), // removed spacer from here...
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: goToList,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                      child: const Text(AppStr.list),
-                    ),
-                    ElevatedButton(
-                      onPressed: goToEditFlow,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                      child: const Text(AppStr.change),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (isPending) {
-                          await saveReview();
-                        } else {
-                          await updateReview();
-                        }
-                        _showSaveConfirmation();
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow),
-                      child: const Text(AppStr.save),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async => await deleteReview(),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text(AppStr.delete),
-                    ),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  formatter.tagDisplay(goodForTags),
+                  const SizedBox(height: 16),
+                  formatter.reviewRow(AppStr.addressLabel, reviewData!['restaddress'] ?? ''),
+                  formatter.reviewRow(AppStr.phoneLabel, reviewData!['restphone'] ?? ''),
+                  const Divider(thickness: 1),
+                  const SizedBox(height: 36), // removed spacer from here...
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(
+                        onPressed: goToList,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                        child: const Text(AppStr.list),
+                      ),
+                      ElevatedButton(
+                        onPressed: goToEditFlow,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                        child: const Text(AppStr.change),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (isPending) {
+                            await saveReview();
+                          } else {
+                            await updateReview();
+                          }
+                          _showSaveConfirmation();
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow),
+                        child: const Text(AppStr.save),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async => await deleteReview(),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        child: const Text(AppStr.delete),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (_isSaving)
-            Container(
-              color: const Color(0xFF000000).withAlpha(77),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-        ],
+            if (_isSaving)
+              Container(
+                color: const Color(0xFF000000).withAlpha(77),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -11,7 +11,7 @@ import 'list_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
 import 'constants/strings.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class TopScreen extends StatefulWidget {
   const TopScreen({super.key});

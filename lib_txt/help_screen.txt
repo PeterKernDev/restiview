@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'constants/strings.dart'; // ✅ Import centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});

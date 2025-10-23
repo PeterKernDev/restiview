@@ -14,7 +14,7 @@ import 'services/session_cache.dart';
 import 'goodfor_screen.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart'; // ✅ Centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class CommentsScreen extends StatefulWidget {
   final ReviewContext context;

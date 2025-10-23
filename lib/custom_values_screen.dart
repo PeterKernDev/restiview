@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'constants/restiview_constants.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 import 'constants/strings.dart';
 import 'settings_screen.dart';
 import 'top_screen.dart';
@@ -38,7 +38,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   bool _isBusy = false;
 
   Future<T?> _withBusy<T>(Future<T> Function() action) async {
-    if (_isBusy || !mounted) return null;
+    if (_isBusy || !mounted) {
+      return null;
+    }
     setState(() {
       _isBusy = true;
     });
@@ -54,8 +56,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     }
     return res;
   }
-
-  void printDebug(String msg) => debugPrint('CVS_DEBUG: $msg');
 
   List<List<dynamic>> _parsePairList(dynamic raw) {
     if (raw is List) {
@@ -91,43 +91,47 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   // ---------------- Cuisine handlers ----------------
   Future<void> _saveEditedCuisine() async {
     final edited = _cuisineEditController.text.trim();
-    printDebug('saveEditedCuisine entered; selected="$_selectedCuisine" edited="$edited"');
 
     if (edited.isEmpty || edited.length > 24) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
-      printDebug('saveEditedCuisine: invalid length/empty');
       return;
     }
 
     if (_selectedCuisine.isEmpty) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
-      printDebug('saveEditedCuisine: no selection');
       return;
     }
 
     if (edited == _selectedCuisine) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
-      printDebug('saveEditedCuisine: value unchanged');
       return;
     }
 
     final mergedList = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
     final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
     if (isDuplicate) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
-      printDebug('saveEditedCuisine: duplicate');
       return;
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
-      printDebug('saveEditedCuisine: no uid');
       return;
     }
 
@@ -136,7 +140,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
-      printDebug('saveEditedCuisine: no snapshot');
       return;
     }
 
@@ -146,21 +149,18 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (index == -1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected cuisine not found')));
-      printDebug('saveEditedCuisine: index -1');
       return;
     }
 
     if (cuisineList[index][1] == 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedCuisine" ${AppStr.usedInReview}')));
-      printDebug('saveEditedCuisine: usedInReview');
       return;
     }
 
     cuisineList[index][0] = edited;
     await ref.update({'cuisine': cuisineList});
     if (!mounted) return;
-    printDebug('saveEditedCuisine: DB updated');
 
     final merged = <String>[];
     for (final s in systemCuisines) {
@@ -187,17 +187,19 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.updatedCuisine}')));
-    printDebug('saveEditedCuisine finished; selected="$edited"');
   }
 
   Future<void> _addCustomCuisine() async {
     final newCuisine = _cuisineController.text.trim();
-    printDebug('addCustomCuisine entered new="$newCuisine"');
 
-    if (newCuisine.isEmpty || newCuisine.length > 24) {
+    if (newCuisine.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomCuisine)));
+      return;
+    }
+    if (newCuisine.length > 24) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
-      printDebug('addCustomCuisine: invalid length/empty');
       return;
     }
 
@@ -206,7 +208,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (exists) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.alreadyExists}')));
-      printDebug('addCustomCuisine: duplicate');
       return;
     }
 
@@ -254,17 +255,14 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.addedToCuisines}')));
-    printDebug('addCustomCuisine finished; selected="$newCuisine"');
   }
 
   Future<void> _removeCustomCuisine() async {
     final selected = _selectedCuisine;
-    printDebug('removeCustomCuisine entered selected="$selected"');
 
     if (systemCuisines.contains(selected)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInCuisineBlock)));
-      printDebug('removeCustomCuisine: built-in block');
       return;
     }
 
@@ -280,14 +278,12 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final cuisineList = _parsePairList(data['cuisine']);
     final index = cuisineList.indexWhere((pair) => pair[0] == selected);
     if (index == -1) {
-      printDebug('removeCustomCuisine: index -1');
       return;
     }
 
     if (cuisineList[index][1] == 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
-      printDebug('removeCustomCuisine: usedInReview');
       return;
     }
 
@@ -298,37 +294,35 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (!mounted) return;
     setState(() {
-      _selectedCuisine = SessionCache.customCuisines.isNotEmpty ? SessionCache.customCuisines.first : '';
+      _selectedCuisine = '';
+      _isEditingCuisine = false;
+      _cuisineEditController.clear();
+      _cuisineController.clear();
     });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
-    printDebug('removeCustomCuisine finished; new selected="$_selectedCuisine"');
   }
 
   // ---------------- Occasion handlers (mirror cuisine) ----------------
   Future<void> _saveEditedOccasion() async {
     final edited = _occasionEditController.text.trim();
-    printDebug('saveEditedOccasion entered; selected="$_selectedOccasion" edited="$edited"');
 
     if (edited.isEmpty || edited.length > 24) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
-      printDebug('saveEditedOccasion: invalid length/empty');
       return;
     }
 
     if (_selectedOccasion.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
-      printDebug('saveEditedOccasion: no selection');
       return;
     }
 
     if (edited == _selectedOccasion) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
-      printDebug('saveEditedOccasion: value unchanged');
       return;
     }
 
@@ -337,7 +331,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (isDuplicate) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
-      printDebug('saveEditedOccasion: duplicate');
       return;
     }
 
@@ -345,7 +338,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (uid == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
-      printDebug('saveEditedOccasion: no uid');
       return;
     }
 
@@ -354,7 +346,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
-      printDebug('saveEditedOccasion: no snapshot');
       return;
     }
 
@@ -364,21 +355,18 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (index == -1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected occasion not found')));
-      printDebug('saveEditedOccasion: index -1');
       return;
     }
 
     if (occasionList[index][1] == 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedOccasion" ${AppStr.usedInReview}')));
-      printDebug('saveEditedOccasion: usedInReview');
       return;
     }
 
     occasionList[index][0] = edited;
     await ref.update({'occasion': occasionList});
     if (!mounted) return;
-    printDebug('saveEditedOccasion: DB updated');
 
     final merged = <String>[];
     for (final s in systemOccasions) {
@@ -404,18 +392,20 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.addedToOccasions}')));
-    printDebug('saveEditedOccasion finished; selected="$edited"');
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.updatedOccasion}')));
   }
 
   Future<void> _addCustomOccasionLocal() async {
     final newOccasion = _occasionController.text.trim();
-    printDebug('addCustomOccasion entered new="$newOccasion"');
 
-    if (newOccasion.isEmpty || newOccasion.length > 24) {
+    if (newOccasion.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomOccasion)));
+      return;
+    }
+    if (newOccasion.length > 24) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
-      printDebug('addCustomOccasion: invalid length/empty');
       return;
     }
 
@@ -424,7 +414,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (exists) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')));
-      printDebug('addCustomOccasion: duplicate');
       return;
     }
 
@@ -472,17 +461,14 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')));
-    printDebug('addCustomOccasion finished; selected="$newOccasion"');
   }
 
   Future<void> _removeCustomOccasionLocal() async {
     final selected = _selectedOccasion;
-    printDebug('removeCustomOccasion entered selected="$selected"');
 
     if (systemOccasions.contains(selected)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInValue)));
-      printDebug('removeCustomOccasion: built-in block');
       return;
     }
 
@@ -498,14 +484,12 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final occasionList = _parsePairList(data['occasion']);
     final index = occasionList.indexWhere((pair) => pair[0] == selected);
     if (index == -1) {
-      printDebug('removeCustomOccasion: index -1');
       return;
     }
 
     if (occasionList[index][1] == 1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
-      printDebug('removeCustomOccasion: usedInReview');
       return;
     }
 
@@ -516,15 +500,17 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (!mounted) return;
     setState(() {
-      _selectedOccasion = SessionCache.customOccasions.isNotEmpty ? SessionCache.customOccasions.first : '';
+      _selectedOccasion = '';
+      _isEditingOccasion = false;
+      _occasionEditController.clear();
+      _occasionController.clear();
     });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
-    printDebug('removeCustomOccasion finished; new selected="$_selectedOccasion"');
   }
 
-  // ---------------- Country handlers (unchanged) ----------------
+  // ---------------- Country handlers ----------------
   Future<void> _addCustomCountry() async {
     final newCountry = _selectedCountry.trim();
     if (!allCountries.contains(newCountry)) {
@@ -562,7 +548,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.addedToCountries}')));
-    printDebug('addCustomCountry finished new="$newCountry"');
   }
 
   @override
@@ -584,12 +569,16 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
   void _goBackToSettings() {
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) {
+      return const SettingsScreen();
+    }));
   }
 
   void _goToTopScreen() {
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TopScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) {
+      return TopScreen();
+    }));
   }
 
   // ---------------- UI ----------------
@@ -597,7 +586,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   Widget build(BuildContext context) {
     final extendedCuisines = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
     final extendedOccasions = _mergedAndSorted(systemOccasions, SessionCache.customOccasions);
-    final countryList = _mergedAndSorted(getSystemCountryNames(), SessionCache.customCountries);
+    final countryList = allCountries; // show full country list in dropdown
 
     return Scaffold(
       backgroundColor: AppColors.beige,
@@ -625,7 +614,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             DropdownButtonFormField<String>(
               initialValue: extendedCuisines.contains(_selectedCuisine) ? _selectedCuisine : null,
               hint: const Text('Select cuisine'),
-              items: extendedCuisines.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              items: extendedCuisines.map((c) {
+                return DropdownMenuItem<String>(value: c, child: Text(c));
+              }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
                 setState(() {
@@ -646,8 +637,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: _isBusy
                       ? null
                       : () {
-                          printDebug('Add cuisine pressed');
-                          _withBusy(() async => await _addCustomCuisine());
+                          _withBusy(() async {
+                            await _addCustomCuisine();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.darkGreen,
@@ -665,8 +657,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: _isBusy
                       ? null
                       : () {
-                          printDebug('Remove cuisine pressed; selected="$_selectedCuisine"');
-                          _withBusy(() async => await _removeCustomCuisine());
+                          _withBusy(() async {
+                            await _removeCustomCuisine();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.red,
@@ -689,7 +682,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
                             return;
                           }
-                          printDebug('Edit cuisine pressed; selected="$_selectedCuisine"');
                           setState(() {
                             _isEditingCuisine = true;
                             _cuisineEditController.text = _selectedCuisine;
@@ -713,8 +705,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: (!_isEditingCuisine || _isBusy)
                       ? null
                       : () {
-                          printDebug('Tick cuisine pressed; selected="$_selectedCuisine" edit="${_cuisineEditController.text}"');
-                          _withBusy(() async => await _saveEditedCuisine()).then((_) => printDebug('Tick cuisine finished'));
+                          _withBusy(() async {
+                            await _saveEditedCuisine();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: _isEditingCuisine ? Colors.lightGreenAccent : Colors.grey[300],
@@ -732,7 +725,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                 height: 36,
                 child: ElevatedButton(
                   onPressed: () {
-                    printDebug('Clear cuisine pressed; clearing EF and DD');
                     setState(() {
                       _isEditingCuisine = false;
                       _cuisineEditController.clear();
@@ -755,13 +747,15 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             // ---------------- Occasion UI (mirrors Cuisine) ----------------
             TextField(
               controller: _isEditingOccasion ? _occasionEditController : _occasionController,
-              decoration: InputDecoration(labelText: _isEditingOccasion ? 'Edit occasion' : AppStr.occasionLabel),
+              decoration: InputDecoration(labelText: _isEditingOccasion ? AppStr.editOccasionLabel : AppStr.occasionLabel),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: extendedOccasions.contains(_selectedOccasion) ? _selectedOccasion : null,
               hint: const Text('Select occasion'),
-              items: extendedOccasions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              items: extendedOccasions.map((c) {
+                return DropdownMenuItem<String>(value: c, child: Text(c));
+              }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
                 setState(() {
@@ -782,15 +776,16 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: _isBusy
                       ? null
                       : () {
-                          printDebug('Add occasion pressed');
-                          _withBusy(() async => await _addCustomOccasionLocal());
+                          _withBusy(() async {
+                            await _addCustomOccasionLocal();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.darkGreen,
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.addOccasion, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: const Text(AppStr.add, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -801,15 +796,16 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: _isBusy
                       ? null
                       : () {
-                          printDebug('Remove occasion pressed; selected="$_selectedOccasion"');
-                          _withBusy(() async => await _removeCustomOccasionLocal());
+                          _withBusy(() async {
+                            await _removeCustomOccasionLocal();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.red,
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.removeOccasion, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: const Text(AppStr.removeButton, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -825,7 +821,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
                             return;
                           }
-                          printDebug('Edit occasion pressed; selected="$_selectedOccasion"');
                           setState(() {
                             _isEditingOccasion = true;
                             _occasionEditController.text = _selectedOccasion;
@@ -849,8 +844,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   onPressed: (!_isEditingOccasion || _isBusy)
                       ? null
                       : () {
-                          printDebug('Tick occasion pressed; selected="$_selectedOccasion" edit="${_occasionEditController.text}"');
-                          _withBusy(() async => await _saveEditedOccasion()).then((_) => printDebug('Tick occasion finished'));
+                          _withBusy(() async {
+                            await _saveEditedOccasion();
+                          });
                         },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: _isEditingOccasion ? Colors.lightGreenAccent : Colors.grey[300],
@@ -868,7 +864,6 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                 height: 36,
                 child: ElevatedButton(
                   onPressed: () {
-                    printDebug('Clear occasion pressed; clearing EF and DD');
                     setState(() {
                       _isEditingOccasion = false;
                       _occasionEditController.clear();
@@ -893,9 +888,12 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             DropdownButtonFormField<String>(
               initialValue: countryList.contains(_selectedCountry) ? _selectedCountry : null,
               hint: const Text('Select country'),
-              items: countryList.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              items: countryList.map((c) {
+                return DropdownMenuItem<String>(value: c, child: Text(c));
+              }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
+                // only set local selection here; do NOT add to DB until user taps Add Country
                 setState(() {
                   _selectedCountry = value ?? '';
                 });
@@ -904,7 +902,13 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             ),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: _isBusy ? null : () => _withBusy(() async => await _addCustomCountry()),
+              onPressed: _isBusy
+                  ? null
+                  : () {
+                      _withBusy(() async {
+                        await _addCustomCountry();
+                      });
+                    },
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.black87,

@@ -1,17 +1,21 @@
 // general_screen.dart
 // Collects general review information including restaurant, city, cuisine, date, diners, and cost.
 // Uses default country from SessionCache and passes data via ReviewContext.
+
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'ratings_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'constants/restiview_constants.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 import 'services/session_cache.dart';
 import 'top_screen.dart';
 import 'services/location_restaurant_helper.dart';
-import 'constants/strings.dart'; // ✅ Import centralized strings
+import 'constants/strings.dart';
 
 class GeneralScreen extends StatefulWidget {
   final ReviewContext context;
@@ -38,116 +42,116 @@ class _GeneralScreenState extends State<GeneralScreen> {
   DateTime _selectedDate = DateTime.now();
   List<NearbyRestaurant> _restaurantOptions = [];
 
-Future<void> _addInlineCustomCuisine() async {
-  final newCuisine = _newCuisineController.text.trim();
-  if (newCuisine.isEmpty) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStr.cuisineRequired)),
-    );
-    return;
+  /// Checks service and permission status without using BuildContext across async gaps.
+  /// Caller should show UI messages and call [Geolocator.openLocationSettings] while mounted.
+  Future<bool> getLocationPermissionStatus() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) return false;
+      if (permission == LocationPermission.denied) return false;
+
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  // Local duplicate check (case-insensitive)
-  final existsLocally = SessionCache.customCuisines.any(
-    (c) => c.toLowerCase() == newCuisine.toLowerCase(),
-  );
-  if (existsLocally) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStr.cuisineExists)),
+  Future<void> _addInlineCustomCuisine() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final newCuisine = _newCuisineController.text.trim();
+    if (newCuisine.isEmpty) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text(AppStr.cuisineRequired)),
+      );
+      return;
+    }
+
+    final existsLocally = SessionCache.customCuisines.any(
+      (c) => c.toLowerCase() == newCuisine.toLowerCase(),
     );
-    return;
-  }
+    if (existsLocally) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text(AppStr.cuisineExists)),
+      );
+      return;
+    }
 
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
 
-  final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
-  try {
-    final snapshot = await ref.get();
-    if (!mounted) return;
+    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    try {
+      final snapshot = await ref.get();
+      if (!mounted) return;
 
-    // Build updated list of custom cuisine entries in shape: [[name, flag], ...]
-    final List<List<dynamic>> updatedCustoms = [];
+      final List<List<dynamic>> updatedCustoms = [];
 
-    if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
-      final raw = data['cuisine'];
-      if (raw is List) {
-        // defensive copy of existing items
-        for (final item in raw) {
-          if (item is List && item.isNotEmpty) {
-            updatedCustoms.add(List<dynamic>.from(item));
+      if (snapshot.exists) {
+        final data = snapshot.value as Map<dynamic, dynamic>;
+        final raw = data['cuisine'];
+        if (raw is List) {
+          for (final item in raw) {
+            if (item is List && item.isNotEmpty) {
+              updatedCustoms.add(List<dynamic>.from(item));
+            }
           }
         }
+        updatedCustoms.add([newCuisine, 0]);
+      } else {
+        updatedCustoms.add([newCuisine, 0]);
       }
-      // Add the new cuisine with flag 0
-      updatedCustoms.add([newCuisine, 0]);
-    } else {
-      // No existing customvals node: create initial structure
-      updatedCustoms.add([newCuisine, 0]);
-    }
 
-    // Sort updatedCustoms alphabetically by name, case-insensitive
-    updatedCustoms.sort((a, b) =>
-        (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
+      updatedCustoms.sort((a, b) =>
+          (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
 
-    // Write back to DB (merge with other keys if node exists)
-    if (snapshot.exists) {
-      await ref.update({'cuisine': updatedCustoms});
-    } else {
-      await ref.set({
-        'cuisine': updatedCustoms,
-        'occasion': [],
-        'country': [],
+      if (snapshot.exists) {
+        await ref.update({'cuisine': updatedCustoms});
+      } else {
+        await ref.set({
+          'cuisine': updatedCustoms,
+          'occasion': [],
+          'country': [],
+        });
+      }
+
+      final merged = <String>[];
+      for (final s in systemCuisines) {
+        if (!merged.contains(s)) merged.add(s);
+      }
+      for (final pair in updatedCustoms) {
+        final name = pair[0] as String;
+        if (!merged.contains(name)) merged.add(name);
+      }
+      SessionCache.customCuisines = merged;
+
+      if (!mounted) return;
+      setState(() {
+        _selectedCuisine = newCuisine;
+        _newCuisineController.clear();
+        _showAddCuisineField = false;
       });
-    }
 
-    // Update SessionCache.customCuisines: merge system + custom (preserve order: system then sorted customs)
-    final merged = <String>[];
-    // Add system cuisines first (if you want custom mixed, change this)
-    for (final s in systemCuisines) {
-      if (!merged.contains(s)) merged.add(s);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text(AppStr.cuisineAdded)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final messengerErr = ScaffoldMessenger.of(context);
+      messengerErr.showSnackBar(
+        SnackBar(content: Text('${AppStr.saveError}: $e')),
+      );
     }
-    for (final pair in updatedCustoms) {
-      final name = pair[0] as String;
-      if (!merged.contains(name)) merged.add(name);
-    }
-    SessionCache.customCuisines = merged;
-
-    // Set selected cuisine to the newly added value
-    if (!mounted) return;
-    setState(() {
-      _selectedCuisine = newCuisine;
-      _newCuisineController.clear();
-      _showAddCuisineField = false;
-    });
-
-    // Confirm to user
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStr.cuisineAdded)),
-    );
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${AppStr.saveError}: $e')),
-    );
   }
-
-
-  setState(() {
-    SessionCache.customCuisines.add(newCuisine);
-    _selectedCuisine = newCuisine;
-    _newCuisineController.clear();
-    _showAddCuisineField = false;
-  });
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text(AppStr.cuisineAdded)),
-  );
-}
 
   void _clearForm() {
     setState(() {
@@ -158,7 +162,6 @@ Future<void> _addInlineCustomCuisine() async {
       _selectedCuisine = '';
       _selectedDate = DateTime.now();
 
-      // Clear the inline-add cuisine input and hide the field
       _newCuisineController.clear();
       _showAddCuisineField = false;
 
@@ -173,9 +176,7 @@ Future<void> _addInlineCustomCuisine() async {
       reviewMap['restphone'] = '';
     });
   }
-  //
-  // Part 2
-  //
+
   @override
   void initState() {
     super.initState();
@@ -196,7 +197,7 @@ Future<void> _addInlineCustomCuisine() async {
       widget.context.isEditing = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _autoFillRestaurantFromLocation();
+        _attemptAutoFill();
       });
     }
 
@@ -245,13 +246,58 @@ Future<void> _addInlineCustomCuisine() async {
     }
   }
 
-  void _autoFillRestaurantFromLocation() async {
+  Future<void> _attemptAutoFill() async {
     _restaurantSearchAttempts++;
+    if (!mounted) return;
     setState(() => _isSearching = true);
 
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      final results = await findNearbyRestaurants();
-      if (results.isNotEmpty && mounted) {
+      if (!SessionCache.allowLocation) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Location search skipped — allowLocation is false.')),
+        );
+        return;
+      }
+
+      final ready = await getLocationPermissionStatus();
+      if (!ready) {
+        if (!mounted) return;
+
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable them in Settings.')),
+          );
+          await Geolocator.openLocationSettings();
+          return;
+        }
+
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.deniedForever) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Location permission permanently denied. Enable it in app settings.')),
+          );
+          return;
+        }
+
+        if (permission == LocationPermission.denied) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Location permission denied. Cannot auto-fill.')),
+          );
+          return;
+        }
+
+        return;
+      }
+
+      final results = await findNearbyRestaurants().timeout(const Duration(seconds: 12));
+
+      if (!mounted) return;
+
+      if (results.isNotEmpty) {
         _restaurantOptions = results;
         final selected = results.first;
         final isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
@@ -268,32 +314,31 @@ Future<void> _addInlineCustomCuisine() async {
           _selectedCuisine = isValidCuisine ? selected.cuisine : '';
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')),
-        );
-      } else {
-        // debugPrint('❌ No restaurant found within ${SessionCache.searchRadius} meters.');
         if (mounted) {
-          _clearForm(); // ✅ Reset the form
-          final message = _restaurantSearchAttempts >= 2
-              ? AppStr.autoFillFailed
-              : AppStr.autoFillNone;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message)),
+          messenger.showSnackBar(
+            SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')),
           );
         }
+      } else {
+        if (mounted) {
+          _clearForm();
+          final message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : AppStr.autoFillNone;
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+        }
+      }
+    } on TimeoutException {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(AppStr.autoFillFailed)));
       }
     } catch (e) {
       if (mounted) {
-        final message = _restaurantSearchAttempts >= 2
-            ? AppStr.autoFillFailed
-            : 'Search failed: $e';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        final message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : 'Search failed: $e';
+        messenger.showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted) {
+        setState(() => _isSearching = false);
+      }
     }
   }
 
@@ -364,288 +409,280 @@ Future<void> _addInlineCustomCuisine() async {
       );
     }
   }
-  //
-  // Part 3 starts here -->
-  //
-@override
-Widget build(BuildContext context) {
-  final topCities = systemCitiesByCountry[SessionCache.defaultCountry] ?? [];
-  final cuisineItemsOrdered = <String>[];
-  {
-    // Combine system + custom, dedupe, trim, then sort case-insensitively
-    final combined = <String>[];
-    combined.addAll(systemCuisines);
-    combined.addAll(SessionCache.customCuisines);
 
-    final deduped = <String>{};
-    for (final raw in combined) {
-      final v = raw.trim();
-      if (v.isNotEmpty) deduped.add(v);
+  @override
+  Widget build(BuildContext context) {
+    final topCities = systemCitiesByCountry[SessionCache.defaultCountry] ?? [];
+    final cuisineItemsOrdered = <String>[];
+    {
+      final combined = <String>[];
+      combined.addAll(systemCuisines);
+      combined.addAll(SessionCache.customCuisines);
+
+      final deduped = <String>{};
+      for (final raw in combined) {
+        final v = raw.trim();
+        if (v.isNotEmpty) deduped.add(v);
+      }
+
+      final sorted = deduped.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      cuisineItemsOrdered.addAll(sorted);
     }
 
-    final sorted = deduped.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    cuisineItemsOrdered.addAll(sorted);
-  }
-
-  return Scaffold(
-    backgroundColor: AppColors.beige,
-    appBar: AppBar(
-      automaticallyImplyLeading: false,
-      title: const Text(
-        AppStr.generalInfo,
-        style: TextStyle(
-          fontFamily: 'Gelica',
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
+    return Scaffold(
+      backgroundColor: AppColors.beige,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text(
+          AppStr.generalInfo,
+          style: TextStyle(
+            fontFamily: 'Gelica',
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
+        backgroundColor: AppColors.darkGreen,
+        centerTitle: true,
       ),
-      backgroundColor: AppColors.darkGreen,
-      centerTitle: true,
-    ),
-    body: LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          children: [
-            SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          controller: _restaurantController,
-                          decoration: const InputDecoration(labelText: AppStr.restaurantLabel),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return AppStr.restaurantRequired;
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        Autocomplete<String>(
-                          optionsBuilder: (textEditingValue) {
-                            if (textEditingValue.text == '' || topCities.isEmpty) {
-                              return const Iterable<String>.empty();
-                            }
-                            return topCities.where((city) => city
-                                .toLowerCase()
-                                .contains(textEditingValue.text.toLowerCase()));
-                          },
-                          onSelected: (selection) {
-                            _cityController.text = selection;
-                          },
-                          fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                            return TextField(
-                              controller: _cityController,
-                              focusNode: focusNode,
-                              decoration: InputDecoration(
-                                labelText: AppStr.cityLabel,
-                                hintText: topCities.isEmpty ? AppStr.cityHint : null,
-                              ),
-                              onEditingComplete: onEditingComplete,
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: DropdownButtonFormField<String>(
-                                    initialValue: cuisineItemsOrdered.contains(_selectedCuisine)
-                                        ? _selectedCuisine
-                                        : null,
-                                    items: cuisineItemsOrdered
-                                        .map((cuisine) => DropdownMenuItem(value: cuisine, child: Text(cuisine)))
-                                        .toList(),
-                                    onChanged: (value) {
-                                      if (!mounted) return;
-                                      setState(() => _selectedCuisine = value ?? '');
-                                    },
-                                    decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
-                                  ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextFormField(
+                            controller: _restaurantController,
+                            decoration: const InputDecoration(labelText: AppStr.restaurantLabel),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return AppStr.restaurantRequired;
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          Autocomplete<String>(
+                            optionsBuilder: (textEditingValue) {
+                              if (textEditingValue.text == '' || topCities.isEmpty) {
+                                return const Iterable<String>.empty();
+                              }
+                              return topCities.where((city) => city
+                                  .toLowerCase()
+                                  .contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (selection) {
+                              _cityController.text = selection;
+                            },
+                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              return TextField(
+                                controller: _cityController,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(
+                                  labelText: AppStr.cityLabel,
+                                  hintText: topCities.isEmpty ? AppStr.cityHint : null,
                                 ),
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() => _showAddCuisineField = !_showAddCuisineField);
-                                  },
-                                  child: const Text(AppStr.add),
-                                ),
-                              ],
-                            ),
-                          if (_showAddCuisineField)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Row(
+                                onEditingComplete: onEditingComplete,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
                                   Expanded(
-                                    child: TextField(
-                                      controller: _newCuisineController,
-                                      decoration: const InputDecoration(
-                                        hintText: AppStr.newCuisineHint,
-                                      ),
+                                    child: DropdownButtonFormField<String>(
+                                      initialValue: cuisineItemsOrdered.contains(_selectedCuisine)
+                                          ? _selectedCuisine
+                                          : null,
+                                      items: cuisineItemsOrdered
+                                          .map((cuisine) => DropdownMenuItem(value: cuisine, child: Text(cuisine)))
+                                          .toList(),
+                                      onChanged: (value) {
+                                        if (!mounted) return;
+                                        setState(() => _selectedCuisine = value ?? '');
+                                      },
+                                      decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    tooltip: AppStr.confirm,
-                                    color: Colors.green,
-                                    icon: const Icon(Icons.check),
-                                    onPressed: () async {
-                                      await _addInlineCustomCuisine();
-                                    },
-                                  ),
-                                  IconButton(
-                                    tooltip: AppStr.cancel,
-                                    color: Colors.grey,
-                                    icon: const Icon(Icons.close),
+                                  TextButton(
                                     onPressed: () {
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _newCuisineController.clear();
-                                        _showAddCuisineField = false;
-                                      });
+                                      setState(() => _showAddCuisineField = !_showAddCuisineField);
                                     },
+                                    child: const Text(AppStr.add),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-
-                        //
-                        // Part 4
-                        //
-
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _dinersController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: AppStr.dinersLabel),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Text(AppStr.costLabel, style: TextStyle(fontSize: 16)),
-                            const SizedBox(width: 12),
-                            Text(SessionCache.currency, style: const TextStyle(fontSize: 16)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: _costController,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: AppStr.amountLabel),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Text('${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}',
-                                style: const TextStyle(fontFamily: 'Gelica')),
-                            const SizedBox(width: 12),
-                            ElevatedButton(
-                              onPressed: () async {
-                                DateTime? picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: _selectedDate,
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (picked != null && mounted) {
-                                  setState(() {
-                                    _selectedDate = picked;
-                                  });
-                                }
-                              },
-                              child: const Text(AppStr.pickDate),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Text('Location search : ', style: TextStyle(fontFamily: 'Gelica')),
-                            SessionCache.allowLocation
-                                ? Expanded(
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: _restaurantOptions.length > 1
-                                          ? ElevatedButton(
-                                              onPressed: _showRestaurantSelector,
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                                              child: const Text(AppStr.multi),
-                                            )
-                                          : ElevatedButton(
-                                              onPressed: _autoFillRestaurantFromLocation,
-                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                                              child: const Text(AppStr.search),
-                                            ),
-                                    ),
-                                  )
-                                : const Text(
-                                    '(OFF)',
-                                    style: TextStyle(
-                                      fontFamily: 'Gelica',
-                                      color: Colors.grey,
-                                      fontStyle: FontStyle.italic,
-                                    ),
+                              if (_showAddCuisineField)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _newCuisineController,
+                                          decoration: const InputDecoration(
+                                            hintText: AppStr.newCuisineHint,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        tooltip: AppStr.confirm,
+                                        color: Colors.green,
+                                        icon: const Icon(Icons.check),
+                                        onPressed: () async {
+                                          await _addInlineCustomCuisine();
+                                        },
+                                      ),
+                                      IconButton(
+                                        tooltip: AppStr.cancel,
+                                        color: Colors.grey,
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () {
+                                          if (!mounted) return;
+                                          setState(() {
+                                            _newCuisineController.clear();
+                                            _showAddCuisineField = false;
+                                          });
+                                        },
+                                      ),
+                                    ],
                                   ),
-                          ],
-                        ),
-                        const SizedBox(height: 36),
-                      ],
+                                ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _dinersController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: AppStr.dinersLabel),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              const Text(AppStr.costLabel, style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 12),
+                              Text(SessionCache.currency, style: const TextStyle(fontSize: 16)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _costController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(labelText: AppStr.amountLabel),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text('${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}',
+                                  style: const TextStyle(fontFamily: 'Gelica')),
+                              const SizedBox(width: 12),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  DateTime? picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _selectedDate,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked != null && mounted) {
+                                    setState(() {
+                                      _selectedDate = picked;
+                                    });
+                                  }
+                                },
+                                child: const Text(AppStr.pickDate),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              const Text('Location search : ', style: TextStyle(fontFamily: 'Gelica')),
+                              SessionCache.allowLocation
+                                  ? Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: _restaurantOptions.length > 1
+                                            ? ElevatedButton(
+                                                onPressed: _showRestaurantSelector,
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                                                child: const Text(AppStr.multi),
+                                              )
+                                            : ElevatedButton(
+                                                onPressed: _attemptAutoFill,
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                                                child: const Text(AppStr.search),
+                                              ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      '(OFF)',
+                                      style: TextStyle(
+                                        fontFamily: 'Gelica',
+                                        color: Colors.grey,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                            ],
+                          ),
+                          const SizedBox(height: 36),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            if (_isSearching)
-              Container(
-                color: const Color(0xFF000000).withAlpha(77),
-                child: const Center(child: CircularProgressIndicator()),
+              if (_isSearching)
+                Container(
+                  color: const Color(0xFF000000).withAlpha(77),
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+            ],
+          );
+        },
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: _goBackToTop,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
+                child: const Text(AppStr.back),
               ),
-          ],
-        );
-      },
-    ),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            ElevatedButton(
-              onPressed: _goBackToTop,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
-              child: const Text(AppStr.back),
-            ),
-            ElevatedButton(
-              onPressed: _clearForm,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-              child: const Text(AppStr.clear),
-            ),
-            ElevatedButton(
-              onPressed: _goToRatingsScreen,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.yellow,
-                foregroundColor: Colors.black,
+              ElevatedButton(
+                onPressed: _clearForm,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                child: const Text(AppStr.clear),
               ),
-              child: const Text(AppStr.next),
-            ),
-          ],
+              ElevatedButton(
+                onPressed: _goToRatingsScreen,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.yellow,
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text(AppStr.next),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

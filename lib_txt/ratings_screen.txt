@@ -9,7 +9,7 @@ import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'sub_preview_screen/review_context.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'constants/strings.dart'; // ✅ Import centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class RatingsScreen extends StatefulWidget {
   final ReviewContext context;
@@ -225,7 +225,7 @@ Widget build(BuildContext context) {
                   child: Text(
                     AppStr.vfmText,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 16,
                       fontFamily: 'Gelica',
                       color: Colors.black54,
                     ),

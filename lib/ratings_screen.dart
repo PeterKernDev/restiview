@@ -9,7 +9,7 @@ import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'sub_preview_screen/review_context.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'constants/strings.dart'; // ✅ Import centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class RatingsScreen extends StatefulWidget {
   final ReviewContext context;
@@ -141,6 +141,10 @@ class _RatingsScreenState extends State<RatingsScreen> {
               ),
             ),
           ),
+
+          // gap equal to width of "oo" in Gelica (invisible)
+          const Text('oo', style: TextStyle(color: Colors.transparent, fontFamily: 'Gelica')),
+
           RatingBar.builder(
             initialRating: displayValue,
             minRating: 0,
@@ -157,6 +161,10 @@ class _RatingsScreenState extends State<RatingsScreen> {
               });
             },
           ),
+
+          // gap equal to width of "o" in Gelica (invisible)
+          const Text('o', style: TextStyle(color: Colors.transparent, fontFamily: 'Gelica')),
+
           const SizedBox(width: 8),
           Text(
             '${(displayValue * 4).round()}',
@@ -225,7 +233,7 @@ Widget build(BuildContext context) {
                   child: Text(
                     AppStr.vfmText,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 16,
                       fontFamily: 'Gelica',
                       color: Colors.black54,
                     ),

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'constants/strings.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
