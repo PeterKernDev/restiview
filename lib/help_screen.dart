@@ -1,10 +1,11 @@
 // help_screen.dart
-//
+// Help and About screen for RestiView — shows app info, website link, and version.
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'constants/strings.dart'; // ✅ Import centralized strings
-import 'constants/colours.dart';
+import 'constants/strings.dart';
+import 'constants/colors.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -23,34 +24,58 @@ class _HelpScreenState extends State<HelpScreen> {
   }
 
   Future<void> _loadVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    setState(() {
-      _version = 'Version ${info.version}';
-    });
-  }
-
-  void _launchWebsite() async {
-    final url = Uri.parse('https://www.restiview.com');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _version = 'Version ${info.version}';
+      });
+    } catch (_) {
+      // If retrieving version fails, silently ignore and leave _version empty.
     }
   }
 
-@override
+  Future<void> _launchWebsite() async {
+    final url = Uri.parse('https://www.restiview.com');
+    try {
+      final canLaunch = await canLaunchUrl(url);
+      if (!canLaunch) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppStr.invalidUrl)),
+        );
+        return;
+      }
+
+      final launched = await launchUrl(url);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppStr.openUrlFailed)),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStr.openUrlFailed)),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E6), // ✅ Beige background
+      backgroundColor: AppColors.beige,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ Disables top-left back arrow
-        title: const Text(
+        automaticallyImplyLeading: false,
+        title: Text(
           AppStr.help,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Gelica',
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        backgroundColor: const Color(0xFF2E4F3E), // ✅ Dark Green
+        backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
       body: SafeArea(
@@ -59,36 +84,36 @@ class _HelpScreenState extends State<HelpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 AppStr.aboutTitle,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Gelica',
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 AppStr.aboutDescription,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontFamily: 'Gelica',
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 AppStr.moreInfoPrompt,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontFamily: 'Gelica',
                 ),
               ),
               const SizedBox(height: 8),
-              GestureDetector(
+              InkWell(
                 onTap: _launchWebsite,
-                child: const Text(
+                child: Text(
                   AppStr.websiteUrl,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     fontFamily: 'Gelica',
                     color: Colors.blue,
@@ -112,13 +137,13 @@ class _HelpScreenState extends State<HelpScreen> {
                     ElevatedButton(
                       onPressed: () => Navigator.pop(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.ochre, // ✅ Dark Green
+                        backgroundColor: AppColors.ochre,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
-                      child: const Text(
+                      child: Text(
                         AppStr.back,
-                        style: TextStyle(fontFamily: 'Gelica'),
+                        style: const TextStyle(fontFamily: 'Gelica'),
                       ),
                     ),
                   ],

@@ -1,14 +1,10 @@
-// review_transform.dart
+// sub_preview_screen/review_transform.dart
 //
-// Converts a formatted Firebase review record back into the editable template.
-// Used when loading saved reviews into the editing flow.
-// Ensures all fields are restored, including ratings, tags, and photo path.
 import 'package:intl/intl.dart';
 import '/constants/restiview_constants.dart';
 
-/// Converts a formatted Firebase review record back into the editable template
 Map<String, dynamic> reverseFormatReviewData(Map<String, dynamic> formatted) {
-  return {
+  final Map<String, dynamic> result = {
     'restaurantName': formatted['restname'],
     'country': formatted['restcountry'],
     'city': formatted['restcity'],
@@ -34,9 +30,32 @@ Map<String, dynamic> reverseFormatReviewData(Map<String, dynamic> formatted) {
     'restaddress': formatted['restaddress'],
     'restphone': formatted['restphone'],
   };
+
+  // Include up to 3 comment photo paths
+  for (int i = 0; i < 3; i++) {
+    final key = 'photoPath$i';
+    if (formatted[key] != null) {
+      result[key] = formatted[key];
+    }
+  }
+
+  // Include detail categories if present
+  for (final key in [
+    'details_cocktails',
+    'details_starters',
+    'details_wine',
+    'details_main',
+    'details_dessert',
+    'details_otherdrinks',
+  ]) {
+    if (formatted[key] != null) {
+      result[key] = formatted[key];
+    }
+  }
+
+  return result;
 }
 
-/// Parses a formatted date string like '17/09/2025' into ISO format
 String _parseFormattedDate(String? dateStr) {
   try {
     final parsed = DateFormat('dd/MM/yyyy').parse(dateStr ?? '');
@@ -46,7 +65,6 @@ String _parseFormattedDate(String? dateStr) {
   }
 }
 
-/// Converts binary tag string like 'YNYNNY' into a list of selected tags
 List<String> _extractTags(String? binary) {
   if (binary == null || binary.length != goodForTags.length) return [];
 

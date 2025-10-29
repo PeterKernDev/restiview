@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart'; // ✅ Centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class GoodForFilterScreen extends StatefulWidget {
   final List<String> initialSelection;

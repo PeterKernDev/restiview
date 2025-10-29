@@ -6,7 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'services/session_cache.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart'; // ✅ Import centralized strings
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});

@@ -1,6 +1,5 @@
-// main_screen.dart
-// It all starts here.
-// RestiView v1.3.0 — Play Store Release
+// main.dart
+// App entry point for RestiView v1.3.0
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,12 +10,20 @@ import 'signin_screen.dart';
 import 'register_screen.dart';
 import 'help_screen.dart';
 import 'top_screen.dart';
-import 'tandc_screen.dart'; // ✅ Added for Terms & Conditions route
+import 'list_screen.dart'; // correct relative path to ReviewListScreen
+import 'settings_screen.dart';
+import 'tandc_screen.dart';
+import 'services/session_cache.dart';
 import 'constants/strings.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Warm session cache before UI so screens can read persisted values synchronously.
+  await SessionCache.initializeFromStorage();
+
+  // Then initialize Firebase.
   await Firebase.initializeApp();
   FirebaseAuth.instance.setLanguageCode('en');
 
@@ -34,9 +41,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'Gelica',
         scaffoldBackgroundColor: AppColors.beige,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.darkGreen,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.darkGreen),
         useMaterial3: true,
       ),
       initialRoute: '/',
@@ -51,17 +56,24 @@ class MyApp extends StatelessWidget {
           case '/help':
             return MaterialPageRoute(builder: (_) => const HelpScreen());
           case '/main':
-            return MaterialPageRoute(builder: (_) => TopScreen());
+            return MaterialPageRoute(builder: (_) => const TopScreen());
+          case '/list':
+            return MaterialPageRoute(builder: (_) {
+              final args = settings.arguments;
+              if (args is Map && args['newReviewKey'] != null) {
+                return ReviewListScreen(newReviewKey: args['newReviewKey'] as String?);
+              }
+              return const ReviewListScreen();
+            });
+          case '/settings':
+            return MaterialPageRoute(builder: (_) => const SettingsScreen());
           case '/tandc':
-            return MaterialPageRoute(builder: (_) => const TandCScreen()); // ✅ Registered route
+            return MaterialPageRoute(builder: (_) => const TandCScreen());
           default:
             return MaterialPageRoute(
               builder: (_) => const Scaffold(
                 body: Center(
-                  child: Text(
-                    'Page not found',
-                    style: TextStyle(fontFamily: 'Gelica'),
-                  ),
+                  child: Text('Page not found', style: TextStyle(fontFamily: 'Gelica')),
                 ),
               ),
             );

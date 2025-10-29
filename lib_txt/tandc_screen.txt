@@ -3,7 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'constants/strings.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 import 'constants/tandc_constants.dart';
 
 class TandCScreen extends StatelessWidget {

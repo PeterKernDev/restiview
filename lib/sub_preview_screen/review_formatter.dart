@@ -1,14 +1,10 @@
-// review_formatter.dart
+// sub_preview_screen/review_formatter.dart
 //
-// Formats review data for Firebase storage and display.
-// Converts raw review input into structured fields, including ratings (0–20 scale),
-// tags, cost, and metadata like user info and timestamp.
-
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import '/constants/restiview_constants.dart';
-import '/constants/strings.dart'; // ✅ Centralized strings
+import '/constants/strings.dart';
 
 Widget reviewRow(String label, String value) {
   return Padding(
@@ -79,7 +75,7 @@ Map<String, dynamic> formatReviewData(Map<String, dynamic> data, String email, S
   final List<String> selectedTags = List<String>.from(data['goodForTags'] ?? []);
   final goodForBinary = goodForTags.map((tag) => selectedTags.contains(tag) ? 'Y' : 'N').join();
 
-  return {
+  final Map<String, dynamic> formatted = {
     'restname': data['restaurantName'],
     'restcountry': data['country'],
     'restcity': data['city'],
@@ -111,4 +107,28 @@ Map<String, dynamic> formatReviewData(Map<String, dynamic> data, String email, S
     'restphone': data['restphone'],
     'timestamp': ServerValue.timestamp,
   };
+
+  // Include up to 3 comment photo paths
+  for (int i = 0; i < 3; i++) {
+    final key = 'photoPath$i';
+    if (data[key] != null) {
+      formatted[key] = data[key];
+    }
+  }
+
+  // Include detail categories if present
+  for (final key in [
+    'details_cocktails',
+    'details_starters',
+    'details_wine',
+    'details_main',
+    'details_dessert',
+    'details_otherdrinks',
+  ]) {
+    if (data[key] != null) {
+      formatted[key] = data[key];
+    }
+  }
+
+  return formatted;
 }

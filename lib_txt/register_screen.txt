@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart';
-import 'constants/colours.dart';
+import 'constants/colors.dart';
 import 'services/session_cache.dart';
 
 class RegisterScreen extends StatefulWidget {

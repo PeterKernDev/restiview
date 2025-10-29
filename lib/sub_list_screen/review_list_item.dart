@@ -1,4 +1,4 @@
-// review_list_item.dart
+// /sub_list_screen/review_list_item.dart
 // Widget for displaying a single restaurant review in the list view.
 
 import 'package:flutter/material.dart';

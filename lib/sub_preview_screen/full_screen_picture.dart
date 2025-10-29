@@ -1,3 +1,5 @@
+// sub_preview_screen/full_screen_picture.dart
+//
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '/constants/strings.dart'; // ✅ Centralized strings

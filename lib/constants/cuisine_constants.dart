@@ -1,3 +1,5 @@
+// constants/cuisine_constants.dart
+//
 const Map<String, List<String>> cuisineKeywords = {
   'French': [
     'bistro', 'patisserie', 'brasserie', 'café', 'fromage', 'croissant', 'baguette', 'crepe', 'escargot', 
