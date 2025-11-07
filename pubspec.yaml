@@ -4,7 +4,7 @@ name: restiview
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.4.3+16
+version: 1.5.1+19
 
 environment:
   sdk: ^3.9.2
