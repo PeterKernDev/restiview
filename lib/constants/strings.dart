@@ -31,7 +31,7 @@ class AppStr {
   static const String commentsTitle = 'Comments';
   static const String confirmDelete = 'Yes';
   static const String costLabel = 'Cost';
-  static const String countryLabel = 'Location';
+  static const String countryLabel = 'Country';
   static const String cuisineLabel = 'Cuisine';
   static const String dateLabel = 'Date:';
   static const String defaultOccasion = 'Nothing Special';
@@ -146,7 +146,7 @@ class AppStr {
   static const String allowAutoCaptureLabel = 'Allow Auto Capture';
   static const String allowAutoCaptureSubtitle = 'Automatically detect restaurants';
   static const String customValuesButton = 'CUSTOM VALUES';
-  static const String saveChangesButton = 'SAVE CHANGES';
+  static const String saveChangesButton = 'SAVE';
   static const String resetButton = 'RESET';
   static const String sortOptionCity = 'City';
   static const String sortOptionCuisine = 'Cuisine';
@@ -220,7 +220,7 @@ class AppStr {
   static const String detailsCountPrefix = 'Items';
   static const String detailsCountSuffix = 'items';
   static const String open = 'Open';
-  static const String addMore = 'Add more';
+  static const String addMore = '+More';
   static const String itemNameHint = 'Details';
   static const String photoAttached = 'Photo attached';
   static const String noPhoto = 'No photo';
@@ -233,4 +233,18 @@ class AppStr {
   static const String logoSemanticLabel = 'RestiView logo';
   static const String invalidUrl = 'Unable to open link on this device';
   static const String openUrlFailed = 'Failed to open link, please try again';
+  static const String enterCustomCountry = 'Please select a country before adding';
+  static const String sortFilter = 'Sort/Filter';
+  static const String loadFailed = 'Failed to load reviews';
+  static const String autoFillSkipped = 'Location search skipped — allowLocation is false.';
+  static const String locationDisabled = 'Location services are disabled. Please enable them in Settings.';
+  static const String permissionDeniedForever = 'Location permission permanently denied. Enable it in app settings.';
+  static const String permissionDenied = 'Location permission denied. Cannot auto-fill.';
+  static const String searchFailed = 'Search failed';
+  static const String locationSearchLabel = 'Location search : ';
+
+
+
+
+
 }

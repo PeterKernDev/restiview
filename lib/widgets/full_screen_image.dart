@@ -1,8 +1,10 @@
-// sub_preview_screen/full_screen_picture.dart
-//
+// lib/widgets/full_screen_image.dart
+// Reusable full screen image viewer used by Thumbnail, Details, Comments, Preview.
+// Tap anywhere to dismiss. Uses Image.file with errorBuilder to avoid crashes.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '/constants/strings.dart'; // ✅ Centralized strings
+import '../constants/strings.dart';
 
 class FullScreenImage extends StatelessWidget {
   final String path;
@@ -19,8 +21,10 @@ class FullScreenImage extends StatelessWidget {
           child: Image.file(
             File(path),
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Text( AppStr.photoError,
+            errorBuilder: (_, __, ___) => const Text(
+              AppStr.photoError,
               style: TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
             ),
           ),
         ),

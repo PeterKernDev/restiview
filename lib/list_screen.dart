@@ -1,6 +1,6 @@
 // list_screen.dart
 // Main screen for displaying and filtering restaurant reviews
-//
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,8 +14,9 @@ import 'constants/colors.dart';
 import 'constants/strings.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
+import 'sub_list_screen/sort_filter.dart';
 import 'sub_list_screen/review_list_item.dart';
-import 'sub_list_screen/review_filter_bar.dart';
+import 'constants/fonts.dart';
 
 class ReviewListScreen extends StatefulWidget {
   final String? newReviewKey;
@@ -34,6 +35,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
 
   String? localCityFilter;
   String? localCuisineFilter;
+  String? localCountryFilter;
   String localSortOption = '';
   final ScrollController _scrollController = ScrollController();
   String? _highlightedKey;
@@ -44,7 +46,10 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
   void initState() {
     super.initState();
 
-    // Restore persisted sort option (async) and apply capitalization for display.
+    localCountryFilter = SessionCache.countryFilter;
+    localCityFilter = SessionCache.cityFilter;
+    localCuisineFilter = SessionCache.cuisineFilter;
+
     SessionCache.getSortOption().then((stored) {
       if (!mounted) return;
       setState(() {
@@ -57,7 +62,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       _reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
 
       _reviewSubscription = _reviewsRef.onValue.listen((event) {
-        final data = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+        final rawValue = event.snapshot.value;
+        final data = (rawValue is Map) ? Map<dynamic, dynamic>.from(rawValue) : <dynamic, dynamic>{};
         final reviews = data.entries.map((e) {
           final review = Map<String, dynamic>.from(e.value as Map);
           review['key'] = e.key;
@@ -75,8 +81,12 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
               _highlightedKey = widget.newReviewKey;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted) return;
+                final target = (index * 96.0).clamp(
+                  0.0,
+                  _scrollController.hasClients ? _scrollController.position.maxScrollExtent : double.infinity,
+                );
                 _scrollController.animateTo(
-                  index * 100.0,
+                  target,
                   duration: const Duration(milliseconds: 500),
                   curve: Curves.easeInOut,
                 );
@@ -93,7 +103,14 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
 
           _isLoading = false;
         });
+      }, onError: (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.loadFailed}: $e')));
       });
+    } else {
+      _isLoading = false;
     }
   }
 
@@ -102,23 +119,24 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     final city = localCityFilter;
     final cuisine = localCuisineFilter;
 
-    final filtered = _allReviews.where((review) {
-      final cityMatch = city == null ||
-          review['restcity']?.toLowerCase() == city.toLowerCase();
+    final rawCountry = localCountryFilter ?? (SessionCache.defaultCountry != 'Any' ? SessionCache.defaultCountry : null);
+    final country = (rawCountry == 'ALL') ? null : rawCountry;
 
-      final cuisineMatch = cuisine == null ||
-          review['restcuisine']?.toLowerCase() == cuisine.toLowerCase();
+    // debugPrint('Filters → Country: $country, City: $city, Cuisine: $cuisine');
+
+    final filtered = _allReviews.where((review) {
+      final cityMatch = city == null || (review['restcity']?.toString().toLowerCase() ?? '') == city.toLowerCase();
+      final cuisineMatch = cuisine == null || (review['restcuisine']?.toString().toLowerCase() ?? '') == cuisine.toLowerCase();
+      final countryMatch = country == null || (review['restcountry']?.toString().toLowerCase() ?? '') == country.toLowerCase();
 
       final binary = review['goodfor'] ?? '';
-      final goodForMatch = filterTags.isEmpty ||
-          filterTags.every((tag) {
-            final index = goodForTags.indexOf(tag);
-            return index >= 0 &&
-                index < binary.length &&
-                binary[index] == 'Y';
-          });
+      final String binaryStr = binary.toString();
+      final goodForMatch = filterTags.isEmpty || filterTags.every((tag) {
+        final index = goodForTags.indexOf(tag);
+        return index >= 0 && index < binaryStr.length && binaryStr[index] == 'Y';
+      });
 
-      return cityMatch && cuisineMatch && goodForMatch;
+      return cityMatch && cuisineMatch && countryMatch && goodForMatch;
     }).toList();
 
     _filteredReviews = _sortReviews(filtered);
@@ -130,19 +148,15 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     switch (sortBy) {
       case 'rating':
         reviews.sort((a, b) =>
-            (double.tryParse(b['restrating'].toString()) ?? 0)
-                .compareTo(double.tryParse(a['restrating'].toString()) ?? 0));
+            (double.tryParse(b['restrating']?.toString() ?? '') ?? 0)
+                .compareTo(double.tryParse(a['restrating']?.toString() ?? '') ?? 0));
         break;
       case 'name':
-        reviews.sort((a, b) => (a['restname'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo((b['restname'] ?? '').toString().toLowerCase()));
+        reviews.sort((a, b) => (a['restname'] ?? '').toString().toLowerCase().compareTo((b['restname'] ?? '').toString().toLowerCase()));
         break;
       case 'date':
       default:
-        reviews.sort((a, b) =>
-            (b['reviewdate'] ?? '').compareTo(a['reviewdate'] ?? ''));
+        reviews.sort((a, b) => (b['reviewdate'] ?? '').toString().compareTo((a['reviewdate'] ?? '').toString()));
         break;
     }
 
@@ -158,138 +172,77 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     );
 
     if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PreviewScreen(context: reviewContext),
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PreviewScreen(context: reviewContext)));
+  }
+
+  void _openFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SortFilterPanel(
+        currentSort: localSortOption,
+        currentCountry: localCountryFilter,
+        currentCity: localCityFilter,
+        currentCuisine: localCuisineFilter,
+        allReviews: _allReviews,
+        onApply: (sort, ct, cy, cz) {
+          SessionCache.setSortOption(sort.toLowerCase());
+          SessionCache.countryFilter = ct;
+
+          if (!mounted) return;
+          setState(() {
+            localSortOption = sort;
+            localCountryFilter = ct;
+            localCityFilter = cy;
+            localCuisineFilter = cz;
+            _applyFiltersAndSort();
+          });
+        },
+        onClear: () {
+          SessionCache.setSortOption('date');
+          SessionCache.countryFilter = SessionCache.defaultCountry != 'Any' ? SessionCache.defaultCountry : null;
+          SessionCache.cityFilter = null;
+          SessionCache.cuisineFilter = null;
+          SessionCache.clearGoodForFilter();
+
+          if (!mounted) return;
+          setState(() {
+            localSortOption = _capitalize(SessionCache.sortOption);
+            localCountryFilter = SessionCache.countryFilter;
+            localCityFilter = null;
+            localCuisineFilter = null;
+            _applyFiltersAndSort();
+          });
+        },
       ),
     );
   }
 
-  void _openFilterDialog() {
-    final sortOptions = [
-      AppStr.sortOptionDate,
-      AppStr.sortOptionRating,
-      AppStr.sortOptionName,
-    ];
-
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        String? modalSort = localSortOption.isNotEmpty ? localSortOption : _capitalize(SessionCache.sortOption);
-        String? modalCity = localCityFilter;
-        String? modalCuisine = localCuisineFilter;
-
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: sortOptions.contains(modalSort) ? modalSort : null,
-                items: sortOptions
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (value) {
-                  if (!mounted || value == null) return;
-                  // persist canonical key (lowercase) immediately
-                  SessionCache.setSortOption(value.toLowerCase());
-                  setState(() {
-                    localSortOption = value;
-                  });
-                },
-                decoration: const InputDecoration(labelText: AppStr.sortByLabel),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                decoration: const InputDecoration(labelText: AppStr.cityLabel),
-                controller: TextEditingController(text: modalCity),
-                onChanged: (value) {
-                  if (!mounted) return;
-                  modalCity = value.trim().isEmpty ? null : value.trim();
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: SessionCache.customCuisines.contains(modalCuisine) ? modalCuisine : null,
-                items: SessionCache.customCuisines
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (value) {
-                  if (!mounted) return;
-                  modalCuisine = value;
-                },
-                decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      if (!mounted) return;
-                      // apply modal values
-                      setState(() {
-                        localCityFilter = modalCity;
-                        localCuisineFilter = modalCuisine;
-                        _applyFiltersAndSort();
-                      });
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        Navigator.pop(context);
-                      });
-                    },
-                    child: const Text(AppStr.apply),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                    onPressed: () {
-                      if (!mounted) return;
-                      // reset filters and persist canonical default sort
-                      SessionCache.setSortOption('date');
-                      setState(() {
-                        localCityFilter = null;
-                        localCuisineFilter = null;
-                        localSortOption = _capitalize(SessionCache.sortOption);
-                        _applyFiltersAndSort();
-                      });
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        Navigator.pop(context);
-                      });
-                    },
-                    child: const Text(AppStr.clear),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  String _capitalize(String input) {
+    return input.isNotEmpty ? '${input[0].toUpperCase()}${input.substring(1)}' : '';
   }
 
-  String _capitalize(String input) {
-    return input.isNotEmpty
-        ? '${input[0].toUpperCase()}${input.substring(1)}'
-        : '';
+  @override
+  void dispose() {
+    _reviewSubscription?.cancel();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
+      textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      minimumSize: const Size(0, 44),
+    );
+
     return PopScope(
       canPop: false,
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
           centerTitle: true,
-          title: Text(
-            'Restaurant Reviews: (${_filteredReviews.length})',
-            style: const TextStyle(
-              fontFamily: 'Gelica',
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
+          title: Text('Restaurant Reviews: (${_filteredReviews.length})', style: AppFonts.title.copyWith(color: Colors.white)),
           backgroundColor: AppColors.red,
         ),
         body: Column(
@@ -298,16 +251,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _filteredReviews.isEmpty
-                      ? const Center(
-                          child: Text(
-                            AppStr.noReviewsMatch,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                              fontFamily: 'Gelica',
-                            ),
-                          ),
-                        )
+                      ? Center(child: Text(AppStr.noReviewsMatch, style: AppFonts.standard.copyWith(fontSize: 16, color: Colors.grey)))
                       : ListView.builder(
                           controller: _scrollController,
                           itemCount: _filteredReviews.length,
@@ -330,109 +274,124 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ReviewFilterBar(
-                        sortOption: localSortOption,
-                        city: localCityFilter,
-                        cuisine: localCuisineFilter,
-                        onTap: _openFilterDialog,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _openFilterDialog,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.lightBlue.shade100,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            textStyle: AppFonts.bold,
+                          ),
+                          child: Text(AppStr.sortFilter, style: AppFonts.bold),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        ElevatedButton(
-                          onPressed: () {
-                            if (!mounted) return;
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (_) => TopScreen()),
-                              (route) => false,
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.ochre,
-                            foregroundColor: Colors.black,
-                          ),
-                          child: const Text(AppStr.back,
-                              style: TextStyle(fontFamily: 'Gelica')),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            final newContext = ReviewContext(
-                              reviewMap: {},
-                              isEditing: false,
-                              reviewKey: null,
-                            );
-                            if (!mounted) return;
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => GeneralScreen(context: newContext),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: ElevatedButton(
+                              onPressed: () {
+                                if (!mounted) return;
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => TopScreen()),
+                                  (route) => false,
+                                );
+                              },
+                              style: actionBtnBase.copyWith(
+                                backgroundColor: WidgetStateProperty.all(AppColors.ochre),
+                                foregroundColor: WidgetStateProperty.all(Colors.black),
                               ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.darkGreen,
-                            foregroundColor: Colors.white,
+                              child: Text(AppStr.back, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
                           ),
-                          child: const Text(AppStr.add,
-                              style: TextStyle(fontFamily: 'Gelica')),
                         ),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (!mounted) return;
-                            // reset filters and persist canonical default sort
-                            SessionCache.setSortOption('date');
-                            setState(() {
-                              localCityFilter = null;
-                              localCuisineFilter = null;
-                              localSortOption = _capitalize(SessionCache.sortOption);
-                              SessionCache.goodForFilter.clear();
-                              _applyFiltersAndSort();
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueGrey,
-                            foregroundColor: Colors.white,
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: ElevatedButton(
+                              onPressed: () {
+                                final newContext = ReviewContext(reviewMap: {}, isEditing: false, reviewKey: null);
+                                if (!mounted) return;
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => GeneralScreen(context: newContext)));
+                              },
+                              style: actionBtnBase.copyWith(
+                                backgroundColor: WidgetStateProperty.all(AppColors.darkGreen),
+                                foregroundColor: WidgetStateProperty.all(Colors.white),
+                              ),
+                              child: Text(AppStr.add, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
                           ),
-                          child: const Text(AppStr.clear,
-                              style: TextStyle(fontFamily: 'Gelica')),
                         ),
-                        ElevatedButton(
-                          onPressed: () async {
-                            if (!mounted) return;
-                            final selected = await Navigator.push<List<String>>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => GoodForFilterScreen(
-                                  initialSelection: SessionCache.goodForFilter,
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: ElevatedButton(
+                              onPressed: () {
+                                if (!mounted) return;
+                                SessionCache.setSortOption('date');
+                                SessionCache.cityFilter = null;
+                                SessionCache.cuisineFilter = null;
+                                SessionCache.countryFilter = null;
+                                SessionCache.clearGoodForFilter();
+
+                                setState(() {
+                                  localCityFilter = null;
+                                  localCuisineFilter = null;
+                                  localCountryFilter = null;
+                                  localSortOption = _capitalize(SessionCache.sortOption);
+                                  _applyFiltersAndSort();
+                                });
+                              },
+                              style: actionBtnBase.copyWith(
+                                backgroundColor: WidgetStateProperty.all(Colors.blueGrey),
+                                foregroundColor: WidgetStateProperty.all(Colors.white),
+                              ),
+                              child: Text(AppStr.clear, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (!mounted) return;
+                                final selected = await Navigator.push<List<String>>(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => GoodForFilterScreen(initialSelection: SessionCache.goodForFilter)),
+                                );
+                                if (!mounted) return;
+                                if (selected != null) {
+                                  setState(() {
+                                    SessionCache.setGoodForFilter(selected);
+                                    _applyFiltersAndSort();
+                                  });
+                                }
+                              },
+                              style: actionBtnBase.copyWith(
+                                backgroundColor: WidgetStateProperty.all(
+                                  SessionCache.goodForFilter.isNotEmpty ? Colors.yellow : Colors.white,
+                                ),
+                                foregroundColor: WidgetStateProperty.all(Colors.black),
+                              ),
+                              child: Text(
+                                AppStr.goodForTitle.toUpperCase(),
+                                overflow: TextOverflow.ellipsis,
+                                style: AppFonts.bold.copyWith(
+                                  decoration: SessionCache.goodForFilter.isNotEmpty ? TextDecoration.underline : TextDecoration.none,
+                                  color: Colors.black,
                                 ),
                               ),
-                            );
-                            if (selected != null && mounted) {
-                              setState(() {
-                                SessionCache.goodForFilter = selected;
-                                _applyFiltersAndSort();
-                              });
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SessionCache.goodForFilter.isNotEmpty
-                                ? Colors.yellow
-                                : Colors.white,
-                            foregroundColor: Colors.black,
-                          ),
-                          child: Text(
-                            AppStr.goodForTitle.toUpperCase(),
-                            style: TextStyle(
-                              fontFamily: 'Gelica',
-                              decoration: SessionCache.goodForFilter.isNotEmpty
-                                  ? TextDecoration.underline
-                                  : TextDecoration.none,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -441,17 +400,10 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                   ],
                 ),
               ),
-            ),
+            )
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _reviewSubscription?.cancel();
-    _scrollController.dispose();
-    super.dispose();
   }
 }

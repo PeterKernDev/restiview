@@ -8,8 +8,9 @@ import 'services/session_cache.dart';
 import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'sub_preview_screen/review_context.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'constants/strings.dart'; // ✅ Import centralized strings
+import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 
 class RatingsScreen extends StatefulWidget {
   final ReviewContext context;
@@ -34,6 +35,25 @@ class _RatingsScreenState extends State<RatingsScreen> {
   late double drinksRatingDisplay;
   late double vfmsRatingDisplay;
 
+  @override
+  void initState() {
+    super.initState();
+    final reviewMap = widget.context.reviewMap;
+
+    foodRating = reviewMap['foodRating'] ?? 0;
+    serviceRating = reviewMap['serviceRating'] ?? 0;
+    ambianceRating = reviewMap['ambianceRating'] ?? 0;
+    drinksRating = reviewMap['drinksRating'] ?? 0;
+    vfmsRating = reviewMap['vfmsRating'] ?? 0;
+    michelinStars = reviewMap['michelinStars'] ?? 0;
+
+    foodRatingDisplay = (foodRating / 4).clamp(0.0, 5.0);
+    serviceRatingDisplay = (serviceRating / 4).clamp(0.0, 5.0);
+    ambianceRatingDisplay = (ambianceRating / 4).clamp(0.0, 5.0);
+    drinksRatingDisplay = (drinksRating / 4).clamp(0.0, 5.0);
+    vfmsRatingDisplay = (vfmsRating / 4).clamp(0.0, 5.0);
+  }
+
   void _clearRatings() {
     if (!mounted) return;
     setState(() {
@@ -50,25 +70,6 @@ class _RatingsScreenState extends State<RatingsScreen> {
       drinksRatingDisplay = 0;
       vfmsRatingDisplay = 0;
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    final reviewMap = widget.context.reviewMap;
-
-    foodRating = reviewMap['foodRating'] ?? 0;
-    serviceRating = reviewMap['serviceRating'] ?? 0;
-    ambianceRating = reviewMap['ambianceRating'] ?? 0;
-    drinksRating = reviewMap['drinksRating'] ?? 0;
-    vfmsRating = reviewMap['vfmsRating'] ?? 0;
-    michelinStars = reviewMap['michelinStars'] ?? 0;
-
-    foodRatingDisplay = foodRating / 4;
-    serviceRatingDisplay = serviceRating / 4;
-    ambianceRatingDisplay = ambianceRating / 4;
-    drinksRatingDisplay = drinksRating / 4;
-    vfmsRatingDisplay = vfmsRating / 4;
   }
 
   void _saveToContext() {
@@ -94,6 +95,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
       ),
     );
   }
+
   void _goToPreviewScreen() {
     _saveToContext(); // Ensure ratings are saved
 
@@ -115,6 +117,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
       ),
     );
   }
+
   void _goBack() {
     _saveToContext();
     Navigator.pushReplacement(
@@ -125,7 +128,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
     );
   }
 
-  Widget _buildStarRatingRow(String label, double displayValue, Function(double) updateDisplay, Function(int) updateStored) {
+  Widget _buildStarRatingRow(String label, double displayValue, void Function(double) updateDisplay, void Function(int) updateStored) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -134,17 +137,10 @@ class _RatingsScreenState extends State<RatingsScreen> {
             width: 90,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                fontFamily: 'Gelica',
-              ),
+              style: AppFonts.standard.copyWith(fontSize: 18, fontWeight: FontWeight.w500),
             ),
           ),
-
-          // gap equal to width of "oo" in Gelica (invisible)
-          const Text('oo', style: TextStyle(color: Colors.transparent, fontFamily: 'Gelica')),
-
+          const SizedBox(width: 8),
           RatingBar.builder(
             initialRating: displayValue,
             minRating: 0,
@@ -161,186 +157,209 @@ class _RatingsScreenState extends State<RatingsScreen> {
               });
             },
           ),
-
-          // gap equal to width of "o" in Gelica (invisible)
-          const Text('o', style: TextStyle(color: Colors.transparent, fontFamily: 'Gelica')),
-
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Text(
             '${(displayValue * 4).round()}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
+            style: AppFonts.bold.copyWith(fontSize: 18, color: Colors.black),
           ),
         ],
       ),
     );
   }
 
-@override
-Widget build(BuildContext context) {
-  final totalRating = foodRating + serviceRating + ambianceRating + drinksRating + vfmsRating;
-
-  return Scaffold(
-    backgroundColor: AppColors.beige,
-    appBar: AppBar(
-      automaticallyImplyLeading: false,
-      title: const Text(
-        AppStr.rateTitle,
-        style: TextStyle(
-          fontFamily: 'Gelica',
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-      backgroundColor: AppColors.darkGreen,
-      centerTitle: true,
-    ),
-    body: Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+  Widget _michelinSelector() {
+    return LayoutBuilder(builder: (ctx, constraints) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(4, (index) {
+          final selected = michelinStars == index;
+          return InkWell(
+            onTap: () {
+              if (!mounted) return;
+              setState(() {
+                michelinStars = index;
+              });
+            },
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 32),
-                const Center(
-                  child: Text(
-                    AppStr.rateSubtitle,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black26),
+                    color: selected ? AppColors.darkGreen : Colors.transparent,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.radio_button_checked,
+                      size: 20,
+                      color: selected ? Colors.white : Colors.black38,
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _buildStarRatingRow(AppStr.foodLabel, foodRatingDisplay, (val) => foodRatingDisplay = val, (val) => foodRating = val),
-                const SizedBox(height: 16),
-                _buildStarRatingRow(AppStr.serviceLabel, serviceRatingDisplay, (val) => serviceRatingDisplay = val, (val) => serviceRating = val),
-                const SizedBox(height: 16),
-                _buildStarRatingRow(AppStr.ambianceLabel, ambianceRatingDisplay, (val) => ambianceRatingDisplay = val, (val) => ambianceRating = val),
-                const SizedBox(height: 16),
-                _buildStarRatingRow(AppStr.drinksLabel, drinksRatingDisplay, (val) => drinksRatingDisplay = val, (val) => drinksRating = val),
-                const SizedBox(height: 16),
-                _buildStarRatingRow(AppStr.vfmsLabel, vfmsRatingDisplay, (val) => vfmsRatingDisplay = val, (val) => vfmsRating = val),
-                const SizedBox(height: 4),
-                const Padding(
-                  padding: EdgeInsets.only(left: 1),
-                  child: Text(
-                    AppStr.vfmText,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontFamily: 'Gelica',
-                      color: Colors.black54,
+                const SizedBox(height: 6),
+                Text(
+                  '$index',
+                  style: AppFonts.standard.copyWith(fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        }),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalRating = foodRating + serviceRating + ambianceRating + drinksRating + vfmsRating;
+
+    // Shared button style for consistent label sizes across the action buttons
+    final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
+      textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      minimumSize: const Size(0, 44),
+    );
+
+    return Scaffold(
+      backgroundColor: AppColors.beige,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(
+          AppStr.rateTitle,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
+        backgroundColor: AppColors.darkGreen,
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 32),
+                  Center(
+                    child: Text(
+                      AppStr.rateSubtitle,
+                      style: AppFonts.bold.copyWith(fontSize: 18),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 90,
-                        child: Text(
-                          AppStr.michelinLabel,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Gelica',
+                  const SizedBox(height: 16),
+                  _buildStarRatingRow(AppStr.foodLabel, foodRatingDisplay, (val) => foodRatingDisplay = val, (val) => foodRating = val),
+                  const SizedBox(height: 16),
+                  _buildStarRatingRow(AppStr.serviceLabel, serviceRatingDisplay, (val) => serviceRatingDisplay = val, (val) => serviceRating = val),
+                  const SizedBox(height: 16),
+                  _buildStarRatingRow(AppStr.ambianceLabel, ambianceRatingDisplay, (val) => ambianceRatingDisplay = val, (val) => ambianceRating = val),
+                  const SizedBox(height: 16),
+                  _buildStarRatingRow(AppStr.drinksLabel, drinksRatingDisplay, (val) => drinksRatingDisplay = val, (val) => drinksRating = val),
+                  const SizedBox(height: 16),
+                  _buildStarRatingRow(AppStr.vfmsLabel, vfmsRatingDisplay, (val) => vfmsRatingDisplay = val, (val) => vfmsRating = val),
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 1),
+                    child: Text(
+                      AppStr.vfmText,
+                      style: AppFonts.standard.copyWith(fontSize: 16, color: Colors.black54),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 90,
+                          child: Text(
+                            AppStr.michelinLabel,
+                            style: AppFonts.bold.copyWith(fontSize: 18),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: List.generate(4, (index) {
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Radio<int>(
-                                  value: index,
-                                  groupValue: michelinStars,
-                                  onChanged: (value) {
-                                    if (!mounted) return;
-                                    setState(() {
-                                      michelinStars = value!;
-                                    });
-                                  },
-                                ),
-                                Text(
-                                  '$index',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontFamily: 'Gelica',
-                                  ),
-                                ),
-                              ],
-                            );
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Center(
-                  child: Text(
-                    '${AppStr.totalRatingLabel} $totalRating / 100',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
-                      color: Color(0xFFB00020),
+                        Expanded(child: _michelinSelector()),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 36),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 36),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _goBack,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
-                  child: const Text(AppStr.back),
-                ),
-                ElevatedButton(
-                  onPressed: _clearRatings,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                  child: const Text(AppStr.clear),
-                ),
-                ElevatedButton(
-                  onPressed: _goToPreviewScreen,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: const Text(AppStr.preview),
-                ),
-                ElevatedButton(
-                  onPressed: _goToNextScreen,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow,
-                    foregroundColor: Colors.black,
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Text(
+                      '${AppStr.totalRatingLabel} $totalRating / 100',
+                      style: AppFonts.bold.copyWith(fontSize: 20, color: const Color(0xFFB00020)),
+                    ),
                   ),
-                  child: const Text(AppStr.next),
-                ),
-              ],
+                  const SizedBox(height: 36),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          const SizedBox(height: 36),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goBack,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(AppColors.ochre),
+                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                        ),
+                        child: Text(AppStr.back, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _clearRatings,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.grey),
+                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                        ),
+                        child: Text(AppStr.clear, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goToPreviewScreen,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.green),
+                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                        ),
+                        child: Text(AppStr.preview, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goToNextScreen,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.yellow),
+                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                        ),
+                        child: Text(AppStr.next, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

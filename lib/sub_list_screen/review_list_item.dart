@@ -1,36 +1,50 @@
-// /sub_list_screen/review_list_item.dart
+// lib/sub_list_screen/review_list_item.dart
 // Widget for displaying a single restaurant review in the list view.
 
 import 'package:flutter/material.dart';
-import '../constants/strings.dart'; // ✅ For AppStr
+import '../constants/strings.dart';
+import '../constants/colors.dart';
+import '../constants/fonts.dart';
 
 class ReviewListItem extends StatelessWidget {
   final Map<String, dynamic> review;
   final VoidCallback onTap;
-  final bool highlight; // ✅ New parameter
+  final bool highlight;
 
   const ReviewListItem({
     required this.review,
     required this.onTap,
-    this.highlight = false, // ✅ Default to false
+    this.highlight = false,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    final restname = review['restname'] ?? '';
-    final reviewdate = review['reviewdate'] ?? '';
-    final rating = double.tryParse(review['restrating'].toString())?.round() ?? '';
-    final restcountry = review['restcountry'] ?? '';
-    final restcity = review['restcity'] ?? '';
-    final restcuisine = review['restcuisine'] ?? '';
+    final restname = review['restname']?.toString() ?? '';
+    final reviewdate = review['reviewdate']?.toString() ?? '';
+    final restratingRaw = review['restrating'];
+    int rating;
+    if (restratingRaw is int) {
+      rating = restratingRaw;
+    } else {
+      rating = int.tryParse(restratingRaw?.toString() ?? '') ??
+          (double.tryParse(restratingRaw?.toString() ?? '')?.round() ?? 0);
+    }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        color: highlight ? Colors.orange.withOpacity(0.2) : null, // ✅ Highlight background
+    final restcountry = review['restcountry']?.toString() ?? '';
+    final restcity = review['restcity']?.toString() ?? '';
+    final restcuisine = review['restcuisine']?.toString() ?? '';
+
+    // Use AppColors.ochre with opacity for highlight
+    // new: use withAlpha to set exact alpha value (0-255)
+    final highlightColor = AppColors.ochre.withAlpha((0.12 * 255).round());
+
+    return Material(
+      color: highlight ? highlightColor : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -41,63 +55,59 @@ class ReviewListItem extends StatelessWidget {
                     child: Text(
                       restname,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: AppFonts.bold.copyWith(
                         color: Colors.blue,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Gelica',
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '${AppStr.ratingLabel} $rating',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontFamily: 'Gelica',
-                    ),
+                    style: AppFonts.standard.copyWith(color: Colors.black),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
 
               // Line 2: Country/City left, Date center, Cuisine right
               Row(
                 children: [
                   Expanded(
+                    flex: 3,
                     child: Text(
-                      '$restcountry, $restcity',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontFamily: 'Gelica',
-                      ),
+                      (restcountry.isNotEmpty && restcity.isNotEmpty) ? '$restcountry, $restcity' : (restcountry + restcity),
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.standard,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
+                    flex: 2,
                     child: Center(
                       child: Text(
                         reviewdate,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontFamily: 'Gelica',
-                        ),
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.standard,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
+                    flex: 3,
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: Text(
                         restcuisine,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontFamily: 'Gelica',
-                        ),
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.standard,
                       ),
                     ),
                   ),
                 ],
               ),
-              const Divider(),
+              const SizedBox(height: 10),
+              const Divider(height: 1),
             ],
           ),
         ),

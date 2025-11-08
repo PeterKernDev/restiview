@@ -67,6 +67,8 @@ const List<String> goodForTags = [
   'Scenic View',
   'Special Occasion',
   'Organic',
+  'Lunch',
+  'Breakfast',
 ];
 
 const List<String> michelinLevels = [

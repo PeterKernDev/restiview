@@ -4,7 +4,9 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import '/constants/restiview_constants.dart';
+import '/constants/colors.dart';
 import '/constants/strings.dart';
+import '/constants/fonts.dart';
 
 Widget reviewRow(String label, String value) {
   return Padding(
@@ -13,15 +15,12 @@ Widget reviewRow(String label, String value) {
       children: [
         Text(
           '$label: ',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Gelica',
-          ),
+          style: AppFonts.bold,
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontFamily: 'Gelica'),
+            style: AppFonts.standard,
           ),
         ),
       ],
@@ -31,31 +30,29 @@ Widget reviewRow(String label, String value) {
 
 Widget tagDisplay(List<String> tags) {
   if (tags.isEmpty) {
-    return const Text(
+    return Text(
       AppStr.noTags,
-      style: TextStyle(fontFamily: 'Gelica'),
+      style: AppFonts.standard,
     );
   }
 
   final tagText = tags.join(', ');
   return Text(
     tagText,
-    style: const TextStyle(fontFamily: 'Gelica'),
+    style: AppFonts.standard,
   );
 }
 
 Widget ratingSummary(int rating, int michelinStars) {
-  final michelinText = michelinStars > 0 ? '  (M-${'*' * michelinStars})' : '';
+  final michelinPrefix = michelinStars > 0 ? 'M${'*' * michelinStars} ' : '';
 
   return Center(
     child: Text(
-      '${AppStr.totalRatingLabel} $rating / 100$michelinText',
+      '$michelinPrefix${AppStr.totalRatingLabel} $rating / 100',
       textAlign: TextAlign.center,
-      style: const TextStyle(
+      style: AppFonts.bold.copyWith(
         fontSize: 20,
-        fontWeight: FontWeight.bold,
-        fontFamily: 'Gelica',
-        color: Color(0xFFB00020),
+        color: AppColors.ratingHighlight,
       ),
     ),
   );

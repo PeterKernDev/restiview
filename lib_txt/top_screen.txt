@@ -1,7 +1,7 @@
 // top_screen.dart
 // Main dashboard screen after user login. Provides access to review creation, viewing, settings, help, and sign-out.
 //
-//
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -12,6 +12,7 @@ import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 
 class TopScreen extends StatefulWidget {
   const TopScreen({super.key});
@@ -68,21 +69,12 @@ class _TopScreenState extends State<TopScreen> {
           showDialog(
             context: context,
             builder: (_) => AlertDialog(
-              title: const Text(
-                AppStr.noReviewsTitle,
-                style: TextStyle(fontFamily: 'Gelica'),
-              ),
-              content: const Text(
-                AppStr.noReviewsMessage,
-                style: TextStyle(fontFamily: 'Gelica'),
-              ),
+              title: Text(AppStr.noReviewsTitle, style: AppFonts.bold),
+              content: Text(AppStr.noReviewsMessage, style: AppFonts.standard),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    AppStr.ok,
-                    style: TextStyle(fontFamily: 'Gelica'),
-                  ),
+                  child: Text(AppStr.ok, style: AppFonts.standard),
                 ),
               ],
             ),
@@ -127,11 +119,7 @@ class _TopScreenState extends State<TopScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           '${AppStr.appTitle} : $displayName',
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Gelica',
-            fontWeight: FontWeight.bold,
-          ),
+          style: AppFonts.bold.copyWith(color: Colors.white),
         ),
         centerTitle: true,
       ),
@@ -144,14 +132,9 @@ class _TopScreenState extends State<TopScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 96),
-                  const Text(
+                  Text(
                     AppStr.restaurantReviews,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
-                      color: AppColors.red,
-                    ),
+                    style: AppFonts.bold.copyWith(fontSize: 24, color: AppColors.red),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -163,7 +146,7 @@ class _TopScreenState extends State<TopScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: _startNewReview,
-                    child: const Text(AppStr.addReview, style: TextStyle(fontFamily: 'Gelica')),
+                    child: Text(AppStr.addReview, style: AppFonts.standard),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -180,13 +163,13 @@ class _TopScreenState extends State<TopScreen> {
                             width: 24,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text(AppStr.viewReviews, style: TextStyle(fontFamily: 'Gelica')),
+                        : Text(AppStr.viewReviews, style: AppFonts.standard),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 36), // ✅ Adds breathing room above bottom buttons
+          const SizedBox(height: 36), // Adds breathing room above bottom buttons
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -198,7 +181,7 @@ class _TopScreenState extends State<TopScreen> {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
                     },
                     icon: const Icon(Icons.settings, color: Colors.white),
-                    label: const Text(AppStr.settings, style: TextStyle(fontFamily: 'Gelica')),
+                    label: Text(AppStr.settings, style: AppFonts.standard.copyWith(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey,
                       foregroundColor: Colors.white,
@@ -215,9 +198,9 @@ class _TopScreenState extends State<TopScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => Navigator.pushNamed(context, '/help'),
-                    child: const Text(AppStr.help, style: TextStyle(fontFamily: 'Gelica')),
+                    child: Text(AppStr.help, style: AppFonts.standard.copyWith(color: Colors.white)),
                   ),
-                  const SizedBox(height: 24), // ✅ Adds gap between Help and Sign Out
+                  const SizedBox(height: 24), // Adds gap between Help and Sign Out
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.red,
@@ -226,7 +209,7 @@ class _TopScreenState extends State<TopScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: _signOut,
-                    child: const Text(AppStr.signOut, style: TextStyle(fontFamily: 'Gelica')),
+                    child: Text(AppStr.signOut, style: AppFonts.standard.copyWith(color: Colors.white)),
                   ),
                 ],
               ),

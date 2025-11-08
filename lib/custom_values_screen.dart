@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/colors.dart';
 import 'constants/strings.dart';
+import 'constants/fonts.dart';
 import 'settings_screen.dart';
 import 'top_screen.dart';
 import 'services/session_cache.dart';
@@ -93,25 +94,19 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final edited = _cuisineEditController.text.trim();
 
     if (edited.isEmpty || edited.length > 24) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
       return;
     }
 
     if (_selectedCuisine.isEmpty) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
       return;
     }
 
     if (edited == _selectedCuisine) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
       return;
     }
@@ -119,18 +114,14 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final mergedList = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
     final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
     if (isDuplicate) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
       return;
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
       return;
     }
@@ -513,9 +504,19 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   // ---------------- Country handlers ----------------
   Future<void> _addCustomCountry() async {
     final newCountry = _selectedCountry.trim();
+    if (newCountry.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStr.enterCustomCountry)),
+      );
+      return;
+    }
+
     if (!allCountries.contains(newCountry)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.notApprovedCountry}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newCountry" ${AppStr.notApprovedCountry}')),
+      );
       return;
     }
     final exists = _mergedAndSorted(getSystemCountryNames(), SessionCache.customCountries)
@@ -577,7 +578,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   void _goToTopScreen() {
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) {
-      return TopScreen();
+      return const TopScreen();
     }));
   }
 
@@ -593,9 +594,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.darkGreen,
-        title: const Text(
+        title: Text(
           AppStr.customValuesTitle,
-          style: TextStyle(fontFamily: 'Gelica', fontWeight: FontWeight.bold, color: Colors.white),
+          style: AppFonts.bold.copyWith(color: Colors.white),
         ),
         centerTitle: true,
       ),
@@ -608,14 +609,17 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             // ---------------- Cuisine UI ----------------
             TextField(
               controller: _isEditingCuisine ? _cuisineEditController : _cuisineController,
-              decoration: InputDecoration(labelText: _isEditingCuisine ? AppStr.editCuisineLabel : AppStr.newCuisineLabel),
+              decoration: InputDecoration(
+                labelText: _isEditingCuisine ? AppStr.editCuisineLabel : AppStr.newCuisineLabel,
+                labelStyle: AppFonts.standard,
+              ),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: extendedCuisines.contains(_selectedCuisine) ? _selectedCuisine : null,
-              hint: const Text('Select cuisine'),
+              hint: Text('Select cuisine', style: AppFonts.standard),
               items: extendedCuisines.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c));
+                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
               }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
@@ -626,7 +630,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   }
                 });
               },
-              decoration: const InputDecoration(labelText: AppStr.currentCuisinesLabel),
+              decoration: InputDecoration(labelText: AppStr.currentCuisinesLabel, labelStyle: AppFonts.standard),
             ),
             const SizedBox(height: 8),
             Row(children: [
@@ -646,7 +650,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.add, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.add, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -666,7 +670,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.removeButton, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.removeButton, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -692,7 +696,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.edit, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.edit, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
 
@@ -747,14 +751,14 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             // ---------------- Occasion UI (mirrors Cuisine) ----------------
             TextField(
               controller: _isEditingOccasion ? _occasionEditController : _occasionController,
-              decoration: InputDecoration(labelText: _isEditingOccasion ? AppStr.editOccasionLabel : AppStr.occasionLabel),
+              decoration: InputDecoration(labelText: _isEditingOccasion ? AppStr.editOccasionLabel : AppStr.occasionLabel, labelStyle: AppFonts.standard),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: extendedOccasions.contains(_selectedOccasion) ? _selectedOccasion : null,
-              hint: const Text('Select occasion'),
+              hint: Text('Select occasion', style: AppFonts.standard),
               items: extendedOccasions.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c));
+                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
               }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
@@ -765,7 +769,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   }
                 });
               },
-              decoration: const InputDecoration(labelText: AppStr.currentOccasionsLabel),
+              decoration: InputDecoration(labelText: AppStr.currentOccasionsLabel, labelStyle: AppFonts.standard),
             ),
             const SizedBox(height: 8),
             Row(children: [
@@ -785,7 +789,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.add, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.add, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -805,7 +809,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.removeButton, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.removeButton, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
               const SizedBox(width: 6),
@@ -831,7 +835,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: const Text(AppStr.edit, style: TextStyle(fontFamily: 'Gelica', fontSize: 13)),
+                  child: Text(AppStr.edit, style: AppFonts.standard.copyWith(fontSize: 13)),
                 ),
               ),
 
@@ -887,9 +891,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               initialValue: countryList.contains(_selectedCountry) ? _selectedCountry : null,
-              hint: const Text('Select country'),
+              hint: Text('Select country', style: AppFonts.standard),
               items: countryList.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c));
+                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
               }).toList(),
               onChanged: (value) {
                 if (!mounted) return;
@@ -898,7 +902,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   _selectedCountry = value ?? '';
                 });
               },
-              decoration: const InputDecoration(labelText: AppStr.countryLabel),
+              decoration: InputDecoration(labelText: AppStr.countryLabel, labelStyle: AppFonts.standard),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
@@ -914,7 +918,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                   foregroundColor: Colors.black87,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: const Text(AppStr.addCountry, style: TextStyle(fontFamily: 'Gelica')),
+              child: Text(AppStr.addCountry, style: AppFonts.standard),
             ),
 
             const Divider(height: 32, thickness: 1),
@@ -928,7 +932,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     foregroundColor: Colors.black,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: const Text(AppStr.back, style: TextStyle(fontFamily: 'Gelica')),
+                child: Text(AppStr.back, style: AppFonts.standard),
               ),
               ElevatedButton(
                 onPressed: _goToTopScreen,
@@ -937,7 +941,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     foregroundColor: Colors.white,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: const Text(AppStr.done, style: TextStyle(fontFamily: 'Gelica')),
+                child: Text(AppStr.done, style: AppFonts.standard.copyWith(color: Colors.white)),
               ),
             ]),
           ]),

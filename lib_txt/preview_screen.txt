@@ -9,8 +9,9 @@ import 'package:firebase_database/firebase_database.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 import 'services/session_cache.dart';
-import 'sub_preview_screen/full_screen_picture.dart';
+import 'widgets/full_screen_image.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'sub_preview_screen/review_transform.dart';
@@ -25,8 +26,6 @@ class PreviewScreen extends StatefulWidget {
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
 }
-
-bool _isSaving = false;
 
 List<String> extractTags(dynamic rawValue, Map<String, dynamic> reviewMap) {
   final tagList = goodForTags;
@@ -45,7 +44,7 @@ List<String> extractTags(dynamic rawValue, Map<String, dynamic> reviewMap) {
       return List<String>.from(rawTags);
     }
   }
-  return [];
+  return <String>[];
 }
 
 int _computeRestrating(Map<String, dynamic> map) {
@@ -53,9 +52,13 @@ int _computeRestrating(Map<String, dynamic> map) {
   int total = 0;
   for (final k in keys) {
     final raw = map[k];
-    if (raw == null) continue;
+    if (raw == null) {
+      continue;
+    }
     final parsed = int.tryParse(raw.toString());
-    if (parsed != null) total += parsed;
+    if (parsed != null) {
+      total += parsed;
+    }
   }
   return total;
 }
@@ -64,17 +67,20 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Map<String, dynamic>? reviewData;
   String? reviewKey;
   final Set<String> expandedCategories = <String>{};
+  bool _isSaving = false;
+
+  // Cached ModalRoute reference to avoid ancestor lookups in dispose
+  ModalRoute<dynamic>? _modalRoute;
+
+  // route-scoped will-pop callback for SDK 3.9.x
+  Future<bool> _onWillPop() async => false;
 
   void _showSaveConfirmation() {
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Review saved successfully')));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.reviewSaved)));
     widget.context.reviewMap.clear();
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        goToList();
-      }
+      if (mounted) goToList();
     });
   }
 
@@ -92,7 +98,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
     } else if (widget.context.reviewKey != null) {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId != null) {
-        FirebaseDatabase.instance.ref('users/$userId/reviews/${widget.context.reviewKey}').get().then((snapshot) {
+        FirebaseDatabase.instance
+            .ref('users/$userId/reviews/${widget.context.reviewKey}')
+            .get()
+            .then((snapshot) {
           if (snapshot.exists && mounted) {
             final raw = Map<String, dynamic>.from(snapshot.value as Map);
             setState(() {
@@ -106,28 +115,83 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Capture ModalRoute while element is active and register the scoped will-pop callback.
+    // ignore: deprecated_member_use
+    _modalRoute ??= ModalRoute.of(context);
+    // ignore: deprecated_member_use
+    _modalRoute?.addScopedWillPopCallback(_onWillPop);
+  }
+
+  // Helpers to keep SessionCache.indexedMatrix consistent
+  void _addToIndexedMatrix(Map<String, dynamic> review) {
+    final ctRaw = review['restcountry'];
+    final cyRaw = review['restcity'];
+    final czRaw = review['restcuisine'];
+
+    final ct = ctRaw is String ? ctRaw.trim() : (ctRaw?.toString().trim());
+    final cy = cyRaw is String ? cyRaw.trim() : (cyRaw?.toString().trim());
+    final cz = czRaw is String ? czRaw.trim() : (czRaw?.toString().trim());
+
+    if (ct == null || ct.isEmpty || cy == null || cy.isEmpty || cz == null || cz.isEmpty) {
+      return;
+    }
+
+    final matrix = SessionCache.indexedMatrix;
+    matrix.putIfAbsent(ct, () => <String, Set<String>>{});
+    matrix[ct]!.putIfAbsent(cy, () => <String>{});
+    matrix[ct]![cy]!.add(cz);
+    SessionCache.indexedMatrix = matrix;
+  }
+
+  void _removeFromIndexedMatrix(Map<String, dynamic> review) {
+    final ctRaw = review['restcountry'];
+    final cyRaw = review['restcity'];
+    final czRaw = review['restcuisine'];
+
+    final ct = ctRaw is String ? ctRaw.trim() : (ctRaw?.toString().trim());
+    final cy = cyRaw is String ? cyRaw.trim() : (cyRaw?.toString().trim());
+    final cz = czRaw is String ? czRaw.trim() : (czRaw?.toString().trim());
+
+    if (ct == null || ct.isEmpty || cy == null || cy.isEmpty || cz == null || cz.isEmpty) {
+      return;
+    }
+
+    final matrix = SessionCache.indexedMatrix;
+    if (!matrix.containsKey(ct)) return;
+    final cityMap = matrix[ct]!;
+    if (!cityMap.containsKey(cy)) return;
+    final cuisineSet = cityMap[cy]!;
+    cuisineSet.remove(cz);
+    if (cuisineSet.isEmpty) {
+      cityMap.remove(cy);
+    } else {
+      cityMap[cy] = cuisineSet;
+    }
+    if (cityMap.isEmpty) {
+      matrix.remove(ct);
+    } else {
+      matrix[ct] = cityMap;
+    }
+    SessionCache.indexedMatrix = matrix;
+  }
+
   Future<bool> _checkForDuplicateReview(String name, String date) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      return true;
-    }
+    if (userId == null) return true;
     final reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
     final snapshot = await reviewsRef.get();
-    if (!snapshot.exists) {
-      return true;
-    }
+    if (!snapshot.exists) return true;
     final data = snapshot.value as Map<dynamic, dynamic>;
     final duplicates = data.values.where((review) {
       final reviewMap = Map<String, dynamic>.from(review as Map);
       return reviewMap['restname']?.toString().trim().toLowerCase() == name.trim().toLowerCase() &&
           reviewMap['reviewdate']?.toString().trim() == date.trim();
     });
-    if (duplicates.isEmpty) {
-      return true;
-    }
-    if (!mounted) {
-      return false;
-    }
+    if (duplicates.isEmpty) return true;
+    if (!mounted) return false;
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -144,37 +208,25 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   List<Map<String, dynamic>> normalizeCards(dynamic raw) {
     final normalized = <Map<String, dynamic>>[];
-    if (raw == null) {
-      return normalized;
-    }
-    if (raw is! List) {
-      return normalized;
-    }
+    if (raw == null) return normalized;
+    if (raw is! List) return normalized;
     for (final item in raw) {
-      if (item == null) {
-        continue;
-      }
+      if (item == null) continue;
       if (item is String) {
         final txt = item.trim();
-        if (txt.isNotEmpty) {
-          normalized.add({'text': txt, 'name': txt});
-        }
+        if (txt.isNotEmpty) normalized.add({'text': txt, 'name': txt});
         continue;
       }
       if (item is Map) {
         final text = (item['text'] ?? item['name'] ?? '').toString().trim();
         final photo = (item['photoPath'] ?? item['photo'] ?? '').toString().trim();
-        if (text.isEmpty && photo.isEmpty) {
-          continue;
-        }
+        if (text.isEmpty && photo.isEmpty) continue;
         final m = <String, dynamic>{};
         if (text.isNotEmpty) {
           m['text'] = text;
           m['name'] = text;
         }
-        if (photo.isNotEmpty) {
-          m['photoPath'] = photo;
-        }
+        if (photo.isNotEmpty) m['photoPath'] = photo;
         normalized.add(m);
       }
     }
@@ -183,19 +235,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<void> saveReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null || reviewData == null) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
+    if (userId == null || reviewData == null) return;
+    setState(() => _isSaving = true);
     try {
       final restName = reviewData?['restname']?.toString().trim() ?? '';
       final reviewDate = reviewData?['reviewdate']?.toString().trim() ?? '';
       final shouldProceed = await _checkForDuplicateReview(restName, reviewDate);
-      if (!shouldProceed) {
-        return;
-      }
+      if (!shouldProceed) return;
 
       final nowIso = DateTime.now().toIso8601String();
       final payload = Map<String, dynamic>.from(reviewData!);
@@ -209,13 +255,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
         final key = 'photoPath$i';
         if (payload.containsKey(key)) {
           final v = payload[key];
-          if (v == null || (v is String && v.trim().isEmpty)) {
-            payload.remove(key);
-          }
+          if (v == null || (v is String && v.trim().isEmpty)) payload.remove(key);
         }
       }
 
-      final detailKeys = [
+      final detailKeys = <String>[
         'details_cocktails',
         'details_starters',
         'details_wine',
@@ -242,6 +286,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       final newRef = FirebaseDatabase.instance.ref('users/$userId/reviews').push();
       await newRef.set(payload);
 
+      // update custom values as before
       final cuisine = payload['restcuisine'];
       final occasion = payload['coccasion'];
       final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
@@ -272,14 +317,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
             }
           }
         }
-        if (updates.isNotEmpty) {
-          await customRef.update(updates);
-        }
+        if (updates.isNotEmpty) await customRef.update(updates);
       }
 
-      if (!mounted) {
-        return;
-      }
+      _addToIndexedMatrix(payload);
+
+      if (!mounted) return;
       setState(() {
         reviewKey = newRef.key;
         widget.context.reviewKey = newRef.key;
@@ -288,25 +331,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
         } catch (_) {}
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> updateReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null || reviewData == null || reviewKey == null) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
+    if (userId == null || reviewData == null || reviewKey == null) return;
+    setState(() => _isSaving = true);
     try {
       final nowIso = DateTime.now().toIso8601String();
       final payload = Map<String, dynamic>.from(reviewData!);
+
+      final previous = widget.context.reviewMap.isNotEmpty ? Map<String, dynamic>.from(widget.context.reviewMap) : null;
 
       if (payload['photoPath'] == null ||
           (payload['photoPath'] is String && payload['photoPath'].toString().trim().isEmpty)) {
@@ -324,7 +361,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
         }
       }
 
-      final detailKeys = [
+      final detailKeys = <String>[
         'details_cocktails',
         'details_starters',
         'details_wine',
@@ -351,6 +388,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
       await FirebaseDatabase.instance.ref('users/$userId/reviews/$reviewKey').update(payload);
 
+      // update custom values as before
       final cuisine = payload['restcuisine'];
       final occasion = payload['coccasion'];
       final customRef = FirebaseDatabase.instance.ref('users/$userId/customvals');
@@ -381,35 +419,36 @@ class _PreviewScreenState extends State<PreviewScreen> {
             }
           }
         }
-        if (updates.isNotEmpty) {
-          await customRef.update(updates);
-        }
+        if (updates.isNotEmpty) await customRef.update(updates);
       }
+
+      try {
+        if (previous != null && previous.isNotEmpty) {
+          final prevRaw = reverseFormatReviewData(previous);
+          _removeFromIndexedMatrix(prevRaw);
+        }
+      } catch (_) {}
+
+      _addToIndexedMatrix(payload);
 
       try {
         widget.context.reviewMap = reverseFormatReviewData(payload);
       } catch (_) {}
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> deleteReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      return;
-    }
+    if (userId == null) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text(AppStr.deleteTitle),
         content: Text(
           widget.context.reviewKey == null ? AppStr.deletePendingMessage : AppStr.deletePermanentMessage,
-          style: const TextStyle(fontFamily: 'Gelica'),
+          style: AppFonts.standard,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text(AppStr.cancel)),
@@ -418,16 +457,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
       ),
     );
     if (confirm ?? false) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       if (widget.context.reviewKey == null) {
         Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => TopScreen()), (route) => false);
       } else {
+        try {
+          final local = widget.context.reviewMap.isNotEmpty ? reverseFormatReviewData(widget.context.reviewMap) : null;
+          if (local != null && local.isNotEmpty) _removeFromIndexedMatrix(local);
+        } catch (_) {}
+
         await FirebaseDatabase.instance.ref('users/$userId/reviews/${widget.context.reviewKey}').remove();
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.reviewDeleted)));
         Navigator.pushReplacementNamed(context, '/list', arguments: {'newReviewKey': null});
       }
@@ -443,9 +483,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   String _formatCost(dynamic value) {
-    if (value == null || value.toString().trim().isEmpty) {
-      return '';
-    }
+    if (value == null || value.toString().trim().isEmpty) return '';
     try {
       final parsed = double.tryParse(value.toString());
       return parsed?.toStringAsFixed(2) ?? '';
@@ -478,7 +516,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
               child: Icon(icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Text(label, style: AppFonts.bold)),
+            Expanded(child: Text(label, style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 8),
             Row(
               children: [
@@ -510,13 +548,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
             padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
             child: Row(
               children: [
-                // increased reserved width so label moves ~3 characters right
-                const SizedBox(width: 102), // previously 84 (72 + 12); +18px approximates 3 chars
+                const SizedBox(width: 102), // reserve thumbnail + gap
                 Expanded(
                   child: Text(
                     label,
                     textAlign: TextAlign.left,
-                    style: const TextStyle(fontFamily: 'Gelica', fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w700),
+                    style: AppFonts.standard.copyWith(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 TextButton(
@@ -538,7 +577,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 final card = cards[index];
                 final photo = (card['photoPath'] ?? '').toString();
                 final text = (card['name'] ?? card['text'] ?? '').toString();
-                final hasPhoto = photo.isNotEmpty && File(photo).existsSync();
+                final hasPhoto = photo.isNotEmpty; // avoid existsSync in build
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
@@ -578,7 +617,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: Colors.grey.shade200),
                           ),
-                          child: Text(text.isNotEmpty ? text : AppStr.detailsNoText, style: const TextStyle(fontFamily: 'Gelica')),
+                          child: Text(text.isNotEmpty ? text : AppStr.detailsNoText, style: AppFonts.standard),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -599,14 +638,32 @@ class _PreviewScreenState extends State<PreviewScreen> {
     return normalizeCards(raw);
   }
 
+  // Overflow-safe rating row: label expands and value is constrained
   Widget _alignedRatingRow(String label, dynamic value, {bool isBold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(width: 80, child: Text('$label:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica', color: color))),
+          Expanded(
+            child: Text(
+              '$label:',
+              style: AppFonts.standard.copyWith(fontWeight: FontWeight.bold, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const SizedBox(width: 8),
-          Text(value?.toString() ?? '', style: TextStyle(fontFamily: 'Gelica', fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: color)),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 24, maxWidth: 80),
+            child: Text(
+              value?.toString() ?? '',
+              textAlign: TextAlign.right,
+              style: AppFonts.standard.copyWith(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -619,6 +676,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
 
     final int totalRating = int.tryParse(reviewData!['restrating']?.toString() ?? '') ?? 0;
+    final int michelinStars = int.tryParse(reviewData!['rmichlin']?.toString() ?? '0') ?? 0;
     final goodForTags = extractTags(reviewData!['goodfor'], reviewData!);
     final dateString = reviewData!['reviewdate']?.toString().trim();
     final isPending = widget.context.reviewKey == null && widget.context.isEditing;
@@ -629,15 +687,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final photoPath = reviewData!['photoPath'];
     final cuisineValue = reviewData!['restcuisine']?.toString().trim();
 
-    final List<String> commentPhotos = [];
+    // Collect comment photo paths without synchronous filesystem checks; Image.file will use errorBuilder if missing
+    final List<String> commentPhotos = <String>[];
     for (int i = 0; i < 3; i++) {
       final path = reviewData!['photoPath$i'];
-      if (path != null && path is String && File(path).existsSync()) {
-        commentPhotos.add(path);
-      }
+      if (path != null && path is String && path.trim().isNotEmpty) commentPhotos.add(path);
     }
 
-    final List<Map<String, dynamic>> detailCategories = [
+    final List<Map<String, dynamic>> detailCategories = <Map<String, dynamic>>[
       {'key': 'cocktails', 'label': AppStr.cocktails, 'icon': Icons.local_bar},
       {'key': 'starters', 'label': AppStr.starters, 'icon': Icons.restaurant_menu},
       {'key': 'wine', 'label': AppStr.wine, 'icon': Icons.wine_bar},
@@ -646,14 +703,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
       {'key': 'otherdrinks', 'label': AppStr.otherDrinks, 'icon': Icons.local_drink},
     ];
 
-    final List<Widget> detailWidgets = [];
+    final List<Widget> detailWidgets = <Widget>[];
     for (final cat in detailCategories) {
       final keyShort = cat['key'] as String;
       final cards = _cardsFor(keyShort);
       final count = cards.length;
-      if (count == 0) {
-        continue;
-      }
+      if (count == 0) continue;
       final fullKey = 'details_$keyShort';
       final isExpanded = expandedCategories.contains(fullKey);
       if (isExpanded) {
@@ -663,7 +718,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
     }
 
-    // Address and phone values (optional)
     final String? addressValue = (reviewData!['restaddress']?.toString().trim().isNotEmpty ?? false) ? reviewData!['restaddress']?.toString().trim() : null;
     final String? phoneValue = (reviewData!['restphone']?.toString().trim().isNotEmpty ?? false) ? reviewData!['restphone']?.toString().trim() : null;
 
@@ -676,7 +730,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
         backgroundColor: const Color(0xFFF5F0E6),
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: const Text(AppStr.previewTitle, style: TextStyle(fontFamily: 'Gelica', fontWeight: FontWeight.bold, color: Colors.white)),
+          title: Text(AppStr.previewTitle, style: AppFonts.bold.copyWith(color: Colors.white)),
           backgroundColor: const Color(0xFF2E4F3E),
           centerTitle: true,
         ),
@@ -690,23 +744,38 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('${AppStr.restaurantLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                          const SizedBox(height: 4),
-                          const Text('${AppStr.countryLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                          const SizedBox(height: 4),
-                          if (cuisineValue != null && cuisineValue.isNotEmpty) ...[
-                            const Text('${AppStr.cuisineLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                      Flexible(
+                        flex: 0,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 120,
+                              child: Text('${AppStr.restaurantLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
                             const SizedBox(height: 4),
-                          ],
-                          if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != 'Nothing Special') ...[
-                            const Text('${AppStr.occasionLabel}:', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
+                            SizedBox(
+                              width: 120,
+                              child: Text('${AppStr.countryLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
                             const SizedBox(height: 4),
+                            if (cuisineValue != null && cuisineValue.isNotEmpty) ...[
+                              SizedBox(
+                                width: 120,
+                                child: Text('${AppStr.cuisineLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion) ...[
+                              SizedBox(
+                                width: 120,
+                                child: Text('${AppStr.occasionLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            SizedBox(width: 120, child: Text(AppStr.dateLabel, style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
-                          const Text(AppStr.dateLabel, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Gelica')),
-                        ],
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -715,23 +784,29 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           children: [
                             Text(
                               reviewData!['restname'] ?? '',
-                              style: const TextStyle(fontFamily: 'Gelica', fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+                              style: AppFonts.bold.copyWith(fontSize: 16, color: Colors.blue),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              (reviewData!['restcity']?.toString().trim().isEmpty ?? true) ? (reviewData!['restcountry'] ?? '') : '${reviewData!['restcity']}, ${reviewData!['restcountry']}',
-                              style: const TextStyle(fontFamily: 'Gelica'),
+                              (reviewData!['restcity']?.toString().trim().isEmpty ?? true)
+                                  ? (reviewData!['restcountry'] ?? '')
+                                  : '${reviewData!['restcity']}, ${reviewData!['restcountry']}',
+                              style: AppFonts.standard,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             if (cuisineValue != null && cuisineValue.isNotEmpty) ...[
-                              Text(cuisineValue, style: const TextStyle(fontFamily: 'Gelica')),
+                              Text(cuisineValue, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 4),
                             ],
-                            if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != 'Nothing Special') ...[
-                              Text(occasionValue, style: const TextStyle(fontFamily: 'Gelica')),
+                            if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion) ...[
+                              Text(occasionValue, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 4),
                             ],
-                            Text(dateString ?? '', style: const TextStyle(fontFamily: 'Gelica')),
+                            Text(dateString ?? '', style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -763,7 +838,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           children: [
                             _alignedRatingRow(AppStr.drinksLabel, reviewData!['rdrinks']),
                             _alignedRatingRow(AppStr.vfmsLabel, reviewData!['rvfm']),
-                            _alignedRatingRow('Rating', '$totalRating / ${AppStr.maxRating}', isBold: true, color: AppColors.ratingHighlight),
+                            _alignedRatingRow(
+                              '${michelinStars > 0 ? 'M${'*' * michelinStars} ' : ''}Rating',
+                              '$totalRating / ${AppStr.maxRating}',
+                              isBold: true,
+                              color: AppColors.ratingHighlight,
+                            ),
                           ],
                         ),
                       ),
@@ -773,28 +853,30 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   const Divider(thickness: 1),
                   const SizedBox(height: 6), // reduced gap to 6 before comments / goodfor
 
-                  // Count / cost / main photo row
+                  // Count / cost / main photo row — constrained to avoid overflow
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Row(
                           children: [
-                            if (dinersValue != null && dinersValue.isNotEmpty) Expanded(child: formatter.reviewRow(AppStr.dinersLabel, dinersValue)),
-                            if (costValue != null && costValue.isNotEmpty) Expanded(child: formatter.reviewRow(AppStr.costLabel, '${reviewData!['currency']} ${_formatCost(costValue)}')),
+                            if (dinersValue != null && dinersValue.isNotEmpty)
+                              Flexible(child: formatter.reviewRow(AppStr.dinersLabel, dinersValue)),
+                            if (costValue != null && costValue.isNotEmpty)
+                              Flexible(child: formatter.reviewRow(AppStr.costLabel, '${reviewData!['currency']} ${_formatCost(costValue)}')),
                           ],
                         ),
                       ),
-                      if (photoPath != null && File(photoPath).existsSync())
+                      if (photoPath != null && photoPath.toString().trim().isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(left: 12),
                           child: GestureDetector(
                             onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: photoPath)));
+                              if (photoPath is String) Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: photoPath)));
                             },
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.file(File(photoPath), height: 100, width: 100, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text(AppStr.photoError)),
+                              child: Image.file(File(photoPath.toString()), height: 100, width: 100, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text(AppStr.photoError)),
                             ),
                           ),
                         ),
@@ -805,19 +887,24 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   if (commentsValue != null && commentsValue.isNotEmpty) formatter.reviewRow(AppStr.commentLabel, commentsValue),
                   if (goodForTags.isNotEmpty) formatter.reviewRow('Good for', goodForTags.join(', ')),
 
+                  // Comment photos rendered with Wrap to avoid overflow
                   if (commentPhotos.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
                         children: commentPhotos.map((path) {
                           return GestureDetector(
                             onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: path)));
                             },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.file(File(path), width: 84, height: 84, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey)),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Image.file(File(path), width: 84, height: 84, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey)),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -843,39 +930,86 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   const Divider(thickness: 1),
                   const SizedBox(height: 36),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton(
-                        onPressed: goToList,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                        child: const Text(AppStr.list),
-                      ),
-                      ElevatedButton(
-                        onPressed: goToEditFlow,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                        child: const Text(AppStr.change),
-                      ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (isPending) {
-                            await saveReview();
-                          } else {
-                            await updateReview();
-                          }
-                          _showSaveConfirmation();
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow),
-                        child: const Text(AppStr.save),
-                      ),
-                      ElevatedButton(
-                        onPressed: () async {
-                          await deleteReview();
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text(AppStr.delete),
-                      ),
-                    ],
+                  // Single responsive row of 4 action buttons with consistent label sizing
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                            child: ElevatedButton(
+                              onPressed: goToList,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey,
+                                foregroundColor: Colors.white,
+                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              child: Text(AppStr.list, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                            child: ElevatedButton(
+                              onPressed: goToEditFlow,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              child: Text(AppStr.change, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (isPending) {
+                                  await saveReview();
+                                } else {
+                                  await updateReview();
+                                }
+                                _showSaveConfirmation();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.yellow,
+                                foregroundColor: Colors.black,
+                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              child: Text(AppStr.save, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                await deleteReview();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                minimumSize: const Size(0, 44),
+                              ),
+                              child: Text(AppStr.delete, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -885,5 +1019,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // Unregister the scoped will-pop callback using the cached ModalRoute reference.
+    // ignore: deprecated_member_use
+    _modalRoute?.removeScopedWillPopCallback(_onWillPop);
+
+    super.dispose();
   }
 }

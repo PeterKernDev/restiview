@@ -1,12 +1,14 @@
 // signin_screen.dart
-
+//
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'services/session_cache.dart';
+import 'services/startup_tasks.dart';
 import 'constants/restiview_constants.dart';
-import 'constants/strings.dart'; // ✅ Import centralized strings
+import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -69,99 +71,24 @@ class _SignInScreenState extends State<SignInScreen> {
     Navigator.pushReplacementNamed(context, '/');
   }
 
-  void initializeDefaultCustomValues() {
-    SessionCache.customValsLoaded = false;
-    SessionCache.customCuisines = [...systemCuisines];
-    SessionCache.customOccasions = [...systemOccasions];
-    SessionCache.customCountries = [...getSystemCountryNames()];
-  }
-
-  void appendCustomValuesFromFirebase(Map<dynamic, dynamic> customData) {
-    // Read raw custom values defensively
-    final rawCuisines = <String>[];
-    try {
-      final raw = customData['cuisine'] ?? [];
-      for (final item in List<dynamic>.from(raw)) {
-        if (item is List && item.isNotEmpty) {
-          final value = item[0];
-          if (value is String && value.trim().isNotEmpty) rawCuisines.add(value.trim());
-        } else if (item is String && item.trim().isNotEmpty) {
-          rawCuisines.add(item.trim());
-        }
-      }
-    } catch (_) {
-      // ignore malformed cuisine payloads
-    }
-
-    final rawOccasions = <String>[];
-    try {
-      final raw = customData['occasion'] ?? [];
-      for (final item in List<dynamic>.from(raw)) {
-        if (item is List && item.isNotEmpty) {
-          final value = item[0];
-          if (value is String && value.trim().isNotEmpty) rawOccasions.add(value.trim());
-        } else if (item is String && item.trim().isNotEmpty) {
-          rawOccasions.add(item.trim());
-        }
-      }
-    } catch (_) {}
-
-    final rawCountries = <String>[];
-    try {
-      final raw = customData['country'] ?? [];
-      for (final item in List<dynamic>.from(raw)) {
-        if (item is String && item.trim().isNotEmpty) rawCountries.add(item.trim());
-      }
-    } catch (_) {}
-
-    SessionCache.customValsLoaded = true;
-
-    // Merge system + custom, dedupe, and sort case-insensitively
-    final cuisineSet = <String>{};
-    cuisineSet.addAll(systemCuisines.map((s) => s.trim()).where((s) => s.isNotEmpty));
-    cuisineSet.addAll(rawCuisines.map((s) => s.trim()).where((s) => s.isNotEmpty));
-    final cuisineList = cuisineSet.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    SessionCache.customCuisines = cuisineList;
-
-    final occasionSet = <String>{};
-    occasionSet.addAll(systemOccasions.map((s) => s.trim()).where((s) => s.isNotEmpty));
-    occasionSet.addAll(rawOccasions.map((s) => s.trim()).where((s) => s.isNotEmpty));
-    final occasionList = occasionSet.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    SessionCache.customOccasions = occasionList;
-
-    final countrySet = <String>{};
-    countrySet.addAll(getSystemCountryNames().map((s) => s.trim()).where((s) => s.isNotEmpty));
-    countrySet.addAll(rawCountries.map((s) => s.trim()).where((s) => s.isNotEmpty));
-    final countryList = countrySet.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    SessionCache.customCountries = countryList;
-  }
   bool _validateInputs({required bool requireName}) {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
     if (requireName && name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStr.nameHint)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.nameHint)));
       return false;
     }
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStr.emailPasswordRequired)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.emailPasswordRequired)));
       return false;
     }
 
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStr.emailRequired)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
       return false;
     }
 
@@ -176,8 +103,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
     _toggleLoading(true);
     try {
-      final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
 
       final uid = userCredential.user?.uid;
       if (uid != null) {
@@ -197,19 +123,15 @@ class _SignInScreenState extends State<SignInScreen> {
           });
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppStr.healingOrphanedAccount)),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.healingOrphanedAccount)));
           }
         }
 
-        // --- SAFE READ: ensure `data` is a Map before using it ---
         final dataSnapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
         final data = dataSnapshot.value;
 
         String userName;
         String homeCountry;
-        String baseCountry;
 
         if (data is! Map) {
           final defaultCountry = getSystemCountryNames().first;
@@ -226,32 +148,12 @@ class _SignInScreenState extends State<SignInScreen> {
 
           userName = 'User';
           homeCountry = defaultCountry;
-          baseCountry = defaultCountry;
         } else {
           final Map<dynamic, dynamic> userMap = data;
           userName = (userMap['userName'] as String?) ?? 'User';
           homeCountry = (userMap['userSettings2'] as String?) ?? getSystemCountryNames().first;
-          baseCountry = userMap.containsKey('baseCountry')
-              ? (userMap['baseCountry'] as String)
-              : homeCountry;
-          if (!userMap.containsKey('baseCountry')) {
-            await FirebaseDatabase.instance.ref('users/$uid/baseCountry').set(baseCountry);
-          }
         }
 
-        final currencyValue = getCurrencyForCountry(homeCountry);
-
-        SessionCache.userName = userName;
-        SessionCache.userEmail = email;
-        SessionCache.sortOption = (data is Map) ? (data['userSettings1'] ?? 'Name') : 'Name';
-        SessionCache.defaultCountry = homeCountry;
-        SessionCache.allowLocation = (data is Map) ? (data['userSettings3'] ?? false) : false;
-        SessionCache.allowPhotos = (data is Map) ? (data['userSettings4'] ?? false) : false;
-        SessionCache.searchRadius = (data is Map) ? (data['userSettings5'] ?? 50) : 50;
-        SessionCache.allowAutoCapture = (data is Map) ? (data['userSettings6'] ?? false) : false;
-        SessionCache.currency = currencyValue;
-
-        // ✅ Persist staySignedIn only after successful sign-in
         await SessionCache.setStaySignedIn(_staySignedIn);
         if (_staySignedIn) {
           await SessionCache.setCredentials(email, password);
@@ -259,13 +161,12 @@ class _SignInScreenState extends State<SignInScreen> {
           await SessionCache.clearCredentials();
         }
 
-        initializeDefaultCustomValues();
-
-        final customSnap = await FirebaseDatabase.instance.ref('users/$uid/customvals').get();
-        if (customSnap.exists) {
-          final customData = customSnap.value as Map<dynamic, dynamic>;
-          appendCustomValuesFromFirebase(customData);
-        }
+        await runStartupTasks(
+          uid: uid,
+          userName: userName,
+          userEmail: email,
+          homeCountry: homeCountry,
+        );
 
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/main', arguments: userName);
@@ -286,7 +187,6 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
-      // ✅ Reset staySignedIn on failure
       if (mounted) setState(() => _staySignedIn = false);
       await SessionCache.setStaySignedIn(false);
       await SessionCache.clearCredentials();
@@ -294,168 +194,155 @@ class _SignInScreenState extends State<SignInScreen> {
       _toggleLoading(false);
     }
   }
-  //
-  // Part 2
-  //
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: AppColors.beige,
-    appBar: AppBar(
-      automaticallyImplyLeading: false,
-      backgroundColor: AppColors.darkGreen,
-      title: Text(
-        AppStr.signInTitle,
-        style: AppFonts.bold.copyWith(color: Colors.white),
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.beige,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.darkGreen,
+        title: Text(
+          AppStr.signInTitle,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
+        centerTitle: true,
       ),
-      centerTitle: true,
-    ),
-    body: Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: _emailController,
-                  enabled: !_initialSSI || !_staySignedIn,
-                  decoration: InputDecoration(
-                    labelText: AppStr.emailLabel,
-                    labelStyle: AppFonts.standard,
-                    border: const UnderlineInputBorder(),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _emailController,
+                    enabled: !_initialSSI || !_staySignedIn,
+                    decoration: InputDecoration(
+                      labelText: AppStr.emailLabel,
+                      labelStyle: AppFonts.standard,
+                      border: const UnderlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
                   ),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  enabled: !_initialSSI || !_staySignedIn,
-                  obscureText: !_showPassword,
-                  decoration: InputDecoration(
-                    labelText: AppStr.passwordLabel,
-                    labelStyle: AppFonts.standard,
-                    border: const UnderlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _showPassword ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    enabled: !_initialSSI || !_staySignedIn,
+                    obscureText: !_showPassword,
+                    decoration: InputDecoration(
+                      labelText: AppStr.passwordLabel,
+                      labelStyle: AppFonts.standard,
+                      border: const UnderlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _showPassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() => _showPassword = !_showPassword);
+                        },
                       ),
-                      onPressed: () {
-                        setState(() => _showPassword = !_showPassword);
-                      },
+                    ),
+                    textInputAction: TextInputAction.done,
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    title: Text(AppStr.enableResetToggleLabel, style: AppFonts.standard),
+                    value: _enableReset,
+                    onChanged: (value) {
+                      setState(() => _enableReset = value);
+                    },
+                    activeThumbColor: AppColors.darkGreen,
+                    activeTrackColor: AppColors.ochre,
+                  ),
+                  TextButton(
+                    onPressed: _enableReset
+                        ? () async {
+                            final email = _emailController.text.trim();
+                            final messenger = ScaffoldMessenger.of(context);
+
+                            if (email.isEmpty) {
+                              messenger.showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
+                              return;
+                            }
+
+                            if (!email.contains('@')) {
+                              messenger.showSnackBar(SnackBar(content: Text(AppStr.emailFormatInvalid)));
+                              return;
+                            }
+
+                            try {
+                              await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                              messenger.showSnackBar(SnackBar(content: Text('${AppStr.resetLinkSent} $email')));
+                            } catch (e) {
+                              messenger.showSnackBar(SnackBar(content: Text('${AppStr.resetLinkError}: ${e.toString()}')));
+                            }
+                          }
+                        : null,
+                    child: Text(
+                      AppStr.forgotPasswordLabel,
+                      style: AppFonts.standard.copyWith(color: _enableReset ? Colors.blue : Colors.grey),
                     ),
                   ),
-                  textInputAction: TextInputAction.done,
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  title: Text(AppStr.enableResetToggleLabel, style: AppFonts.standard),
-                  value: _enableReset,
-                  onChanged: (value) {
-                    setState(() => _enableReset = value);
-                  },
-                  activeThumbColor: AppColors.darkGreen,
-                  activeTrackColor: AppColors.ochre,
-                ),
-                TextButton(
-                  onPressed: _enableReset
-                      ? () async {
-                          final email = _emailController.text.trim();
-                          final messenger = ScaffoldMessenger.of(context);
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    title: Text(AppStr.staySignedIn, style: AppFonts.standard),
+                    value: _staySignedIn,
+                    onChanged: (value) async {
+                      setState(() => _staySignedIn = value);
 
-                          if (email.isEmpty) {
-                            messenger.showSnackBar(
-                              SnackBar(content: Text(AppStr.emailRequired)),
-                            );
-                            return;
-                          }
-
-                          if (!email.contains('@')) {
-                            messenger.showSnackBar(
-                              SnackBar(content: Text(AppStr.emailFormatInvalid)),
-                            );
-                            return;
-                          }
-
-                          try {
-                            await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-                            messenger.showSnackBar(
-                              SnackBar(content: Text('${AppStr.resetLinkSent} $email')),
-                            );
-                          } catch (e) {
-                            messenger.showSnackBar(
-                              SnackBar(content: Text('${AppStr.resetLinkError}: ${e.toString()}')),
-                            );
-                          }
-                        }
-                      : null,
-                  child: Text(
-                    AppStr.forgotPasswordLabel,
-                    style: AppFonts.standard.copyWith(
-                      color: _enableReset ? Colors.blue : Colors.grey,
+                      if (!value) {
+                        _emailController.clear();
+                        _passwordController.clear();
+                        await SessionCache.setStaySignedIn(false);
+                        await SessionCache.clearCredentials();
+                      }
+                    },
+                    activeThumbColor: AppColors.darkGreen,
+                    activeTrackColor: AppColors.ochre,
+                  ),
+                  const SizedBox(height: 24),
+                  if (_loading) const Center(child: CircularProgressIndicator()),
+                ],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.darkGreen,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
+                    onPressed: _loading ? null : _signInUser,
+                    child: Text(AppStr.signInButton, style: AppFonts.standard.copyWith(color: Colors.white)),
                   ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  title: Text(AppStr.staySignedIn, style: AppFonts.standard),
-                  value: _staySignedIn,
-                  onChanged: (value) async {
-                    setState(() => _staySignedIn = value);
-
-                    if (!value) {
-                      // ✅ Clear fields and credentials
-                      _emailController.clear();
-                      _passwordController.clear();
-                      await SessionCache.setStaySignedIn(false);
-                      await SessionCache.clearCredentials();
-                    }
-                  },
-                  activeThumbColor: AppColors.darkGreen,
-                  activeTrackColor: AppColors.ochre,
-                ),
-                const SizedBox(height: 24),
-                if (_loading) const Center(child: CircularProgressIndicator()),
-              ],
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.ochre,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _loading ? null : _goBack,
+                    child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.darkGreen,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: _loading ? null : _signInUser,
-                  child: Text(AppStr.signInButton, style: AppFonts.standard.copyWith(color: Colors.white)),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ochre,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: _loading ? null : _goBack,
-                  child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }

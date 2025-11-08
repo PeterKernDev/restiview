@@ -1,11 +1,12 @@
 // help_screen.dart
-// Help and About screen for RestiView — shows app info, website link, and version.
+// Help and About screen for RestiView — uses AppFonts/AppColors and guards async UI updates.
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -31,7 +32,7 @@ class _HelpScreenState extends State<HelpScreen> {
         _version = 'Version ${info.version}';
       });
     } catch (_) {
-      // If retrieving version fails, silently ignore and leave _version empty.
+      // ignore and leave _version empty
     }
   }
 
@@ -67,14 +68,7 @@ class _HelpScreenState extends State<HelpScreen> {
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(
-          AppStr.help,
-          style: const TextStyle(
-            fontFamily: 'Gelica',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        title: Text(AppStr.help, style: AppFonts.bold.copyWith(color: Colors.white)),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
@@ -84,41 +78,17 @@ class _HelpScreenState extends State<HelpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                AppStr.aboutTitle,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Gelica',
-                ),
-              ),
+              Text(AppStr.aboutTitle, style: AppFonts.bold.copyWith(fontSize: 24)),
               const SizedBox(height: 16),
-              Text(
-                AppStr.aboutDescription,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontFamily: 'Gelica',
-                ),
-              ),
+              Text(AppStr.aboutDescription, style: AppFonts.standard.copyWith(fontSize: 16)),
               const SizedBox(height: 24),
-              Text(
-                AppStr.moreInfoPrompt,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontFamily: 'Gelica',
-                ),
-              ),
+              Text(AppStr.moreInfoPrompt, style: AppFonts.standard.copyWith(fontSize: 16)),
               const SizedBox(height: 8),
               InkWell(
                 onTap: _launchWebsite,
                 child: Text(
                   AppStr.websiteUrl,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Gelica',
-                    color: Colors.blue,
-                    decoration: TextDecoration.underline,
-                  ),
+                  style: AppFonts.standard.copyWith(fontSize: 16, color: Colors.blue, decoration: TextDecoration.underline),
                 ),
               ),
               const Expanded(child: SizedBox()),
@@ -127,24 +97,21 @@ class _HelpScreenState extends State<HelpScreen> {
                   children: [
                     Text(
                       _version,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'Gelica',
-                        color: Colors.grey[700],
-                      ),
+                      style: AppFonts.standard.copyWith(fontSize: 14, color: Colors.grey[700]),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.ochre,
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: Text(
-                        AppStr.back,
-                        style: const TextStyle(fontFamily: 'Gelica'),
-                      ),
+                      child: Text(AppStr.back, style: AppFonts.standard),
                     ),
                   ],
                 ),

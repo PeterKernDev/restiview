@@ -101,115 +101,187 @@ class _GoodForScreenState extends State<GoodForScreen> {
     });
   }
 
-@override
-Widget build(BuildContext context) {
-  final options = _goodForOptions.entries.toList();
+  @override
+  Widget build(BuildContext context) {
+    final options = _goodForOptions.entries.toList();
 
-  return Scaffold(
-    backgroundColor: const Color(0xFFF5F0E6),
-    appBar: AppBar(
-      automaticallyImplyLeading: false, // ✅ Disables top-left back arrow
-      title: const Text(
-        AppStr.goodForTitle,
-        style: TextStyle(
-          fontFamily: 'Gelica',
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
+    // Shared button style for consistent label sizes
+    final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
+      textStyle: const TextStyle(
+        fontFamily: 'Gelica',
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.4,
       ),
-      backgroundColor: const Color(0xFF2E4F3E),
-      centerTitle: true,
-    ),
-    body: Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                const Text(
-                  AppStr.goodForPrompt,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Gelica',
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      minimumSize: const Size(0, 44),
+    );
+
+    // Tile size: will be used by GridView childAspectRatio calculation
+    const double tileHeight = 56.0;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F0E6),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text(
+          AppStr.goodForTitle,
+          style: TextStyle(
+            fontFamily: 'Gelica',
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: const Color(0xFF2E4F3E),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  const Text(
+                    AppStr.goodForPrompt,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Gelica',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    childAspectRatio: 4.5,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    children: options.map((entry) {
-                      return Row(
-                        children: [
-                          Checkbox(
-                            value: entry.value,
-                            onChanged: (bool? value) {
+                  const SizedBox(height: 24),
+
+                  // Grid with 2 columns, uniform tiles
+                  Expanded(
+                    child: LayoutBuilder(builder: (context, constraints) {
+                      // Calculate item width to keep two columns with spacing
+                      final double spacing = 12;
+                      final double availableWidth = constraints.maxWidth - spacing;
+                      final double itemWidth = (availableWidth / 2);
+                      final double childAspectRatio = itemWidth / tileHeight;
+
+                      return GridView.count(
+                        crossAxisCount: 2,
+                        childAspectRatio: childAspectRatio,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        children: options.map((entry) {
+                          final label = entry.key;
+                          final checked = entry.value;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
                               if (!mounted) return;
                               setState(() {
-                                _goodForOptions[entry.key] = value ?? false;
+                                _goodForOptions[label] = !checked;
                               });
                             },
-                          ),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontFamily: 'Gelica',
+                            child: Container(
+                              height: tileHeight,
+                              decoration: BoxDecoration(
+                                color: checked ? Colors.yellow.shade100 : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: checked ? Colors.black54 : Colors.grey.shade300),
+                                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      label,
+                                      style: const TextStyle(fontFamily: 'Gelica', fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    checked ? Icons.check_box : Icons.check_box_outline_blank,
+                                    size: 18,
+                                    color: checked ? Colors.black87 : Colors.grey,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                          );
+                        }).toList(),
                       );
-                    }).toList(),
+                    }),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 36), // ✅ Replaces Spacer safely
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _goBack,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre), // ✅ brand ochre
 
-                  child: const Text(AppStr.back),
-                ),
-                ElevatedButton(
-                  onPressed: _clearSelections,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                  child: const Text(AppStr.clear),
-                ),
-                ElevatedButton(
-                  onPressed: _goToPreviewScreen,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: const Text(AppStr.preview),
-                ),
-                ElevatedButton(
-                  onPressed: _goToNext,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow,
-                    foregroundColor: Colors.black,
+          const SizedBox(height: 12),
+
+          // Action row: single row of 4 buttons with consistent sizing.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goBack,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(AppColors.ochre),
+                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                        ),
+                        child: const Text(AppStr.back, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
                   ),
-                  child: const Text(AppStr.next),
-                ),
-              ],
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _clearSelections,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.grey),
+                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                        ),
+                        child: const Text(AppStr.clear, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goToPreviewScreen,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.green),
+                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                        ),
+                        child: const Text(AppStr.preview, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _goToNext,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.yellow),
+                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                        ),
+                        child: const Text(AppStr.next, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }

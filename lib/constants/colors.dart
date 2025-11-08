@@ -17,29 +17,5 @@ class AppColors {
 
   // Added yellow (used for primary action buttons / highlights)
   static const yellow = Colors.yellow;
-}
-
-class AppFonts {
-  static const gelica = 'Gelica';
-
-  static const standard = TextStyle(
-    fontFamily: gelica,
-  );
-
-  static const bold = TextStyle(
-    fontFamily: gelica,
-    fontWeight: FontWeight.bold,
-  );
-
-  static const title = TextStyle(
-    fontFamily: gelica,
-    fontWeight: FontWeight.bold,
-    fontSize: 22,
-  );
-
-  static const smallHint = TextStyle(
-    fontFamily: gelica,
-    fontSize: 12,
-    color: AppColors.mutedText,
-  );
+  static const amber = Colors.amber;
 }

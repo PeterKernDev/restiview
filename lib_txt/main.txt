@@ -1,10 +1,12 @@
 // main.dart
 // App entry point for RestiView v1.3.0
+//
+// Enforces portrait-only orientation at startup and initializes SessionCache and Firebase.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-
 import 'landing_screen.dart';
 import 'signin_screen.dart';
 import 'register_screen.dart';
@@ -19,6 +21,12 @@ import 'constants/colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Lock the app to portrait only (portraitUp and portraitDown)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // Warm session cache before UI so screens can read persisted values synchronously.
   await SessionCache.initializeFromStorage();

@@ -1,15 +1,18 @@
-// details_screen.dart
+// lib/details_screen.dart
 // Reusable details screen for any category (cocktails, starters, wine, main, dessert, other).
-// Allows add-photo + editable text cards with "Add more". Saves list to ReviewContext.reviewMap.
-// Controllers are owned by DetailItem to avoid controller/index mismatch when removing items.
+// Uses shared Thumbnail and ActionRow widgets for consistent, overflow-safe behaviour.
+// Fix: bottom action buttons use non-wrapping, scale-down text and reduced internal padding
+// to prevent line-wrapping on narrow screens and at large textScaleFactor.
+// Change: Add More button no longer uses an icon; label comes from AppStr.addMore (contains '+More').
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 import 'constants/strings.dart';
-import 'sub_preview_screen/full_screen_picture.dart';
+import 'widgets/full_screen_image.dart';
+import 'widgets/thumbnail.dart';
 
 class DetailItem {
   String id;
@@ -81,9 +84,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
     for (final entry in _controllerListeners.entries) {
       final id = entry.key;
       final listener = entry.value;
-      final item = _items.firstWhere((it) => it.id == id, orElse: () => DetailItem(id: UniqueKey().toString()));
+      final existing = _items.firstWhere((it) => it.id == id, orElse: () => DetailItem(id: UniqueKey().toString()));
       try {
-        item.controller.removeListener(listener);
+        existing.controller.removeListener(listener);
       } catch (_) {}
     }
     for (final item in _items) {
@@ -98,7 +101,6 @@ class _DetailsScreenState extends State<DetailsScreen> {
       return;
     }
     void listener() {
-      // trigger rebuild so Add more button and other UI reflect controller changes
       if (mounted) setState(() {});
     }
 
@@ -116,9 +118,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   }
 
   void _showFullImage(String path) {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: path)));
   }
 
@@ -136,42 +136,32 @@ class _DetailsScreenState extends State<DetailsScreen> {
     if (_items.isEmpty) {
       _items.add(DetailItem(id: UniqueKey().toString()));
     }
-    // attach listeners for controllers
     for (final item in _items) {
       _attachListener(item);
     }
   }
 
   Future<void> _pickPhoto(int index) async {
-    if (_isBusy || !mounted) {
-      return;
-    }
+    if (_isBusy || !mounted) return;
     try {
+      setState(() => _isBusy = true);
       final picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 75);
-      if (picked == null) {
-        return;
-      }
-      if (!mounted) {
-        return;
-      }
+      if (picked == null) return;
+      if (!mounted) return;
       setState(() {
         _items[index].photoPath = picked.path;
         _items[index].timestamp = DateTime.now();
       });
-      // Recognition/computer-vision stub:
-      // Trigger image recognition in a background isolate and update _items[index].controller.text when ready.
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
     }
   }
 
   void _deletePhoto(int index) {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() {
       _items[index].photoPath = null;
       _items[index].timestamp = DateTime.now();
@@ -187,14 +177,8 @@ class _DetailsScreenState extends State<DetailsScreen> {
   }
 
   void _addMore() {
-    if (!mounted) {
-      return;
-    }
-    // guard: only add if last item has content
-    if (!_lastItemHasContent()) {
-      // no-op; button should be disabled in UI, but guard defensively
-      return;
-    }
+    if (!mounted) return;
+    if (!_lastItemHasContent()) return;
     setState(() {
       final item = DetailItem(id: UniqueKey().toString());
       _items.add(item);
@@ -203,14 +187,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
   }
 
   void _removeItem(int index) {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() {
       final removed = _items.removeAt(index);
       _detachListener(removed);
       removed.disposeController();
-      // Ensure at least one card remains
       if (_items.isEmpty) {
         final newItem = DetailItem(id: UniqueKey().toString());
         _items.add(newItem);
@@ -228,14 +209,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
   }
 
   Future<void> _saveAndReturn() async {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _isBusy = true;
-    });
+    if (!mounted) return;
+    setState(() => _isBusy = true);
     try {
-      // Sync controller values into items
       for (var i = 0; i < _items.length; i++) {
         _items[i].name = _items[i].controller.text.trim();
       }
@@ -245,77 +221,45 @@ class _DetailsScreenState extends State<DetailsScreen> {
           .toList();
       final key = 'details_${widget.categoryKey}';
       widget.context.reviewMap[key] = mapped;
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.detailsSaved)));
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       Navigator.pop(context, widget.context);
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isBusy = false;
-        });
-      }
+      if (mounted) setState(() => _isBusy = false);
     }
   }
 
   Widget _photoColumn(int index, DetailItem item) {
+    final photoPath = item.photoPath;
     return Column(
       children: <Widget>[
-        GestureDetector(
+        Thumbnail(
+          path: photoPath,
+          size: 84,
           onTap: _isBusy
               ? null
               : () {
-                  final p = item.photoPath;
-                  if (p != null && p.isNotEmpty) {
-                    _showFullImage(p);
+                  if (photoPath != null && photoPath.isNotEmpty) {
+                    _showFullImage(photoPath);
                   } else {
                     _pickPhoto(index);
                   }
                 },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints.tightFor(width: 84, height: 84),
-            child: Container(
-              color: AppColors.lightGrey,
-              child: item.photoPath == null
-                  ? Icon(Icons.camera_alt, size: 32, color: AppColors.mutedText)
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Builder(builder: (_) {
-                        try {
-                          final f = File(item.photoPath!);
-                          if (!f.existsSync()) {
-                            return Icon(Icons.broken_image, size: 32, color: AppColors.mutedText);
-                          }
-                          return Image.file(f, fit: BoxFit.cover);
-                        } catch (_) {
-                          return Icon(Icons.broken_image, size: 32, color: AppColors.mutedText);
-                        }
-                      }),
-                    ),
-            ),
-          ),
+          onRemove: (photoPath != null && photoPath.isNotEmpty) ? () => _deletePhoto(index) : null,
         ),
         const SizedBox(height: 6),
         SizedBox(
           width: 84,
           height: 28,
           child: TextButton.icon(
-            onPressed: (item.photoPath == null || _isBusy) ? null : () => _deletePhoto(index),
+            onPressed: (photoPath == null || _isBusy) ? null : () => _deletePhoto(index),
             icon: const Icon(Icons.delete_outline, color: Colors.grey),
             label: const SizedBox.shrink(),
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-            ),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
           ),
         ),
       ],
@@ -342,10 +286,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 textInputAction: TextInputAction.newline,
                 minLines: 3,
                 maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: AppStr.itemNameHint,
-                  alignLabelWithHint: true,
-                ),
+                decoration: InputDecoration(labelText: AppStr.itemNameHint, alignLabelWithHint: true),
               ),
             ),
             const SizedBox(width: 8),
@@ -382,6 +323,17 @@ class _DetailsScreenState extends State<DetailsScreen> {
   Widget build(BuildContext context) {
     final canAddMore = !_isBusy && _lastItemHasContent();
 
+    // Helper to produce a style with colors using styleFrom (no MaterialStateProperty)
+    ButtonStyle buttonStyle(Color bg, Color fg) {
+      return ElevatedButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        minimumSize: const Size(0, 44),
+        textStyle: AppFonts.standard,
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.beige,
       appBar: AppBar(
@@ -408,29 +360,52 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: <Widget>[
-                ElevatedButton(
-                  onPressed: () {
-                    if (!mounted) {
-                      return;
-                    }
-                    Navigator.pop(context, widget.context);
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
-                  child: Text(AppStr.cancel, style: AppFonts.standard.copyWith(color: Colors.white)),
+
+              // Fixed-height action row to prevent expansion
+              SizedBox(
+                height: 64,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (!mounted) return;
+                              Navigator.pop(context, widget.context);
+                            },
+                            style: buttonStyle(AppColors.red, Colors.white),
+                            child: Text(AppStr.cancel, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                          child: ElevatedButton(
+                            onPressed: canAddMore ? _addMore : null,
+                            style: buttonStyle(AppColors.ochre, Colors.black),
+                            child: Text(AppStr.addMore, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: canAddMore ? Colors.black : Colors.black45)),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                          child: ElevatedButton(
+                            onPressed: _isBusy ? null : _saveAndReturn,
+                            style: buttonStyle(AppColors.darkGreen, Colors.white),
+                            child: Text(AppStr.save, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre, foregroundColor: Colors.black),
-                  onPressed: canAddMore ? _addMore : null,
-                  icon: const Icon(Icons.add),
-                  label: Text(AppStr.addMore, style: AppFonts.standard.copyWith(color: canAddMore ? Colors.black : Colors.black45)),
-                ),
-                ElevatedButton(
-                  onPressed: _isBusy ? null : _saveAndReturn,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.darkGreen),
-                  child: Text(AppStr.save, style: AppFonts.standard.copyWith(color: Colors.white)),
-                ),
-              ]),
+              ),
+
               const SizedBox(height: 8),
             ]),
           ),

@@ -1,9 +1,9 @@
 // goodfor_filter_screen.dart
-// Allows users to select GoodFor tags to filter the review list view. Returns selected tags to caller.
+// Matches GoodForScreen appearance but returns selected tags to caller.
 
 import 'package:flutter/material.dart';
 import 'constants/restiview_constants.dart';
-import 'constants/strings.dart'; // ✅ Centralized strings
+import 'constants/strings.dart';
 import 'constants/colors.dart';
 
 class GoodForFilterScreen extends StatefulWidget {
@@ -17,19 +17,24 @@ class GoodForFilterScreen extends StatefulWidget {
 
 class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
   late Map<String, bool> _filterOptions;
+  late Map<String, bool> _initialOptions;
 
   @override
   void initState() {
     super.initState();
-    _filterOptions = {
-      for (var tag in goodForTags) tag: false,
-    };
+
+    _filterOptions = {for (var tag in goodForTags) tag: false};
+
     for (var tag in widget.initialSelection) {
       if (_filterOptions.containsKey(tag)) {
         _filterOptions[tag] = true;
       }
     }
+
+    _initialOptions = Map<String, bool>.from(_filterOptions);
   }
+
+  bool get _hasChanged => !_mapsEqual(_filterOptions, _initialOptions);
 
   void _clearFilters() {
     setState(() {
@@ -40,112 +45,173 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
   }
 
   void _returnFilters() {
-    final selected = _filterOptions.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
+    final selected = _filterOptions.entries.where((e) => e.value).map((e) => e.key).toList();
+    if (!mounted) return;
     Navigator.pop(context, selected);
   }
 
-@override
-Widget build(BuildContext context) {
-  final options = _filterOptions.entries.toList();
+  bool _mapsEqual(Map<String, bool> a, Map<String, bool> b) {
+    if (a.length != b.length) return false;
+    for (final key in a.keys) {
+      if (a[key] != b[key]) return false;
+    }
+    return true;
+  }
 
-  return Scaffold(
-    backgroundColor: AppColors.beige, // ✅ Brand beige
-    appBar: AppBar(
-      automaticallyImplyLeading: false,
-      title: const Text(
-        AppStr.goodForFilterTitle,
-        style: TextStyle(
-          fontFamily: 'Gelica',
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    final options = _filterOptions.entries.toList();
+
+    // Shared button style for consistent label sizes
+    final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
+      textStyle: const TextStyle(
+        fontFamily: 'Gelica',
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.4,
       ),
-      backgroundColor: AppColors.darkGreen, // ✅ Brand dark green
-      centerTitle: true,
-    ),
-    body: Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                const Text(
-                  AppStr.goodForFilterPrompt,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Gelica',
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      minimumSize: const Size(0, 44),
+    );
+
+    // Tile height to match GoodForScreen visuals
+    const double tileHeight = 56.0;
+
+    return Scaffold(
+      backgroundColor: AppColors.beige,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text(
+          AppStr.goodForFilterTitle,
+          style: TextStyle(
+            fontFamily: 'Gelica',
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: AppColors.darkGreen,
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  const Text(
+                    AppStr.goodForFilterPrompt,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Gelica',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    childAspectRatio: 4.5,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    children: options.map((entry) {
-                      return Row(
-                        children: [
-                          Checkbox(
-                            value: entry.value,
-                            onChanged: (bool? value) {
+                  const SizedBox(height: 24),
+
+                  // Grid with same tile style as GoodForScreen (2 columns)
+                  Expanded(
+                    child: LayoutBuilder(builder: (context, constraints) {
+                      final double spacing = 12;
+                      final double availableWidth = constraints.maxWidth - spacing;
+                      final double itemWidth = (availableWidth / 2);
+                      final double childAspectRatio = itemWidth / tileHeight;
+
+                      return GridView.count(
+                        crossAxisCount: 2,
+                        childAspectRatio: childAspectRatio,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        children: options.map((entry) {
+                          final label = entry.key;
+                          final checked = entry.value;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
+                              if (!mounted) return;
                               setState(() {
-                                _filterOptions[entry.key] = value ?? false;
+                                _filterOptions[label] = !checked;
                               });
                             },
-                          ),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontFamily: 'Gelica',
+                            child: Container(
+                              height: tileHeight,
+                              decoration: BoxDecoration(
+                                color: checked ? Colors.yellow.shade100 : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: checked ? Colors.black54 : Colors.grey.shade300),
+                                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      label,
+                                      style: const TextStyle(fontFamily: 'Gelica', fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    checked ? Icons.check_box : Icons.check_box_outline_blank,
+                                    size: 18,
+                                    color: checked ? Colors.black87 : Colors.grey,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                          );
+                        }).toList(),
                       );
-                    }).toList(),
+                    }),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 36),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _returnFilters,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ochre, // ✅ Brand ochre
+
+          const SizedBox(height: 24),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: _returnFilters,
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(AppColors.ochre),
+                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                        ),
+                        child: Text(_hasChanged ? AppStr.apply : AppStr.back, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
                   ),
-                  child: const Text(AppStr.back),
-                ),
-                ElevatedButton(
-                  onPressed: _clearFilters,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey, // ✅ Always grey
-                    foregroundColor: Colors.white,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _clearFilters();
+                        },
+                        style: actionBtnBase.copyWith(
+                          backgroundColor: WidgetStateProperty.all(Colors.grey),
+                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                        ),
+                        child: const Text(AppStr.clear, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
                   ),
-                  child: const Text(AppStr.clear),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }

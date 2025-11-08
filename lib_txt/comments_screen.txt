@@ -1,7 +1,11 @@
 // comments_screen.dart
 // "Details" screen: captures comments, up to three photos, and six detail categories (cocktails, starters, wine, main, dessert, other).
 // Photo UI: three small tiles (left, center, right). Tapping a tile opens camera when empty or full-screen when present.
-// Clear button only clears comments. Next button now uses AppColors.yellow.
+// Clear button only clears comments. Next button uses AppColors.yellow.
+// Fixes applied:
+//  - avoid synchronous File.existsSync during initState (don't block/throw on missing files)
+//  - render the three photo slots using a Wrap so thumbnails never cause a horizontal RenderFlex overflow
+//  - use Image.file with errorBuilder everywhere so missing/unreadable files don't break layout
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -15,8 +19,9 @@ import 'services/session_cache.dart';
 import 'goodfor_screen.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 import 'details_screen.dart';
-import 'sub_preview_screen/full_screen_picture.dart';
+import 'widgets/full_screen_image.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -52,21 +57,22 @@ class _CommentsScreenState extends State<CommentsScreen> {
       text: widget.context.reviewMap['comments'] ?? '',
     );
 
-    // Load up to 3 saved photos if present (init only)
+    // Do not perform synchronous File.existsSync calls in initState.
+    // Accept stored paths if present; Image.file will handle missing files at paint time.
     for (var i = 0; i < 3; i++) {
       final key = 'photoPath$i';
       final p = widget.context.reviewMap[key];
-      if (p is String && p.isNotEmpty && File(p).existsSync()) {
+      if (p is String && p.isNotEmpty) {
         _photoPaths[i] = p;
       } else {
         _photoPaths[i] = null;
       }
     }
 
-    // Migrate legacy single photo key if present
+    // Migrate legacy single photo key if present (without existsSync)
     if (_photoPaths.every((e) => e == null)) {
       final legacy = widget.context.reviewMap['photoPath'];
-      if (legacy is String && legacy.isNotEmpty && File(legacy).existsSync()) {
+      if (legacy is String && legacy.isNotEmpty) {
         _photoPaths[0] = legacy;
         widget.context.reviewMap.remove('photoPath');
         widget.context.reviewMap['photoPath0'] = legacy;
@@ -277,71 +283,84 @@ class _CommentsScreenState extends State<CommentsScreen> {
     );
   }
 
-Widget _photoTile(int index, double width) {
-  final path = _photoPaths[index];
-  final bool enabled = index == 0 ? true : _photoPaths[index - 1] != null;
+  Widget _photoTileContent(String? path, bool enabled, int index) {
+    if (path == null || path.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(color: AppColors.lightGrey, borderRadius: BorderRadius.circular(4)),
+        child: Center(
+          child: Icon(Icons.camera_alt, size: 32, color: enabled ? AppColors.mutedText : AppColors.mutedText.withAlpha(80)),
+        ),
+      );
+    }
 
-  return SizedBox(
-    width: width,
-    child: Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.mutedText),
+      ),
+    );
+  }
+
+  Widget _photoSlot(int index) {
+    final path = _photoPaths[index];
+    final bool enabled = index == 0 ? true : _photoPaths[index - 1] != null;
+
+    return GestureDetector(
+      onTap: (!_isBusy && enabled)
+          ? () {
+              if (path != null && path.isNotEmpty) {
+                _showFullImage(path);
+              } else {
+                _capturePhotoAt(index);
+              }
+            }
+          : null,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
+        child: Stack(
           children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: (!_isBusy && enabled)
-                    ? () {
-                        if (path != null && path.isNotEmpty) {
-                          _showFullImage(path);
-                        } else {
-                          _capturePhotoAt(index);
-                        }
-                      }
-                    : null,
-                child: Container(
-                  height: width,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGrey,
-                    borderRadius: BorderRadius.circular(4),
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
+              child: _photoTileContent(path, enabled, index),
+            ),
+            if (path != null && path.isNotEmpty)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: Material(
+                    color: Colors.black38,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    child: InkWell(
+                      onTap: () => _removePhotoAt(index),
+                      child: const Icon(Icons.close, size: 18, color: Colors.white),
+                    ),
                   ),
-                  child: path == null
-                      ? Icon(Icons.camera_alt,
-                          size: 32,
-                          color: enabled ? AppColors.mutedText : AppColors.mutedText.withAlpha(80))
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Image.file(
-                            File(path),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.mutedText),
-                          ),
-                        ),
                 ),
               ),
-            ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 28,
-              height: width,
-              child: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 24),
-                onPressed: (path == null || _isBusy) ? null : () => _removePhotoAt(index),
-                padding: EdgeInsets.zero,
-                alignment: Alignment.topCenter,
-              ),
-            ),
           ],
         ),
-      ],
-    ),
-  );
-}
-
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    const tileWidth = 84.0;
+    // detail categories
+    final detailList = <Map<String, dynamic>>[
+      {'key': 'cocktails', 'label': AppStr.cocktails, 'icon': Icons.local_bar},
+      {'key': 'starters', 'label': AppStr.starters, 'icon': Icons.restaurant_menu},
+      {'key': 'wine', 'label': AppStr.wine, 'icon': Icons.wine_bar},
+      {'key': 'main', 'label': AppStr.mainCourse, 'icon': Icons.set_meal},
+      {'key': 'dessert', 'label': AppStr.dessert, 'icon': Icons.icecream},
+      {'key': 'otherdrinks', 'label': AppStr.otherDrinks, 'icon': Icons.local_drink},
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.beige,
@@ -370,23 +389,19 @@ Widget _photoTile(int index, double width) {
                             maxLines: 3,
                           ),
                           const SizedBox(height: 16),
-                          // Three photo tiles row: left, center, right
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _photoTile(0, tileWidth),
-                              _photoTile(1, tileWidth),
-                              _photoTile(2, tileWidth),
-                            ],
+
+                          // Thumbnails: use Wrap so slots wrap on narrow screens and never overflow
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: List<Widget>.generate(3, (i) => _photoSlot(i)),
+                            ),
                           ),
 
                           const SizedBox(height: 20),
-                          _detailTile('cocktails', AppStr.cocktails, Icons.local_bar),
-                          _detailTile('starters', AppStr.starters, Icons.restaurant_menu),
-                          _detailTile('wine', AppStr.wine, Icons.wine_bar),
-                          _detailTile('main', AppStr.mainCourse, Icons.set_meal),
-                          _detailTile('dessert', AppStr.dessert, Icons.icecream),
-                          _detailTile('otherdrinks', AppStr.otherDrinks, Icons.local_drink),
+                          for (final cat in detailList) _detailTile(cat['key'] as String, cat['label'] as String, cat['icon'] as IconData),
 
                           const SizedBox(height: 24),
                         ],

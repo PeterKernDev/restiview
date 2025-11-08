@@ -3,7 +3,6 @@
 // Uses default country from SessionCache and passes data via ReviewContext.
 
 import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +15,7 @@ import 'services/session_cache.dart';
 import 'top_screen.dart';
 import 'services/location_restaurant_helper.dart';
 import 'constants/strings.dart';
+import 'constants/fonts.dart';
 
 class GeneralScreen extends StatefulWidget {
   final ReviewContext context;
@@ -68,6 +68,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       widget.context.isEditing = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
         _autoFillRestaurantFromLocation();
       });
     }
@@ -105,15 +108,21 @@ class _GeneralScreenState extends State<GeneralScreen> {
   Future<bool> getLocationPermissionStatus() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return false;
+      if (!serviceEnabled) {
+        return false;
+      }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.deniedForever) return false;
-      if (permission == LocationPermission.denied) return false;
+      if (permission == LocationPermission.deniedForever) {
+        return false;
+      }
+      if (permission == LocationPermission.denied) {
+        return false;
+      }
 
       return true;
     } catch (_) {
@@ -122,42 +131,43 @@ class _GeneralScreenState extends State<GeneralScreen> {
   }
 
   Future<void> _addInlineCustomCuisine() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final newCuisine = _newCuisineController.text.trim();
+    final String newCuisine = _newCuisineController.text.trim();
     if (newCuisine.isEmpty) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text(AppStr.cuisineRequired)),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineRequired)));
       return;
     }
 
-    final existsLocally = SessionCache.customCuisines.any(
-      (c) => c.toLowerCase() == newCuisine.toLowerCase(),
-    );
+    final bool existsLocally = SessionCache.customCuisines.any((c) => c.toLowerCase() == newCuisine.toLowerCase());
     if (existsLocally) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text(AppStr.cuisineExists)),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineExists)));
       return;
     }
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return;
+    }
 
-    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
     try {
-      final snapshot = await ref.get();
-      if (!mounted) return;
+      final DataSnapshot snapshot = await ref.get();
+      if (!mounted) {
+        return;
+      }
 
-      final List<List<dynamic>> updatedCustoms = [];
+      final List<List<dynamic>> updatedCustoms = <List<dynamic>>[];
 
       if (snapshot.exists) {
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        final raw = data['cuisine'];
+        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final dynamic raw = data['cuisine'];
         if (raw is List) {
-          for (final item in raw) {
+          for (final dynamic item in raw) {
             if (item is List && item.isNotEmpty) {
               updatedCustoms.add(List<dynamic>.from(item));
             }
@@ -168,87 +178,87 @@ class _GeneralScreenState extends State<GeneralScreen> {
         updatedCustoms.add([newCuisine, 0]);
       }
 
-      updatedCustoms.sort((a, b) =>
-          (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
+      updatedCustoms.sort((a, b) => (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
 
       if (snapshot.exists) {
         await ref.update({'cuisine': updatedCustoms});
       } else {
-        await ref.set({
-          'cuisine': updatedCustoms,
-          'occasion': [],
-          'country': [],
-        });
+        await ref.set({'cuisine': updatedCustoms, 'occasion': [], 'country': []});
       }
 
-      final merged = <String>[];
-      for (final s in systemCuisines) {
-        if (!merged.contains(s)) merged.add(s);
+      final List<String> merged = <String>[];
+      for (final String s in systemCuisines) {
+        if (!merged.contains(s)) {
+          merged.add(s);
+        }
       }
-      for (final pair in updatedCustoms) {
-        final name = pair[0] as String;
-        if (!merged.contains(name)) merged.add(name);
+      for (final List<dynamic> pair in updatedCustoms) {
+        final String name = pair[0] as String;
+        if (!merged.contains(name)) {
+          merged.add(name);
+        }
       }
       SessionCache.customCuisines = merged;
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _selectedCuisine = newCuisine;
         _newCuisineController.clear();
         _showAddCuisineField = false;
       });
 
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text(AppStr.cuisineAdded)),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineAdded)));
     } catch (e) {
-      if (!mounted) return;
-      final messengerErr = ScaffoldMessenger.of(context);
-      messengerErr.showSnackBar(
-        SnackBar(content: Text('${AppStr.saveError}: $e')),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     }
   }
 
   Future<void> _addInlineCustomOccasion() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final newOccasion = _newOccasionController.text.trim();
-
+    final String newOccasion = _newOccasionController.text.trim();
     if (newOccasion.isEmpty || newOccasion.length > 24) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text(AppStr.occasionMaxLength)),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
       return;
     }
 
-    final existsLocally = SessionCache.customOccasions.any(
-      (o) => o.toLowerCase() == newOccasion.toLowerCase(),
-    );
+    final bool existsLocally = SessionCache.customOccasions.any((o) => o.toLowerCase() == newOccasion.toLowerCase());
     if (existsLocally) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')));
       return;
     }
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return;
+    }
 
-    final ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
     try {
-      final snapshot = await ref.get();
-      if (!mounted) return;
+      final DataSnapshot snapshot = await ref.get();
+      if (!mounted) {
+        return;
+      }
 
-      final List<List<dynamic>> updatedOccasions = [];
+      final List<List<dynamic>> updatedOccasions = <List<dynamic>>[];
 
       if (snapshot.exists) {
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        final raw = data['occasion'];
+        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final dynamic raw = data['occasion'];
         if (raw is List) {
-          for (final item in raw) {
+          for (final dynamic item in raw) {
             if (item is List && item.isNotEmpty) {
               updatedOccasions.add(List<dynamic>.from(item));
             }
@@ -259,52 +269,54 @@ class _GeneralScreenState extends State<GeneralScreen> {
         updatedOccasions.add([newOccasion, 0]);
       }
 
-      updatedOccasions.sort((a, b) =>
-          (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
+      updatedOccasions.sort((a, b) => (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
 
       if (snapshot.exists) {
         await ref.update({'occasion': updatedOccasions});
       } else {
-        await ref.set({
-          'cuisine': [],
-          'occasion': updatedOccasions,
-          'country': [],
-        });
+        await ref.set({'cuisine': [], 'occasion': updatedOccasions, 'country': []});
       }
 
-      final merged = <String>[];
-      for (final s in systemOccasions) {
-        if (!merged.contains(s)) merged.add(s);
+      final List<String> merged = <String>[];
+      for (final String s in systemOccasions) {
+        if (!merged.contains(s)) {
+          merged.add(s);
+        }
       }
-      for (final pair in updatedOccasions) {
-        final name = pair[0] as String;
-        if (!merged.contains(name)) merged.add(name);
+      for (final List<dynamic> pair in updatedOccasions) {
+        final String name = pair[0] as String;
+        if (!merged.contains(name)) {
+          merged.add(name);
+        }
       }
       merged.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       SessionCache.customOccasions = merged;
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _selectedOccasion = newOccasion;
         _newOccasionController.clear();
         _showAddOccasionField = false;
       });
 
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')));
     } catch (e) {
-      if (!mounted) return;
-      final messengerErr = ScaffoldMessenger.of(context);
-      messengerErr.showSnackBar(
-        SnackBar(content: Text('${AppStr.saveError}: $e')),
-      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     }
   }
 
   void _clearForm() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _restaurantController.clear();
       _cityController.clear();
@@ -319,7 +331,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
       _showAddCuisineField = false;
       _showAddOccasionField = false;
 
-      final reviewMap = widget.context.reviewMap;
+      final Map<String, dynamic> reviewMap = widget.context.reviewMap;
       reviewMap['restaurantName'] = '';
       reviewMap['city'] = '';
       reviewMap['cuisine'] = '';
@@ -333,21 +345,25 @@ class _GeneralScreenState extends State<GeneralScreen> {
   }
 
   void _showRestaurantSelector() async {
-    final selected = await showDialog<NearbyRestaurant>(
+    final NearbyRestaurant? selected = await showDialog<NearbyRestaurant>(
       context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(AppStr.selectRestaurant, style: AppFonts.bold),
-        children: _restaurantOptions.map((rest) {
-          return SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, rest),
-            child: Text(rest.name),
-          );
-        }).toList(),
-      ),
+      builder: (BuildContext ctx) {
+        return SimpleDialog(
+          title: Text(AppStr.selectRestaurant, style: AppFonts.bold),
+          children: _restaurantOptions.map((NearbyRestaurant rest) {
+            return SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(ctx, rest);
+              },
+              child: Text(rest.name),
+            );
+          }).toList(),
+        );
+      },
     );
 
     if (selected != null && mounted) {
-      final isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
+      final bool isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
 
       setState(() {
         widget.context.reviewMap['restaurantName'] = selected.name;
@@ -364,60 +380,71 @@ class _GeneralScreenState extends State<GeneralScreen> {
   }
 
   Future<void> _autoFillRestaurantFromLocation() async {
-    _restaurantSearchAttempts++;
-    if (mounted) setState(() => _isSearching = true);
-
-    final messenger = ScaffoldMessenger.of(context);
+    _restaurantSearchAttempts += 1;
+    if (mounted) {
+      setState(() {
+        _isSearching = true;
+      });
+    }
 
     try {
       if (!SessionCache.allowLocation) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Location search skipped — allowLocation is false.')),
-        );
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.autoFillSkipped)));
         return;
       }
 
-      final ready = await getLocationPermissionStatus();
+      final bool ready = await getLocationPermissionStatus();
       if (!ready) {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
-        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (!serviceEnabled) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Location services are disabled. Please enable them in Settings.')),
-          );
+          if (!mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.locationDisabled)));
           await Geolocator.openLocationSettings();
           return;
         }
 
-        final permission = await Geolocator.checkPermission();
+        final LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.deniedForever) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Location permission permanently denied. Enable it in app settings.')),
-          );
+          if (!mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.permissionDeniedForever)));
           return;
         }
 
         if (permission == LocationPermission.denied) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Location permission denied. Cannot auto-fill.')),
-          );
+          if (!mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.permissionDenied)));
           return;
         }
 
         return;
       }
 
-      final results = await findNearbyRestaurants().timeout(const Duration(seconds: 12));
-      if (!mounted) return;
+      final List<NearbyRestaurant> results = await findNearbyRestaurants().timeout(const Duration(seconds: 12));
+      if (!mounted) {
+        return;
+      }
 
       if (results.isNotEmpty) {
         _restaurantOptions = results;
-        final selected = results.first;
-        final isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
+        final NearbyRestaurant selected = results.first;
+        final bool isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         setState(() {
           widget.context.reviewMap['restaurantName'] = selected.name;
           widget.context.reviewMap['restaddress'] = selected.address;
@@ -430,39 +457,49 @@ class _GeneralScreenState extends State<GeneralScreen> {
           _selectedCuisine = isValidCuisine ? selected.cuisine : '';
         });
 
-        if (!mounted) return;
-        messenger.showSnackBar(
-          SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')),
-        );
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')));
       } else {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         _clearForm();
-        final message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : AppStr.autoFillNone;
-        messenger.showSnackBar(SnackBar(content: Text(message)));
+        final String message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : AppStr.autoFillNone;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } on TimeoutException {
-      if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(AppStr.autoFillFailed)));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.autoFillFailed)));
     } catch (e) {
-      if (!mounted) return;
-      final message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : 'Search failed: $e';
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      if (!mounted) {
+        return;
+      }
+      final String message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : '${AppStr.searchFailed}: $e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } finally {
-      if (mounted) setState(() => _isSearching = false);
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
     }
   }
 
   void _saveGeneralInfoToMap() {
-    final reviewMap = widget.context.reviewMap;
+    final Map<String, dynamic> reviewMap = widget.context.reviewMap;
 
     reviewMap['restaurantName'] = _restaurantController.text;
     reviewMap['country'] = SessionCache.defaultCountry;
     reviewMap['city'] = _cityController.text;
     reviewMap['cuisine'] = SessionCache.customCuisines.contains(_selectedCuisine) ? _selectedCuisine : '';
     reviewMap['occasion'] = _selectedOccasion;
-    final dinersText = _dinersController.text.trim();
+    final String dinersText = _dinersController.text.trim();
     reviewMap['numberOfDiners'] = dinersText.isEmpty ? '' : int.tryParse(dinersText);
-    final costText = _costController.text.trim();
+    final String costText = _costController.text.trim();
     reviewMap['cost'] = costText.isEmpty ? '' : costText;
     reviewMap['currency'] = SessionCache.currency;
     reviewMap['dateOfReview'] = _selectedDate.toIso8601String();
@@ -471,6 +508,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
   void _goToRatingsScreen() {
     if (_formKey.currentState?.validate() ?? false) {
       _saveGeneralInfoToMap();
+      if (!mounted) {
+        return;
+      }
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -481,46 +521,61 @@ class _GeneralScreenState extends State<GeneralScreen> {
   }
 
   void _goBackToTop() async {
-    final shouldLeave = await showDialog<bool>(
+    final bool? shouldLeave = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(AppStr.discardTitle),
-        content: const Text(AppStr.discardMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(AppStr.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(AppStr.yes),
-          ),
-        ],
-      ),
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(AppStr.discardTitle),
+          content: const Text(AppStr.discardMessage),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text(AppStr.cancel),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text(AppStr.yes),
+            ),
+          ],
+        );
+      },
     );
 
     if (shouldLeave ?? false) {
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => TopScreen()),
-        (route) => false,
-      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => TopScreen()), (Route<dynamic> route) => false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final topCities = systemCitiesByCountry[SessionCache.defaultCountry] ?? [];
-    final cuisineItemsOrdered = <String>{}
+    final List<String> topCities = systemCitiesByCountry[SessionCache.defaultCountry] ?? <String>[];
+    final Set<String> cuisineItemsOrdered = <String>{}
       ..addAll(systemCuisines)
       ..addAll(SessionCache.customCuisines);
-    final cuisineList = cuisineItemsOrdered.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final List<String> cuisineList = cuisineItemsOrdered.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-    final occasionItemsOrdered = <String>[
+    final List<String> occasionItemsOrdered = <String>[
       ...systemOccasions,
-      ...SessionCache.customOccasions.where((o) => !systemOccasions.contains(o)),
+      ...SessionCache.customOccasions.where((String o) => !systemOccasions.contains(o)),
     ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    // Helper to produce a style with colors using styleFrom (no MaterialStateProperty)
+    ButtonStyle buttonStyle(Color bg, Color fg) {
+      return ElevatedButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        minimumSize: const Size(0, 44),
+        textStyle: AppFonts.bold.copyWith(fontSize: 14),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.beige,
@@ -530,282 +585,275 @@ class _GeneralScreenState extends State<GeneralScreen> {
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
-      body: LayoutBuilder(
-        builder: (ctx, constraints) {
-          return Stack(
-            children: [
-              SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _restaurantController,
-                            decoration: const InputDecoration(labelText: AppStr.restaurantLabel),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) return AppStr.restaurantRequired;
-                              return null;
+      body: LayoutBuilder(builder: (BuildContext ctx, BoxConstraints constraints) {
+        return Stack(children: <Widget>[
+          SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                    TextFormField(
+                      controller: _restaurantController,
+                      decoration: const InputDecoration(labelText: AppStr.restaurantLabel),
+                      validator: (String? value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return AppStr.restaurantRequired;
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text == '' || topCities.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return topCities.where((String city) => city.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                      },
+                      onSelected: (String selection) {
+                        _cityController.text = selection;
+                      },
+                      fieldViewBuilder: (BuildContext fieldCtx, TextEditingController controller, FocusNode focusNode, VoidCallback onEditingComplete) {
+                        return TextField(
+                          controller: _cityController,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(labelText: AppStr.cityLabel, hintText: topCities.isEmpty ? AppStr.cityHint : null),
+                          onEditingComplete: onEditingComplete,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                      Row(children: <Widget>[
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: cuisineList.contains(_selectedCuisine) ? _selectedCuisine : null,
+                            items: cuisineList.map((String cuisine) {
+                              return DropdownMenuItem(value: cuisine, child: Text(cuisine));
+                            }).toList(),
+                            onChanged: (String? value) {
+                              if (!mounted) {
+                                return;
+                              }
+                              setState(() {
+                                _selectedCuisine = value ?? '';
+                              });
                             },
+                            decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
                           ),
-                          const SizedBox(height: 16),
-                          Autocomplete<String>(
-                            optionsBuilder: (textEditingValue) {
-                              if (textEditingValue.text == '' || topCities.isEmpty) return const Iterable<String>.empty();
-                              return topCities.where((city) => city.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            if (!mounted) {
+                              return;
+                            }
+                            setState(() {
+                              _showAddCuisineField = !_showAddCuisineField;
+                            });
+                          },
+                          child: Text(AppStr.add, style: AppFonts.standard),
+                        ),
+                      ]),
+                      if (_showAddCuisineField)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Row(children: <Widget>[
+                            Expanded(
+                              child: TextField(controller: _newCuisineController, decoration: const InputDecoration(hintText: AppStr.newCuisineHint)),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: AppStr.confirm,
+                              color: Colors.green,
+                              icon: const Icon(Icons.check),
+                              onPressed: () async {
+                                await _addInlineCustomCuisine();
+                              },
+                            ),
+                            IconButton(
+                              tooltip: AppStr.cancel,
+                              color: Colors.grey,
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                if (!mounted) {
+                                  return;
+                                }
+                                setState(() {
+                                  _newCuisineController.clear();
+                                  _showAddCuisineField = false;
+                                });
+                              },
+                            ),
+                          ]),
+                        ),
+                    ]),
+                    const SizedBox(height: 16),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+                      Row(children: <Widget>[
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: occasionItemsOrdered.contains(_selectedOccasion) ? _selectedOccasion : occasionItemsOrdered.first,
+                            items: occasionItemsOrdered.map((String occasion) {
+                              return DropdownMenuItem(value: occasion, child: Text(occasion));
+                            }).toList(),
+                            onChanged: (String? value) {
+                              if (!mounted) {
+                                return;
+                              }
+                              setState(() {
+                                _selectedOccasion = value ?? AppStr.defaultOccasion;
+                              });
                             },
-                            onSelected: (selection) => _cityController.text = selection,
-                            fieldViewBuilder: (fieldCtx, controller, focusNode, onEditingComplete) {
-                              return TextField(
-                                controller: _cityController,
-                                focusNode: focusNode,
-                                decoration: InputDecoration(
-                                  labelText: AppStr.cityLabel,
-                                  hintText: topCities.isEmpty ? AppStr.cityHint : null,
-                                ),
-                                onEditingComplete: onEditingComplete,
-                              );
-                            },
+                            decoration: const InputDecoration(labelText: AppStr.occasionLabel),
                           ),
-                          const SizedBox(height: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: cuisineList.contains(_selectedCuisine) ? _selectedCuisine : null,
-                                      items: cuisineList.map((cuisine) => DropdownMenuItem(value: cuisine, child: Text(cuisine))).toList(),
-                                      onChanged: (value) {
-                                        if (!mounted) return;
-                                        setState(() => _selectedCuisine = value ?? '');
-                                      },
-                                      decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      if (!mounted) return;
-                                      setState(() => _showAddCuisineField = !_showAddCuisineField);
-                                    },
-                                    child: Text(AppStr.add, style: AppFonts.standard),
-                                  ),
-                                ],
-                              ),
-                              if (_showAddCuisineField)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _newCuisineController,
-                                          decoration: const InputDecoration(hintText: AppStr.newCuisineHint),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        tooltip: AppStr.confirm,
-                                        color: Colors.green,
-                                        icon: const Icon(Icons.check),
-                                        onPressed: () async => await _addInlineCustomCuisine(),
-                                      ),
-                                      IconButton(
-                                        tooltip: AppStr.cancel,
-                                        color: Colors.grey,
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () {
-                                          if (!mounted) return;
-                                          setState(() {
-                                            _newCuisineController.clear();
-                                            _showAddCuisineField = false;
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-                          // Occasion moved here under cuisine
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: occasionItemsOrdered.contains(_selectedOccasion) ? _selectedOccasion : occasionItemsOrdered.first,
-                                      items: occasionItemsOrdered
-                                          .map((occasion) => DropdownMenuItem(value: occasion, child: Text(occasion)))
-                                          .toList(),
-                                      onChanged: (value) {
-                                        if (!mounted) return;
-                                        setState(() => _selectedOccasion = value ?? AppStr.defaultOccasion);
-                                      },
-                                      decoration: const InputDecoration(labelText: AppStr.occasionLabel),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      if (!mounted) return;
-                                      setState(() => _showAddOccasionField = !_showAddOccasionField);
-                                    },
-                                    child: Text(AppStr.add, style: AppFonts.standard),
-                                  ),
-                                ],
-                              ),
-                              if (_showAddOccasionField)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8.0),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _newOccasionController,
-                                          decoration: const InputDecoration(hintText: AppStr.newOccasionHint),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        tooltip: AppStr.confirm,
-                                        color: Colors.green,
-                                        icon: const Icon(Icons.check),
-                                        onPressed: () async => await _addInlineCustomOccasion(),
-                                      ),
-                                      IconButton(
-                                        tooltip: AppStr.cancel,
-                                        color: Colors.grey,
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () {
-                                          if (!mounted) return;
-                                          setState(() {
-                                            _newOccasionController.clear();
-                                            _showAddOccasionField = false;
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _dinersController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: AppStr.dinersLabel),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Text(AppStr.costLabel, style: AppFonts.standard),
-                              const SizedBox(width: 12),
-                              Text(SessionCache.currency, style: AppFonts.standard),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _costController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(labelText: AppStr.amountLabel),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Text('${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}', style: AppFonts.standard),
-                              const SizedBox(width: 12),
-                              ElevatedButton(
-                                onPressed: () async {
-                                  DateTime? picked = await showDatePicker(
-                                    context: ctx,
-                                    initialDate: _selectedDate,
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2100),
-                                  );
-                                  if (picked != null && mounted) {
-                                    setState(() => _selectedDate = picked);
-                                  }
-                                },
-                                child: Text(AppStr.pickDate, style: AppFonts.standard),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Text('Location search : ', style: AppFonts.standard),
-                              SessionCache.allowLocation
-                                  ? Expanded(
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: _restaurantOptions.length > 1
-                                            ? ElevatedButton(
-                                                onPressed: _showRestaurantSelector,
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                                                child: Text(AppStr.multi, style: AppFonts.standard),
-                                              )
-                                            : ElevatedButton(
-                                                onPressed: _autoFillRestaurantFromLocation,
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                                                child: Text(AppStr.search, style: AppFonts.standard.copyWith(color: Colors.white)),
-                                              ),
-                                      ),
-                                    )
-                                  : Text(
-                                      '(OFF)',
-                                      style: AppFonts.standard.copyWith(color: AppColors.mutedText, fontStyle: FontStyle.italic),
-                                    ),
-                            ],
-                          ),
-                          const SizedBox(height: 36),
-                        ],
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            if (!mounted) {
+                              return;
+                            }
+                            setState(() {
+                              _showAddOccasionField = !_showAddOccasionField;
+                            });
+                          },
+                          child: Text(AppStr.add, style: AppFonts.standard),
+                        ),
+                      ]),
+                      if (_showAddOccasionField)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Row(children: <Widget>[
+                            Expanded(
+                              child: TextField(controller: _newOccasionController, decoration: const InputDecoration(hintText: AppStr.newOccasionHint)),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: AppStr.confirm,
+                              color: Colors.green,
+                              icon: const Icon(Icons.check),
+                              onPressed: () async {
+                                await _addInlineCustomOccasion();
+                              },
+                            ),
+                            IconButton(
+                              tooltip: AppStr.cancel,
+                              color: Colors.grey,
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                if (!mounted) {
+                                  return;
+                                }
+                                setState(() {
+                                  _newOccasionController.clear();
+                                  _showAddOccasionField = false;
+                                });
+                              },
+                            ),
+                          ]),
+                        ),
+                    ]),
+                    const SizedBox(height: 16),
+                    TextField(controller: _dinersController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: AppStr.dinersLabel)),
+                    const SizedBox(height: 16),
+                    Row(children: <Widget>[
+                      Text(AppStr.costLabel, style: AppFonts.standard),
+                      const SizedBox(width: 12),
+                      Text(SessionCache.currency, style: AppFonts.standard),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(controller: _costController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: AppStr.amountLabel)),
                       ),
+                    ]),
+                    const SizedBox(height: 16),
+                    Row(children: <Widget>[
+                      Text('${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}', style: AppFonts.standard),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () async {
+                          DateTime? picked = await showDatePicker(context: ctx, initialDate: _selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                          if (picked != null && mounted) {
+                            setState(() {
+                              _selectedDate = picked;
+                            });
+                          }
+                        },
+                        child: Text(AppStr.pickDate, style: AppFonts.standard),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                    Row(children: <Widget>[
+                      Text(AppStr.locationSearchLabel, style: AppFonts.standard),
+                      SessionCache.allowLocation
+                          ? Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: _restaurantOptions.length > 1
+                                    ? ElevatedButton(
+                                        onPressed: _showRestaurantSelector,
+                                        style: buttonStyle(Colors.amber, Colors.black),
+                                        child: Text(AppStr.multi, style: AppFonts.standard),
+                                      )
+                                    : ElevatedButton(
+                                        onPressed: _autoFillRestaurantFromLocation,
+                                        style: buttonStyle(Colors.blue, Colors.white),
+                                        child: Text(AppStr.search, style: AppFonts.standard.copyWith(color: Colors.white)),
+                                      ),
+                              ),
+                            )
+                          : Text('(OFF)', style: AppFonts.standard.copyWith(color: AppColors.mutedText, fontStyle: FontStyle.italic)),
+                    ]),
+                    const SizedBox(height: 36),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+          if (_isSearching)
+            Container(color: Colors.black.withAlpha(77), child: const Center(child: CircularProgressIndicator())),
+        ]);
+      }),
+      bottomNavigationBar: SafeArea(
+        child: SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    child: ElevatedButton(
+                      onPressed: _goBackToTop,
+                      style: buttonStyle(AppColors.ochre, Colors.black),
+                      child: Text(AppStr.back, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black)),
                     ),
                   ),
                 ),
-              ),
-              if (_isSearching)
-                Container(
-                  color: Colors.black.withAlpha(77),
-                  child: const Center(child: CircularProgressIndicator()),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    child: ElevatedButton(
+                      onPressed: _clearForm,
+                      style: buttonStyle(AppColors.lightGrey, Colors.black87),
+                      child: Text(AppStr.clear, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black87)),
+                    ),
+                  ),
                 ),
-            ],
-          );
-        },
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              ElevatedButton(
-                onPressed: _goBackToTop,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
-                child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
-              ),
-              ElevatedButton(
-                onPressed: _clearForm,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.lightGrey),
-                child: Text(AppStr.clear, style: AppFonts.standard.copyWith(color: Colors.black87)),
-              ),
-              ElevatedButton(
-                onPressed: _goToRatingsScreen,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.yellow, foregroundColor: Colors.black),
-                child: Text(AppStr.next, style: AppFonts.standard.copyWith(color: Colors.black)),
-              ),
-            ],
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    child: ElevatedButton(
+                      onPressed: _goToRatingsScreen,
+                      style: buttonStyle(AppColors.yellow, Colors.black),
+                      child: Text(AppStr.next, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
