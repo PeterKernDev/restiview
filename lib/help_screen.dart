@@ -68,7 +68,7 @@ class _HelpScreenState extends State<HelpScreen> {
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(AppStr.help, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(AppStr.help, style: AppFonts.bold.copyWith(color: AppColors.white)),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
@@ -88,7 +88,7 @@ class _HelpScreenState extends State<HelpScreen> {
                 onTap: _launchWebsite,
                 child: Text(
                   AppStr.websiteUrl,
-                  style: AppFonts.standard.copyWith(fontSize: 16, color: Colors.blue, decoration: TextDecoration.underline),
+                  style: AppFonts.standard.copyWith(fontSize: 16, color: AppColors.darkGreen, decoration: TextDecoration.underline),
                 ),
               ),
               const Expanded(child: SizedBox()),
@@ -97,7 +97,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   children: [
                     Text(
                       _version,
-                      style: AppFonts.standard.copyWith(fontSize: 14, color: Colors.grey[700]),
+                      style: AppFonts.standard.copyWith(fontSize: 14, color: AppColors.mutedText),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
@@ -107,7 +107,7 @@ class _HelpScreenState extends State<HelpScreen> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.ochre,
-                        foregroundColor: Colors.black,
+                        foregroundColor: AppColors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),

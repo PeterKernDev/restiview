@@ -38,22 +38,66 @@ String cleanRestaurantName(String rawName) {
   return cleaned.length > 40 ? '${cleaned.substring(0, 40)}…' : cleaned;
 }
 
+/// Improved heuristic to guess city from formatted address.
+/// Returns '' if no city can be determined.
 String extractCityFromAddress(String address) {
-  final country = SessionCache.defaultCountry;
-  final countryCities = systemCitiesByCountry[country] ?? [];
+  final String country = SessionCache.defaultCountry;
+  final List<String> countryCities = systemCitiesByCountry[country] ?? [];
 
-  final normalizedAddress = normalize(address);
-  for (final city in countryCities) {
+  final String normalizedAddress = normalize(address);
+  for (final String city in countryCities) {
     if (normalizedAddress.contains(normalize(city))) {
       return city;
     }
   }
 
-  final parts = address.split(',');
+  final List<String> parts = address.split(',').map((p) => p.trim()).toList();
+  if (parts.isEmpty) {
+    return '';
+  }
+
+  // Handle "City - State" patterns
+  String takeBeforeHyphen(String s) {
+    final segs = s.split('-').map((t) => t.trim()).toList();
+    if (segs.length >= 2 && RegExp(r'^[A-Za-z]{2,3}$').hasMatch(segs.last)) {
+      return segs.first;
+    }
+    return s;
+  }
+
+  // Prefer second component if address has 4+ parts (Street, City, State, ZIP, Country)
+  if (parts.length >= 4) {
+    final candidate = takeBeforeHyphen(parts[1]);
+    final bool looksLikeState = RegExp(r'^[A-Za-z]{2,3}$').hasMatch(candidate);
+    final bool looksLikeZip = RegExp(r'^\d{4,}$').hasMatch(candidate);
+    if (candidate.isNotEmpty && !looksLikeState && !looksLikeZip) {
+      return candidate;
+    }
+  }
+
+  // Scan middle parts for a city-like token
+  for (int i = 1; i < parts.length - 1; i++) {
+    final candidate = takeBeforeHyphen(parts[i]);
+    if (candidate.isNotEmpty &&
+        !RegExp(r'^[A-Za-z]{2,3}$').hasMatch(candidate) &&
+        !RegExp(r'^\d{4,}$').hasMatch(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Fallback: second-to-last part, cleaned
   if (parts.length >= 3) {
-    final fallback = parts[parts.length - 2].trim();
-    final cleaned = fallback.replaceAll(RegExp(r'\d{5}-\d{3}'), '').trim();
-    return cleaned.split('-').first.trim();
+    String fallback = parts[parts.length - 2].trim();
+    fallback = fallback.replaceAll(RegExp(r'\d{5}-\d{3}'), '').trim();
+    final segs = fallback.split('-').map((s) => s.trim()).toList();
+    if (segs.length >= 2 && RegExp(r'^[A-Za-z]{2,3}$').hasMatch(segs.last)) {
+      return segs.first;
+    }
+    if (fallback.isNotEmpty &&
+        !RegExp(r'^[A-Za-z]{2,3}$').hasMatch(fallback) &&
+        !RegExp(r'^\d{4,}$').hasMatch(fallback)) {
+      return fallback;
+    }
   }
 
   return '';

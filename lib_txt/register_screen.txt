@@ -1,5 +1,13 @@
-// register_screen.dart
+// lib/register_screen.dart
 // Registration flow with device-aware country detection and startup initialization
+//
+// Changes:
+// - Added 'Allow Friends' toggle under 'Allow Photos'.
+// - Persisted toggle as userSettings7 in the users/$uid record.
+// - Calls ensureUserSetup(...) helper unconditionally after user creation so
+//   users_by_email mapping, public_profiles, and userSettings7 are created/ensured.
+// - Passes acceptsFriends flag to ensureUserSetup.
+// - Kept screen scrollable by keeping the main form inside SingleChildScrollView (buttons remain in SafeArea).
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -11,6 +19,7 @@ import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'services/session_cache.dart';
 import 'services/startup_tasks.dart';
+import 'services/user_setup.dart'; // ensureUserSetup helper
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,13 +29,14 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   bool _showPassword = false;
   bool _allowLocation = false;
   bool _allowPhotos = false;
+  bool _allowFriends = false; // new toggle
   bool _loading = false;
   bool _termsAccepted = false;
 
@@ -135,9 +145,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'userSettings4': _allowPhotos,
           'userSettings5': 50,
           'userSettings6': false,
+          'userSettings7': _allowFriends, // persisted toggle
         });
 
         await userCredential.user!.updateDisplayName(name);
+
+        // Ensure auxiliary records are present (UBE mapping, public profile, userSettings7)
+        try {
+          final String mailboxEmail = email.trim().toLowerCase();
+          await ensureUserSetup(
+            uid: uid,
+            email: mailboxEmail,
+            displayName: name,
+            acceptsFriends: _allowFriends,
+          );
+        } catch (e, st) {
+          debugPrint('Register.ensureUserSetup failed for uid=$uid: $e\n$st');
+          // non-blocking: continue registration even if helper fails
+        }
 
         // Run shared startup logic
         await runStartupTasks(
@@ -158,6 +183,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } finally {
       _toggleLoading(false);
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -254,6 +287,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onChanged: (value) {
                       if (!mounted) return;
                       setState(() => _allowPhotos = value);
+                    },
+                    activeThumbColor: AppColors.darkGreen,
+                    activeTrackColor: AppColors.ochre,
+                  ),
+                  // Allow Friends toggle (text moved to strings)
+                  SwitchListTile(
+                    title: Text(AppStr.allowFriendsLabel, style: AppFonts.standard),
+                    value: _allowFriends,
+                    onChanged: (value) {
+                      if (!mounted) return;
+                      setState(() => _allowFriends = value);
                     },
                     activeThumbColor: AppColors.darkGreen,
                     activeTrackColor: AppColors.ochre,

@@ -31,7 +31,7 @@ class AppStr {
   static const String commentsTitle = 'Comments';
   static const String confirmDelete = 'Yes';
   static const String costLabel = 'Cost';
-  static const String countryLabel = 'Country';
+  static const String locationLabel = 'Location';
   static const String cuisineLabel = 'Cuisine';
   static const String dateLabel = 'Date:';
   static const String defaultOccasion = 'Nothing Special';
@@ -113,8 +113,6 @@ class AppStr {
   static const String signInFailed = 'Sign In Failed';
   static const String signInRegister = 'SIGN IN / REGISTER';
   static const String signInTitle = 'Sign In';
-
-  // Part 2 additions (continued)
   static const String signOut = 'SIGN OUT';
   static const String staySignedIn = 'Stay Signed In';
   static const String subtitle = 'Record your most memorable dining experiences.';
@@ -243,8 +241,137 @@ class AppStr {
   static const String searchFailed = 'Search failed';
   static const String locationSearchLabel = 'Location search : ';
 
+  static const String friendsTitle = 'Friends';
+  static const String noFriends = 'No friends found';
+  static const String addFriend = '+FRIEND';
+  static const String friendRequestsDisabled = 'User does not accept friend requests';
+  static const String sendFriendRequest = 'SEND FRIEND REQUEST';
+  static const String friendTap = 'Open request details';
+
+  static const String frAsked = 'FR-ASKED';
+  static const String frWants = 'FR-WANTS';
+  static const String rvAsked = 'RV-ASKED';
+  static const String rvWants = 'RV-WANTS';
+
+  static const String declined = 'DECLINED';
+  static const String rejected = 'REJECTED';
+  static const String timedOut = 'TIMED-OUT';
+
+  static const String sharedCountFmt = '(%d)';
+  static const String loadFriendsError = 'Failed to load friends';
+  static const String friendsUpper = 'FRIENDS';
+  static const String friendsCountFmt = 'FRIENDS (%d)';
+  static const String requestTitle = 'Friend Request';
+  static const String sendRequestTitle = 'Send Friend Request';
+  static const String userNameLabel = 'User Name';
+  static const String sendRequest = 'SEND';
+  static const String friendRequestSent = 'Friend request sent';
+  static const String sendRequestFailed = 'Failed to send request';
+  static const String userNotFound = 'User not found';
+  static const String accept = 'ACCEPT';
+  static const String hardReject = 'HARD REJECT';
+  static const String softReject = 'SOFT REJECT';
+  static const String friendAccepted = 'Friend request accepted';
+  static const String acceptFailed = 'Failed to accept request';
+  static const String friendRejected = 'Friend request processed';
+  static const String friendRejectedInform = 'Friend request rejected and user informed';
+  static const String friendDeclinedInform = 'Friend request declined and user informed';
+  static const String rejectFailed = 'Failed to reject request';
+  static const String informOnRejectLabel = 'Inform user of rejection';
+  static const String invalidEmail = 'Enter a valid email address';
+  static const String fromLabel = 'From';
+  static const String check = "Check";
+  static const String emailValid = "Email is valid";
+  static const String checkFailed = "Email check failed";
+  static const String emailNotChecked = "Please check the email before sending";
+  static const String friendRequestNoticesProcessed = "Friend request notices processed";
+  static const String mappingWriteFailed = "Failed to ensure email mapping";
+  static const String signInRequired = 'Please sign in to continue';
+  static const String cannotAddSelf = 'You cannot add yourself as a friend';
+  static const String requestSent = 'Friend request sent';
+  static const String requestSendFailed = 'Failed to send friend request';
+  static const String requestsTitle = 'Requests';
+  static const String requestCommentLabel = 'Comment (optional)';
+  static const String validEmailConfirmed = 'valid email confirmed';
+  static const String checkLabel = 'Check';
+  static const String noFriendsYet = 'No friends yet';
+  static const String accepting = 'Accepting...';
+  static const String reject = 'DECLINE';
+  static const String friendLabel = 'FRIEND';
+  static const String alreadyFriends = 'You are already friends';
+  static const String userNotAvailable = 'User not available';
+  static const String incomingRequestsTitle = 'Incoming requests';
+  static const String currentFriendsTitle = 'Your friends';
+  static const String requestReceivedLabel = 'Wants to be your friend';
+  static const String acceptLabel = 'Accept';
+  static const String rejectLabel = 'Reject';
+  static const String recipientLabel = 'Recipient';
+  static const String recipientHint = 'recipient@example.com';
+  static const String recipientRequired = 'Recipient email is required';
+  static const String selectedIdPrefix = 'Selected id:';
+  static const String clearRecipientTooltip = 'Clear recipient';
+  static const String noRecipientSelected = 'No recipient selected';
+  static const String countryLabel = 'Country';
+  static const String countryRequired = 'Country is required';
+  static const String requesterLabel = 'Requester';
+  static const String recipientLabelShort = 'Recipient';
+  static const String messageLabel = 'Message';
+  static const String notProvided = 'Not provided';
+  static const String createdAtLabel = 'Created';
+  static const String deleteSuccess = 'Friendship removed';
+
+  static const String deleteSuccessPending = 'Friendship removal initiated';
+  static const String deleteFailed = 'Failed to remove friendship';
+  static const String allowFriendsLabel = 'Allow Friends';
+  static const String reviewRequestDetailsTitle = 'Review Request Details';
+  static const String requestingEmail = 'Req Email';
+  static const String requestingUsername = 'Req User';
+  static const String requestingComment = 'Comment';
+  static const String filtersLabel = 'Filters:';
+  static const String reviewMatchingCountLabel = 'Review matching count';
+  static const String includePhotosLabel = 'Include photos?';
+  static const String providerCommentLabel = 'Provider comment (optional)';
+  static const String providerCommentHint = 'Optional message to requester';
+  static const String backButtonLabel = 'Back';
+  static const String acceptButtonLabel = 'Accept';
+  static const String rejectButtonLabel = 'Reject';
+  static const String reviewButtonLabel = 'Review';
+  static const String unknownCount = 'unknown';
+  static const String none = 'None';
+
+  static const String reviewReviewsTitle = 'Review reviews';
+  static const String matchingReviews = 'Matches';
+  static const String includedLabel = 'Included';
+  static const String excludedLabel = 'Excluded';
+  static const String noMatchingReviews = 'No matching reviews';
+
+  static const String exclude = 'Exclude';
+  static const String include = 'Include';
+  static const String declineLabel = 'DECLINE';
+  static const String deleteLabel = 'DELETE';
+  static const String reviewLabel = 'REVIEW';
+  static const String backLabel = 'BACK';
+  static const String decline = 'Decline';
+  static const String frWantedLabel = 'FR-WANTED';
+  static const String frAskedLabel = 'FR-ASKED';
+  static const String rvWantsLabel = 'RV-WANTS';
+  static const String rvAskedLabel = 'RV-ASKED';
+  static const String declinedLabel = 'DECLINED';
+  static const String unknownLabel = 'UNKNOWN';
 
 
 
 
 }
+
+
+
+
+
+
+
+
+
+
+
+

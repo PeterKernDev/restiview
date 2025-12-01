@@ -1,5 +1,4 @@
-// main.dart
-// App entry point for RestiView v1.3.0
+// lib/main.dart
 //
 // Enforces portrait-only orientation at startup and initializes SessionCache and Firebase.
 
@@ -15,6 +14,11 @@ import 'top_screen.dart';
 import 'list_screen.dart'; // correct relative path to ReviewListScreen
 import 'settings_screen.dart';
 import 'tandc_screen.dart';
+import 'friends_screen.dart';
+import 'friend_request_screen.dart'; // dedicated friend request screen
+import 'review_request_screen.dart'; // dedicated review request screen
+import 'review_request_details_screen.dart'; // provider review request details
+import 'sub_friends_screen/friend_entry.dart'; // FriendEntry type for routing arguments
 import 'services/session_cache.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
@@ -77,6 +81,29 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const SettingsScreen());
           case '/tandc':
             return MaterialPageRoute(builder: (_) => const TandCScreen());
+          case '/friends':
+            return MaterialPageRoute(builder: (_) => const FriendsScreen());
+          case '/friend-request':
+            return MaterialPageRoute(builder: (_) => const FriendRequestScreen());
+          case '/request': // kept for backward compatibility — now routes to ReviewRequestScreen
+            return MaterialPageRoute(builder: (_) => const ReviewRequestScreen());
+          case '/review-request': // explicit route name (optional)
+            return MaterialPageRoute(builder: (_) => const ReviewRequestScreen());
+          case '/review-request-details':
+            return MaterialPageRoute(builder: (_) {
+              final args = settings.arguments;
+              if (args is Map) {
+                final dynamic feObj = args['friendEntry'];
+                final Map<dynamic, dynamic>? friendVmap =
+                    (args['friendVmap'] is Map) ? args['friendVmap'] as Map<dynamic, dynamic> : null;
+
+                if (feObj is FriendEntry) {
+                  return ReviewRequestDetailsScreen(friendEntry: feObj, friendVmap: friendVmap);
+                }
+              }
+              // Fallback: navigate back to friends if args missing or of wrong type
+              return const FriendsScreen();
+            });
           default:
             return MaterialPageRoute(
               builder: (_) => const Scaffold(

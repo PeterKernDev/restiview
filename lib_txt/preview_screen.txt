@@ -80,7 +80,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.reviewSaved)));
     widget.context.reviewMap.clear();
     Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) goToList();
+      if (mounted) {
+        goToList();
+      }
     });
   }
 
@@ -214,7 +216,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
       if (item == null) continue;
       if (item is String) {
         final txt = item.trim();
-        if (txt.isNotEmpty) normalized.add({'text': txt, 'name': txt});
+        if (txt.isNotEmpty) {
+          normalized.add({'text': txt, 'name': txt});
+        }
         continue;
       }
       if (item is Map) {
@@ -226,7 +230,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
           m['text'] = text;
           m['name'] = text;
         }
-        if (photo.isNotEmpty) m['photoPath'] = photo;
+        if (photo.isNotEmpty) {
+          m['photoPath'] = photo;
+        }
         normalized.add(m);
       }
     }
@@ -236,7 +242,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Future<void> saveReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null || reviewData == null) return;
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
     try {
       final restName = reviewData?['restname']?.toString().trim() ?? '';
       final reviewDate = reviewData?['reviewdate']?.toString().trim() ?? '';
@@ -255,7 +263,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
         final key = 'photoPath$i';
         if (payload.containsKey(key)) {
           final v = payload[key];
-          if (v == null || (v is String && v.trim().isEmpty)) payload.remove(key);
+          if (v == null || (v is String && v.trim().isEmpty)) {
+            payload.remove(key);
+          }
         }
       }
 
@@ -317,7 +327,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
             }
           }
         }
-        if (updates.isNotEmpty) await customRef.update(updates);
+        if (updates.isNotEmpty) {
+          await customRef.update(updates);
+        }
       }
 
       _addToIndexedMatrix(payload);
@@ -331,14 +343,20 @@ class _PreviewScreenState extends State<PreviewScreen> {
         } catch (_) {}
       });
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
   Future<void> updateReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null || reviewData == null || reviewKey == null) return;
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
     try {
       final nowIso = DateTime.now().toIso8601String();
       final payload = Map<String, dynamic>.from(reviewData!);
@@ -419,7 +437,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
             }
           }
         }
-        if (updates.isNotEmpty) await customRef.update(updates);
+        if (updates.isNotEmpty) {
+          await customRef.update(updates);
+        }
       }
 
       try {
@@ -435,7 +455,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
         widget.context.reviewMap = reverseFormatReviewData(payload);
       } catch (_) {}
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -463,7 +487,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
       } else {
         try {
           final local = widget.context.reviewMap.isNotEmpty ? reverseFormatReviewData(widget.context.reviewMap) : null;
-          if (local != null && local.isNotEmpty) _removeFromIndexedMatrix(local);
+          if (local != null && local.isNotEmpty) {
+            _removeFromIndexedMatrix(local);
+          }
         } catch (_) {}
 
         await FirebaseDatabase.instance.ref('users/$userId/reviews/${widget.context.reviewKey}').remove();
@@ -691,7 +717,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final List<String> commentPhotos = <String>[];
     for (int i = 0; i < 3; i++) {
       final path = reviewData!['photoPath$i'];
-      if (path != null && path is String && path.trim().isNotEmpty) commentPhotos.add(path);
+      if (path != null && path is String && path.trim().isNotEmpty) {
+        commentPhotos.add(path);
+      }
     }
 
     final List<Map<String, dynamic>> detailCategories = <Map<String, dynamic>>[
@@ -708,7 +736,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
       final keyShort = cat['key'] as String;
       final cards = _cardsFor(keyShort);
       final count = cards.length;
-      if (count == 0) continue;
+      if (count == 0) {
+        continue;
+      }
       final fullKey = 'details_$keyShort';
       final isExpanded = expandedCategories.contains(fullKey);
       if (isExpanded) {
@@ -718,11 +748,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
     }
 
-    final String? addressValue = (reviewData!['restaddress']?.toString().trim().isNotEmpty ?? false) ? reviewData!['restaddress']?.toString().trim() : null;
-    final String? phoneValue = (reviewData!['restphone']?.toString().trim().isNotEmpty ?? false) ? reviewData!['restphone']?.toString().trim() : null;
+    final String? addressValue = (reviewData!['restaddress']?.toString().trim().isNotEmpty ?? false)
+        ? reviewData!['restaddress']?.toString().trim()
+        : null;
+    final String? phoneValue = (reviewData!['restphone']?.toString().trim().isNotEmpty ?? false)
+        ? reviewData!['restphone']?.toString().trim()
+        : null;
 
     final bool hasDetails = detailWidgets.isNotEmpty;
     final bool hasAddressOrPhone = (addressValue != null && addressValue.isNotEmpty) || (phoneValue != null && phoneValue.isNotEmpty);
+
+    final String cityCountry = (reviewData!['restcity']?.toString().trim().isEmpty ?? true)
+        ? (reviewData!['restcountry'] ?? '').toString()
+        : '${reviewData!['restcity']}, ${reviewData!['restcountry']}';
 
     return PopScope(
       canPop: false,
@@ -740,74 +778,82 @@ class _PreviewScreenState extends State<PreviewScreen> {
               padding: const EdgeInsets.all(16),
               child: ListView(
                 children: [
-                  // Header: name, city/country, date, cuisine, occasion
+                  // Header rows: label left, value right
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        flex: 0,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 120,
-                              child: Text('${AppStr.restaurantLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              width: 120,
-                              child: Text('${AppStr.countryLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ),
-                            const SizedBox(height: 4),
-                            if (cuisineValue != null && cuisineValue.isNotEmpty) ...[
-                              SizedBox(
-                                width: 120,
-                                child: Text('${AppStr.cuisineLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-                            if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion) ...[
-                              SizedBox(
-                                width: 120,
-                                child: Text('${AppStr.occasionLabel}:', style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-                            SizedBox(width: 120, child: Text(AppStr.dateLabel, style: AppFonts.bold, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          ],
-                        ),
-                      ),
+                      SizedBox(width: 120, child: Text('${AppStr.restaurantLabel}:', style: AppFonts.bold)),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              reviewData!['restname'] ?? '',
-                              style: AppFonts.bold.copyWith(fontSize: 16, color: Colors.blue),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              (reviewData!['restcity']?.toString().trim().isEmpty ?? true)
-                                  ? (reviewData!['restcountry'] ?? '')
-                                  : '${reviewData!['restcity']}, ${reviewData!['restcountry']}',
-                              style: AppFonts.standard,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            if (cuisineValue != null && cuisineValue.isNotEmpty) ...[
-                              Text(cuisineValue, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 4),
-                            ],
-                            if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion) ...[
-                              Text(occasionValue, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 4),
-                            ],
-                            Text(dateString ?? '', style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
+                        child: Text(
+                          reviewData!['restname']?.toString().trim() ?? '',
+                          style: AppFonts.bold.copyWith(fontSize: 16, color: Colors.blue),
+                          maxLines: 2, // cap to 2 lines
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SizedBox(width: 120, child: Text('${AppStr.locationLabel}:', style: AppFonts.bold)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          cityCountry,
+                          style: AppFonts.standard,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  if (cuisineValue != null && cuisineValue.isNotEmpty)
+                    Row(
+                      children: [
+                        SizedBox(width: 120, child: Text('${AppStr.cuisineLabel}:', style: AppFonts.bold)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            cuisineValue,
+                            style: AppFonts.standard,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (cuisineValue != null && cuisineValue.isNotEmpty) const SizedBox(height: 4),
+                  if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion)
+                    Row(
+                      children: [
+                        SizedBox(width: 120, child: Text('${AppStr.occasionLabel}:', style: AppFonts.bold)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            occasionValue,
+                            style: AppFonts.standard,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (occasionValue != null && occasionValue.isNotEmpty && occasionValue != AppStr.defaultOccasion)
+                    const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SizedBox(width: 120, child: Text(AppStr.dateLabel, style: AppFonts.bold)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          dateString ?? '',
+                          style: AppFonts.standard,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -815,7 +861,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
                   const SizedBox(height: 6),
                   const Divider(thickness: 1),
-                  const SizedBox(height: 6), // reduced gap before ratings
+                  const SizedBox(height: 6),
 
                   // Ratings
                   Row(
@@ -851,7 +897,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   ),
 
                   const Divider(thickness: 1),
-                  const SizedBox(height: 6), // reduced gap to 6 before comments / goodfor
+                  const SizedBox(height: 6),
 
                   // Count / cost / main photo row — constrained to avoid overflow
                   Row(
@@ -872,18 +918,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           padding: const EdgeInsets.only(left: 12),
                           child: GestureDetector(
                             onTap: () {
-                              if (photoPath is String) Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: photoPath)));
+                              if (photoPath is String) {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: photoPath)));
+                              }
                             },
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.file(File(photoPath.toString()), height: 100, width: 100, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text(AppStr.photoError)),
+                              child: Image.file(
+                                File(photoPath.toString()),
+                                height: 100,
+                                width: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Text(AppStr.photoError),
+                              ),
                             ),
                           ),
                         ),
                     ],
                   ),
 
-                  const SizedBox(height: 6), // reduced gap before comments / goodfor
+                  const SizedBox(height: 6),
                   if (commentsValue != null && commentsValue.isNotEmpty) formatter.reviewRow(AppStr.commentLabel, commentsValue),
                   if (goodForTags.isNotEmpty) formatter.reviewRow('Good for', goodForTags.join(', ')),
 
@@ -903,7 +957,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
                               constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
-                                child: Image.file(File(path), width: 84, height: 84, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey)),
+                                child: Image.file(
+                                  File(path),
+                                  width: 84,
+                                  height: 84,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
+                                ),
                               ),
                             ),
                           );
@@ -939,7 +999,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6.0),
                             child: ElevatedButton(
-                              onPressed: goToList,
+                              onPressed: () {
+                                goToList();
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.grey,
                                 foregroundColor: Colors.white,
@@ -955,7 +1017,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6.0),
                             child: ElevatedButton(
-                              onPressed: goToEditFlow,
+                              onPressed: () {
+                                goToEditFlow();
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.orange,
                                 foregroundColor: Colors.white,

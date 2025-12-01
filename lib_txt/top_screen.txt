@@ -1,6 +1,9 @@
 // top_screen.dart
-// Main dashboard screen after user login. Provides access to review creation, viewing, settings, help, and sign-out.
+// Main dashboard screen after user login. Provides access to review creation, viewing, settings, help, sign-out, and friends access.
+// Updated: friends button is disabled (greyed out) when the current user does not accept friend requests
+// (determined by users/$uid/userSettings7 or default true).
 //
+// Change: removed accepted-friends counter entirely (no reads or display).
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,30 +26,93 @@ class TopScreen extends StatefulWidget {
 
 class _TopScreenState extends State<TopScreen> {
   bool _isLoading = false;
+  bool _acceptsFriends = true; // whether this user accepts friends (controls button enabled)
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAcceptsFriends();
+  }
+
+  Future<void> _loadAcceptsFriends() async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      if (mounted) {
+        setState(() {
+          _acceptsFriends = true;
+        });
+      }
+      return;
+    }
+
+    try {
+      bool accepts = true;
+      try {
+        final DataSnapshot s7 = await FirebaseDatabase.instance.ref('users/$userId/userSettings7').get();
+        if (s7.exists && s7.value != null) {
+          final Object? v = s7.value;
+          if (v is bool) {
+            accepts = v;
+          } else if (v is String) {
+            accepts = v.toLowerCase() == 'true';
+          } else if (v is num) {
+            accepts = v != 0;
+          }
+        }
+      } catch (e) {
+        debugPrint('TopScreen: failed to read userSettings7 for $userId: $e');
+        // keep default true
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _acceptsFriends = accepts;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${AppStr.loadFriendsError}: $e')),
+      );
+    }
+  }
 
   Future<void> _signOut() async {
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${AppStr.signOutFailed}: $e')),
       );
       return;
     }
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     Navigator.pushReplacementNamed(context, '/');
   }
 
   Future<void> _handleViewReviews() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppStr.userNotAuthenticated)),
         );
@@ -54,10 +120,10 @@ class _TopScreenState extends State<TopScreen> {
       return;
     }
 
-    final reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
+    final DatabaseReference reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
 
     try {
-      final snapshot = await reviewsRef.get();
+      final DataSnapshot snapshot = await reviewsRef.get();
 
       if (mounted) {
         if (snapshot.exists && snapshot.value is Map) {
@@ -68,16 +134,20 @@ class _TopScreenState extends State<TopScreen> {
         } else {
           showDialog(
             context: context,
-            builder: (_) => AlertDialog(
-              title: Text(AppStr.noReviewsTitle, style: AppFonts.bold),
-              content: Text(AppStr.noReviewsMessage, style: AppFonts.standard),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(AppStr.ok, style: AppFonts.standard),
-                ),
-              ],
-            ),
+            builder: (_) {
+              return AlertDialog(
+                title: Text(AppStr.noReviewsTitle, style: AppFonts.bold),
+                content: Text(AppStr.noReviewsMessage, style: AppFonts.standard),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text(AppStr.ok, style: AppFonts.standard),
+                  ),
+                ],
+              );
+            },
           );
         }
       }
@@ -89,14 +159,16 @@ class _TopScreenState extends State<TopScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
   void _startNewReview() {
-    final newContext = ReviewContext(
-      reviewMap: {},
+    final ReviewContext newContext = ReviewContext(
+      reviewMap: <String, dynamic>{},
       isEditing: false,
       reviewKey: null,
     );
@@ -109,9 +181,25 @@ class _TopScreenState extends State<TopScreen> {
     );
   }
 
+  void _openFriends() {
+    if (!_acceptsFriends) {
+      return;
+    }
+    Navigator.pushNamed(context, '/friends').then((_) async {
+      await _loadAcceptsFriends();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayName = SessionCache.userName.isNotEmpty ? SessionCache.userName : AppStr.anonUser;
+    final String displayName = SessionCache.userName.isNotEmpty ? SessionCache.userName : AppStr.anonUser;
+
+    // friendsLabel no longer includes a count
+    final String friendsLabel = AppStr.friendsUpper;
+
+    final Color friendsBg = _acceptsFriends ? AppColors.ochre : Colors.grey.shade400;
+    final Color friendsFg = _acceptsFriends ? Colors.black87 : Colors.black38;
+
     return Scaffold(
       backgroundColor: AppColors.beige,
       appBar: AppBar(
@@ -124,13 +212,13 @@ class _TopScreenState extends State<TopScreen> {
         centerTitle: true,
       ),
       body: Column(
-        children: [
+        children: <Widget>[
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                children: <Widget>[
                   const SizedBox(height: 96),
                   Text(
                     AppStr.restaurantReviews,
@@ -165,17 +253,28 @@ class _TopScreenState extends State<TopScreen> {
                           )
                         : Text(AppStr.viewReviews, style: AppFonts.standard),
                   ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: friendsBg,
+                      foregroundColor: friendsFg,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _acceptsFriends ? _openFriends : null,
+                    child: Text(friendsLabel, style: AppFonts.standard.copyWith(color: friendsFg)),
+                  ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 36), // Adds breathing room above bottom buttons
+          const SizedBox(height: 36),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                children: <Widget>[
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
@@ -197,10 +296,12 @@ class _TopScreenState extends State<TopScreen> {
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    onPressed: () => Navigator.pushNamed(context, '/help'),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/help');
+                    },
                     child: Text(AppStr.help, style: AppFonts.standard.copyWith(color: Colors.white)),
                   ),
-                  const SizedBox(height: 24), // Adds gap between Help and Sign Out
+                  const SizedBox(height: 24),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.red,

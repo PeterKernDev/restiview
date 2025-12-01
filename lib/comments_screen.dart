@@ -254,7 +254,8 @@ class _CommentsScreenState extends State<CommentsScreen> {
   Widget _detailTile(String key, String title, IconData icon) {
     final raw = widget.context.reviewMap['details_$key'];
     final count = (raw is List) ? raw.length : 0;
-    final countLabel = count == 0 ? 'No items: 0' : 'Items: $count';
+    // Replaced hard-coded labels with AppStr tokens
+    final countLabel = count == 0 ? '${AppStr.detailsNone}: 0' : '${AppStr.detailsCountPrefix}: $count';
 
     return InkWell(
       onTap: () => _openDetailsCategory(key, title),
@@ -416,12 +417,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
                         ElevatedButton(
                           onPressed: _goBack,
                           style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
-                          child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
+                          child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)), 
                         ),
                         ElevatedButton(
                           onPressed: _clearCommentsOnly,
                           style: ElevatedButton.styleFrom(backgroundColor: AppColors.lightGrey),
-                          child: Text(AppStr.clear, style: AppFonts.standard.copyWith(color: Colors.black87)),
+                          child: Text(AppStr.clear, style: AppFonts.standard.copyWith(color: Colors.black87)), 
                         ),
                         ElevatedButton(
                           onPressed: _goToPreviewScreen,
@@ -429,7 +430,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
                             backgroundColor: AppColors.yellow,
                             foregroundColor: Colors.black,
                           ),
-                          child: Text(AppStr.next, style: AppFonts.standard.copyWith(color: Colors.black)),
+                          child: Text(AppStr.next, style: AppFonts.standard.copyWith(color: Colors.black)), 
                         ),
                       ],
                     ),
