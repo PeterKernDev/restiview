@@ -46,3 +46,10 @@ app.*.map.json
 android/app/google-services.json
 android/app/build/
 android/app/build/
+
+# Flutter / Android large artifacts
+android/app/**/kernel_blob.bin
+*.apk
+*.aab
+*.so
+*.keystore
