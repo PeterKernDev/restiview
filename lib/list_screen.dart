@@ -156,7 +156,53 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         break;
       case 'date':
       default:
-        reviews.sort((a, b) => (b['reviewdate'] ?? '').toString().compareTo((a['reviewdate'] ?? '').toString()));
+        // Prefer numeric timestamp if available (ServerValue.timestamp resolves to an int)
+        int toTs(dynamic v) {
+          if (v == null) return 0;
+          if (v is int) return v;
+          if (v is double) return v.toInt();
+          if (v is String) return int.tryParse(v) ?? 0;
+          return 0;
+        }
+
+        DateTime? parseSortDate(dynamic sd) {
+          try {
+            if (sd == null) return null;
+            final s = sd.toString();
+            // expected format from formatter: yyyy/MM/dd
+            return DateTime.parse(s.replaceAll('/', '-'));
+          } catch (_) {
+            return null;
+          }
+        }
+
+        reviews.sort((a, b) {
+          // Primary: sortdate (yyyy/MM/dd) if present
+          final sa = parseSortDate(a['sortdate']);
+          final sb = parseSortDate(b['sortdate']);
+          if (sa != null && sb != null) return sb.compareTo(sa);
+
+          
+
+          // Secondary: numeric timestamp (if sortdate missing)
+          final ta = toTs(a['timestamp']);
+          final tb = toTs(b['timestamp']);
+          if (ta != 0 || tb != 0) {
+            return tb.compareTo(ta);
+          }
+
+          // Final fallback: parse displayed reviewdate (dd/MM/yyyy)
+          try {
+            final da = a['reviewdate']?.toString() ?? '';
+            final db = b['reviewdate']?.toString() ?? '';
+            final dateA = da.isNotEmpty ? DateTime.parse(da.split('/').reversed.join('-')) : DateTime.fromMillisecondsSinceEpoch(0);
+            final dateB = db.isNotEmpty ? DateTime.parse(db.split('/').reversed.join('-')) : DateTime.fromMillisecondsSinceEpoch(0);
+            return dateB.compareTo(dateA);
+          } catch (_) {
+            // last resort: alpha compare
+            return (b['reviewdate'] ?? '').toString().compareTo((a['reviewdate'] ?? '').toString());
+          }
+        });
         break;
     }
 
@@ -171,8 +217,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       reviewKey: reviewKey,
     );
 
-    if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => PreviewScreen(context: reviewContext)));
+  if (!mounted) return;
+  Navigator.push(context, MaterialPageRoute(builder: (_) => PreviewScreen(context: reviewContext, mode: 'preview')));
   }
 
   void _openFilterDialog() {

@@ -20,8 +20,9 @@ import 'general_screen.dart';
 
 class PreviewScreen extends StatefulWidget {
   final ReviewContext context;
+  final String mode;
 
-  const PreviewScreen({super.key, required this.context});
+  const PreviewScreen({super.key, required this.context, this.mode = 'preview'});
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -916,23 +917,44 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       if (photoPath != null && photoPath.toString().trim().isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(left: 12),
-                          child: GestureDetector(
-                            onTap: () {
-                              if (photoPath is String) {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: photoPath)));
-                              }
-                            },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(photoPath.toString()),
-                                height: 100,
-                                width: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Text(AppStr.photoError),
+                          child: Builder(builder: (context) {
+                            final String p = photoPath.toString();
+                            bool exists = false;
+                            try {
+                              exists = File(p).existsSync();
+                            } catch (_) {
+                              exists = false;
+                            }
+
+                            if (exists) {
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: p)));
+                                },
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    File(p),
+                                    height: 100,
+                                    width: 100,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Text(AppStr.photoError),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade400),
                               ),
-                            ),
-                          ),
+                              child: const Center(child: Icon(Icons.close, color: Colors.white70)),
+                            );
+                          }),
                         ),
                     ],
                   ),
@@ -949,22 +971,44 @@ class _PreviewScreenState extends State<PreviewScreen> {
                         spacing: 12,
                         runSpacing: 12,
                         children: commentPhotos.map((path) {
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: path)));
-                            },
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.file(
-                                  File(path),
-                                  width: 84,
-                                  height: 84,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
+                          final String p = path;
+                          bool exists = false;
+                          try {
+                            exists = File(p).existsSync();
+                          } catch (_) {
+                            exists = false;
+                          }
+
+                          if (exists) {
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: p)));
+                              },
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.file(
+                                    File(p),
+                                    width: 84,
+                                    height: 84,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
+                                  ),
                                 ),
                               ),
+                            );
+                          }
+
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.grey.shade400),
+                              ),
+                              child: const Center(child: Icon(Icons.close, color: Colors.white70)),
                             ),
                           );
                         }).toList(),
@@ -990,91 +1034,138 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   const Divider(thickness: 1),
                   const SizedBox(height: 36),
 
-                  // Single responsive row of 4 action buttons with consistent label sizing
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                goToList();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey,
-                                foregroundColor: Colors.white,
-                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                minimumSize: const Size(0, 44),
+                  // Bottom action row: show preview buttons or exclude buttons depending on mode
+                  if (widget.mode == 'preview')
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  goToList();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey,
+                                  foregroundColor: Colors.white,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: Text(AppStr.list, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                               ),
-                              child: Text(AppStr.list, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                goToEditFlow();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                foregroundColor: Colors.white,
-                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                minimumSize: const Size(0, 44),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  goToEditFlow();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: Text(AppStr.change, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                               ),
-                              child: Text(AppStr.change, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                if (isPending) {
-                                  await saveReview();
-                                } else {
-                                  await updateReview();
-                                }
-                                _showSaveConfirmation();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.yellow,
-                                foregroundColor: Colors.black,
-                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                minimumSize: const Size(0, 44),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (isPending) {
+                                    await saveReview();
+                                  } else {
+                                    await updateReview();
+                                  }
+                                  _showSaveConfirmation();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.yellow,
+                                  foregroundColor: Colors.black,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: Text(AppStr.save, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                               ),
-                              child: Text(AppStr.save, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                await deleteReview();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                minimumSize: const Size(0, 44),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  await deleteReview();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: Text(AppStr.delete, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                               ),
-                              child: Text(AppStr.delete, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    )
+                  else if (widget.mode == 'exclude')
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // exclude_back: simply return to previous screen without excluding
+                                  Navigator.pop(context, null);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.ochre,
+                                  foregroundColor: Colors.white,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: const Text('Back', overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // Signal to caller that the current review should be excluded
+                                  Navigator.pop(context, true);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  minimumSize: const Size(0, 44),
+                                ),
+                                child: const Text('Exclude', overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

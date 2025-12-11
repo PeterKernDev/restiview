@@ -29,6 +29,15 @@ class Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    bool fileExists = false;
+    if (path != null && path!.isNotEmpty) {
+      try {
+        fileExists = File(path!).existsSync();
+      } catch (_) {
+        fileExists = false;
+      }
+    }
+
     return SizedBox(
       width: size,
       height: size,
@@ -55,10 +64,12 @@ class Thumbnail extends StatelessWidget {
                 ),
               ),
             ),
+          // Only enable onTap when file exists and onTap was provided. If file is missing
+          // the overlay InkWell will be non-interactive (onTap: null) so taps do nothing.
           Positioned.fill(
             child: Material(
               color: Colors.transparent,
-              child: InkWell(onTap: onTap),
+              child: InkWell(onTap: (onTap != null && fileExists) ? onTap : null),
             ),
           ),
         ],
@@ -83,6 +94,17 @@ class Thumbnail extends StatelessWidget {
 
     try {
       final file = File(path!);
+      final bool exists = file.existsSync();
+      if (!exists) {
+        // Missing file: show grey box with a small cross and do not present camera icon
+        return Container(
+          color: Colors.grey.shade300,
+          width: size,
+          height: size,
+          child: const Center(child: Icon(Icons.close, color: Colors.white70)),
+        );
+      }
+
       return Image.file(
         file,
         fit: fit,

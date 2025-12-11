@@ -263,7 +263,15 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     if (!mounted) {
       return;
     }
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PreviewScreen(context: ctx)));
+    final result = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PreviewScreen(context: ctx, mode: 'exclude')));
+    // If preview returned true, caller signalled to exclude this review — add to exclusions
+    // Do NOT pop this screen; remain on the review list so the user can continue and persist changes.
+    if (result == true) {
+      if (!mounted) return;
+      setState(() {
+        _excludedKeys.add(_selectedKey!);
+      });
+    }
   }
 
   // Public/well-named wrappers to match button semantics

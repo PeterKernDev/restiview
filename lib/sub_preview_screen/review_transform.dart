@@ -56,10 +56,31 @@ Map<String, dynamic> reverseFormatReviewData(Map<String, dynamic> formatted) {
   return result;
 }
 
-String _parseFormattedDate(String? dateStr) {
+String _parseFormattedDate(dynamic dateStr) {
   try {
-    final parsed = DateFormat('dd/MM/yyyy').parse(dateStr ?? '');
-    return parsed.toIso8601String();
+    if (dateStr == null) return DateTime.now().toIso8601String();
+
+    // If stored as a List (defensive), take first element
+    if (dateStr is List && dateStr.isNotEmpty) {
+      dateStr = dateStr.first;
+    }
+
+    // If the value is already a DateTime serialized (ISO), try parsing
+    final s = dateStr.toString();
+
+    // Try dd/MM/yyyy first
+    try {
+      final parsed = DateFormat('dd/MM/yyyy').parse(s);
+      return parsed.toIso8601String();
+    } catch (_) {
+      // Try ISO parse
+      try {
+        return DateTime.parse(s).toIso8601String();
+      } catch (_) {
+        // As a last resort, return now
+        return DateTime.now().toIso8601String();
+      }
+    }
   } catch (_) {
     return DateTime.now().toIso8601String();
   }

@@ -113,7 +113,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PreviewScreen(context: previewContext),
+        builder: (_) => PreviewScreen(context: previewContext, mode: 'preview'),
       ),
     );
   }

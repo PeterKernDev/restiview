@@ -87,7 +87,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PreviewScreen(context: previewContext),
+        builder: (_) => PreviewScreen(context: previewContext, mode: 'preview'),
       ),
     );
   }

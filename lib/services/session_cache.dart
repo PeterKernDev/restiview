@@ -14,9 +14,7 @@ class SessionCache {
   /// Inject a storage instance (test-only). Non-breaking for existing callers.
   static void injectStorageForTesting(FlutterSecureStorage storage) {
     _storage = storage;
-    if (kDebugMode) {
-      debugPrint('[SessionCache] injected test storage instance');
-    }
+    
   }
 
   // In-memory session values
@@ -46,14 +44,14 @@ class SessionCache {
   static void setPendingFriend(String email, String? uid) {
     pendingFriendEmail = email.trim();
     pendingFriendUid = (uid != null && uid.isNotEmpty) ? uid : null;
-    if (kDebugMode) debugPrint('[SessionCache] pending friend set: $pendingFriendEmail / $pendingFriendUid');
+    
   }
 
   /// Clear the pending friend fields after consumption.
   static void clearPendingFriend() {
     pendingFriendEmail = '';
     pendingFriendUid = null;
-    if (kDebugMode) debugPrint('[SessionCache] pending friend cleared');
+    
   }
 
 
@@ -117,27 +115,19 @@ class SessionCache {
   static Future<void> setStaySignedIn(bool value) async {
     try {
       await _storage.write(key: _keyStaySignedIn, value: value.toString());
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setStaySignedIn=$value');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setStaySignedIn error: $e');
-      }
+      // Non-fatal: ignore storage write errors here.
     }
   }
 
   static Future<bool> getStaySignedIn() async {
     try {
       final String? value = await _storage.read(key: _keyStaySignedIn);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getStaySignedIn read="$value"');
-      }
+      
       return value == 'true';
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getStaySignedIn error: $e');
-      }
+      // Non-fatal: ignore storage read errors and return default.
       return false;
     }
   }
@@ -147,13 +137,9 @@ class SessionCache {
     try {
       await _storage.write(key: _keySavedEmail, value: email);
       await _storage.write(key: _keySavedPassword, value: password);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] credentials saved for email="$email"');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setCredentials error: $e');
-      }
+      // Non-fatal: ignore storage errors when setting credentials.
     }
   }
 
@@ -162,27 +148,19 @@ class SessionCache {
       await _storage.delete(key: _keySavedEmail);
       await _storage.delete(key: _keySavedPassword);
       await _storage.delete(key: _keySavedDisplayName);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] credentials cleared');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] clearCredentials error: $e');
-      }
+      // Non-fatal: ignore errors when clearing credentials.
     }
   }
 
   static Future<String?> getSavedEmail() async {
     try {
       final String? v = await _storage.read(key: _keySavedEmail);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedEmail read="${v ?? ''}"');
-      }
+      
       return v;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedEmail error: $e');
-      }
+      // Non-fatal: ignore read errors and return null.
       return null;
     }
   }
@@ -190,14 +168,10 @@ class SessionCache {
   static Future<String?> getSavedPassword() async {
     try {
       final String? v = await _storage.read(key: _keySavedPassword);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedPassword read="${v != null ? '***' : ''}"');
-      }
+      
       return v;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedPassword error: $e');
-      }
+      // Non-fatal: ignore read errors and return null.
       return null;
     }
   }
@@ -206,27 +180,19 @@ class SessionCache {
   static Future<void> setSavedDisplayName(String displayName) async {
     try {
       await _storage.write(key: _keySavedDisplayName, value: displayName);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSavedDisplayName="$displayName"');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSavedDisplayName error: $e');
-      }
+      // Non-fatal: ignore storage write errors for display name.
     }
   }
 
   static Future<String?> getSavedDisplayName() async {
     try {
       final String? v = await _storage.read(key: _keySavedDisplayName);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedDisplayName read="${v ?? ''}"');
-      }
+      
       return v;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedDisplayName error: $e');
-      }
+      // Non-fatal: ignore read errors and return null.
       return null;
     }
   }
@@ -234,13 +200,9 @@ class SessionCache {
   static Future<void> clearSavedDisplayName() async {
     try {
       await _storage.delete(key: _keySavedDisplayName);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] clearSavedDisplayName');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] clearSavedDisplayName error: $e');
-      }
+      // Non-fatal: ignore errors while deleting saved display name.
     }
   }
 
@@ -248,27 +210,19 @@ class SessionCache {
   static Future<void> setSavedCountry(String countryCode) async {
     try {
       await _storage.write(key: _keySavedCountry, value: countryCode);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSavedCountry="$countryCode"');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSavedCountry error: $e');
-      }
+      // Non-fatal: ignore storage write errors for saved country.
     }
   }
 
   static Future<String?> getSavedCountry() async {
     try {
       final String? v = await _storage.read(key: _keySavedCountry);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedCountry read="${v ?? ''}"');
-      }
+      
       return v ?? (defaultCountry.isNotEmpty ? defaultCountry : null);
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSavedCountry error: $e');
-      }
+      // Non-fatal: ignore read errors and return default country.
       return defaultCountry.isNotEmpty ? defaultCountry : null;
     }
   }
@@ -282,9 +236,7 @@ class SessionCache {
       // Could be extended to read from storage or remote config
       return List<String>.from(systemCountriesFallback);
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getCountryList error: $e');
-      }
+      // Non-fatal: ignore read errors and return fallback country list.
       return List<String>.from(systemCountriesFallback);
     }
   }
@@ -295,13 +247,9 @@ class SessionCache {
       final String canonical = option.toLowerCase();
       sortOption = canonical;
       await _storage.write(key: _keySortOption, value: canonical);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSortOption="$canonical"');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] setSortOption error: $e');
-      }
+      // Non-fatal: ignore errors while setting sort option.
     }
   }
 
@@ -310,19 +258,13 @@ class SessionCache {
       final String? stored = await _storage.read(key: _keySortOption);
       if (stored != null && stored.isNotEmpty) {
         sortOption = stored;
-        if (kDebugMode) {
-          debugPrint('[SessionCache] getSortOption read="$stored"');
-        }
+        
         return stored;
       }
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSortOption fallback="$sortOption"');
-      }
+      
       return sortOption;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] getSortOption error: $e');
-      }
+      // Non-fatal: ignore read errors and return current sortOption.
       return sortOption;
     }
   }
@@ -338,14 +280,10 @@ class SessionCache {
       if (c != null && c.isNotEmpty) {
         defaultCountry = c;
       }
-      if (kDebugMode) {
-        debugPrint('[SessionCache] initializeFromStorage done (sortOption=$sortOption defaultCountry=$defaultCountry)');
-      }
+      
       // Add more keys here if needed
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] initializeFromStorage error: $e');
-      }
+      // Non-fatal: ignore initialization errors and continue.
     }
   }
 
@@ -355,9 +293,7 @@ class SessionCache {
     cityFilter = null;
     cuisineFilter = null;
     clearGoodForFilter();
-    if (kDebugMode) {
-      debugPrint('[SessionCache] clearFilters');
-    }
+    
   }
 
   // Reset entire session (e.g. on sign-out or account deletion)
@@ -384,13 +320,9 @@ class SessionCache {
     try {
       await clearCredentials();
       await setStaySignedIn(false);
-      if (kDebugMode) {
-        debugPrint('[SessionCache] resetSession complete');
-      }
+      
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SessionCache] resetSession error: $e');
-      }
+      // Non-fatal: ignore errors during reset; best-effort only.
     }
   }
 }

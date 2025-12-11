@@ -22,6 +22,7 @@ import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'details_screen.dart';
 import 'widgets/full_screen_image.dart';
+import 'widgets/thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -220,7 +221,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PreviewScreen(context: previewContext),
+        builder: (_) => PreviewScreen(context: previewContext, mode: 'preview'),
       ),
     );
   }
@@ -285,21 +286,18 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   Widget _photoTileContent(String? path, bool enabled, int index) {
-    if (path == null || path.isEmpty) {
-      return Container(
-        decoration: BoxDecoration(color: AppColors.lightGrey, borderRadius: BorderRadius.circular(4)),
-        child: Center(
-          child: Icon(Icons.camera_alt, size: 32, color: enabled ? AppColors.mutedText : AppColors.mutedText.withAlpha(80)),
-        ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Image.file(
-        File(path),
+    // Use Thumbnail widget behavior for consistent placeholders and missing-file handling.
+    // We'll provide a camera icon placeholder when slot empty. Thumbnail will render a grey-cross
+    // if the file path exists but the file is missing.
+    return SizedBox(
+      width: 84,
+      height: 84,
+      child: Thumbnail(
+        path: path,
+        size: 84,
+        placeholder: Icon(Icons.camera_alt, size: 32, color: enabled ? AppColors.mutedText : AppColors.mutedText.withAlpha(80)),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.mutedText),
+        onTap: null, // tap handling is managed by the parent _photoSlot
       ),
     );
   }
@@ -308,13 +306,26 @@ class _CommentsScreenState extends State<CommentsScreen> {
     final path = _photoPaths[index];
     final bool enabled = index == 0 ? true : _photoPaths[index - 1] != null;
 
+    // Determine if file exists to decide tap behavior. Avoid sync filesystem calls in init; doing
+    // a small existsSync check here is acceptable at tap/render time for these small thumbnails.
+    bool fileExists = false;
+    if (path != null && path.isNotEmpty) {
+      try {
+        fileExists = File(path).existsSync();
+      } catch (_) {
+        fileExists = false;
+      }
+    }
+
     return GestureDetector(
       onTap: (!_isBusy && enabled)
           ? () {
-              if (path != null && path.isNotEmpty) {
+              if (path != null && path.isNotEmpty && fileExists) {
                 _showFullImage(path);
-              } else {
+              } else if (path == null || path.isEmpty) {
                 _capturePhotoAt(index);
+              } else {
+                // path present but file missing: do nothing (non-interactive placeholder)
               }
             }
           : null,

@@ -169,7 +169,7 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
   void _onBack() {
     Navigator.of(context).pop();
   }
-
+  // the following two are stubs for now
   void _onAccept() {}
   void _onReject() {}
 
