@@ -1,6 +1,6 @@
 // lib/review_request_details_screen.dart
 // ReviewRequestDetailsScreen — provider view of a received review request.
-// Reads users/<myUid>/friends/<friendUid>/review for filters, comment, rvCount and exCount/exKeys.
+// Reads from users_by_email/<mailboxNormalized>/requests/<mailboxReqId> for filters, comment, rvCount and exCount/exKeys.
 // Displays requester email/username (from FriendEntry) and allows provider to add a short single-line
 // message. Action buttons pinned to the bottom. All user-facing text comes from AppStr.
 // Pressing Review navigates to ReviewReviewsScreen to let the provider inspect and exclude reviews.
@@ -75,12 +75,14 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
 
     Map<dynamic, dynamic>? reviewMap;
     try {
-      final dynamic fv = widget.friendVmap;
-      if (fv is Map && fv['review'] is Map) {
-        reviewMap = Map<dynamic, dynamic>.from(fv['review'] as Map);
-      } else {
+      // Read from mailbox instead of friend's nested review
+      final String? mailboxNormalized = widget.friendEntry.mailboxNormalized;
+      final String? mailboxReqId = widget.friendEntry.mailboxReqId;
+      
+      if (mailboxNormalized != null && mailboxNormalized.isNotEmpty &&
+          mailboxReqId != null && mailboxReqId.isNotEmpty) {
         final DatabaseReference ref =
-            FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review');
+            FirebaseDatabase.instance.ref('users_by_email/$mailboxNormalized/requests/$mailboxReqId');
         final DataSnapshot snap = await ref.get();
         if (snap.exists && snap.value is Map) {
           reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
@@ -88,18 +90,14 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
       }
 
       if (reviewMap != null) {
-        final Map<dynamic, dynamic> filters =
-            (reviewMap['filters'] is Map) ? Map<dynamic, dynamic>.from(reviewMap['filters'] as Map) : <dynamic, dynamic>{};
-
-        _country = (filters['country'] is String)
-            ? (filters['country'] as String)
-            : (reviewMap['country'] is String ? reviewMap['country'] as String : null);
-        _cuisine = (filters['cuisine'] is String)
-            ? (filters['cuisine'] as String)
-            : (reviewMap['cuisine'] is String ? reviewMap['cuisine'] as String : null);
-        _city = (filters['city'] is String)
-            ? (filters['city'] as String)
-            : (reviewMap['city'] is String ? reviewMap['city'] as String : null);
+        // Read filter criteria directly from request root (not nested)
+        _country = (reviewMap['country'] is String) ? reviewMap['country'] as String : null;
+        _cuisine = (reviewMap['cuisine'] is String) ? reviewMap['cuisine'] as String : null;
+        _city = (reviewMap['city'] is String) ? reviewMap['city'] as String : null;
+        
+        // Convert 'none' to null for display
+        if (_cuisine == 'none') _cuisine = null;
+        if (_city == 'none') _city = null;
 
         _requestComment = (reviewMap['comment'] is String && (reviewMap['comment'] as String).isNotEmpty)
             ? reviewMap['comment'] as String
@@ -144,6 +142,10 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
         }
 
         _includePhotos = reviewMap['includePhotos'] == true;
+        // populate provider comment if present
+        if (reviewMap['providerComment'] is String && (reviewMap['providerComment'] as String).isNotEmpty) {
+          _providerCommentController.text = reviewMap['providerComment'] as String;
+        }
       } else {
         _country = null;
         _cuisine = null;
@@ -166,12 +168,31 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
     });
   }
 
-  void _onBack() {
-    Navigator.of(context).pop();
+  Future<void> _onBack() async {
+    // persist provider comment (trimmed) to the review subnode
+    final String trimmed = _providerCommentController.text.trim();
+    if (myUid.isNotEmpty) {
+      final DatabaseReference ref = FirebaseDatabase.instance.ref();
+      try {
+        if (trimmed.isEmpty) {
+          // remove the field by setting it to null
+          await ref.child('users/$myUid/friends/$friendUid/review/providerComment').set(null);
+        } else {
+          await ref.child('users/$myUid/friends/$friendUid/review/providerComment').set(trimmed);
+        }
+      } catch (_) {
+        // ignore write failure
+      }
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
-  // the following two are stubs for now
-  void _onAccept() {}
-  void _onReject() {}
+  // the following two actions were removed along with their buttons
 
   // FIX: await the pushed route result and reload the review subnode when returning
   Future<void> _onReview() async {
@@ -180,6 +201,25 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
       'cuisine': _cuisine,
       'city': _city,
     };
+
+    if (!mounted) {
+      return;
+    }
+
+    // persist provider comment before navigating so it's available to the review screen
+    final String trimmed = _providerCommentController.text.trim();
+    if (myUid.isNotEmpty) {
+      final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review/providerComment');
+      try {
+        if (trimmed.isEmpty) {
+          await ref.set(null);
+        } else {
+          await ref.set(trimmed);
+        }
+      } catch (_) {
+        // ignore; navigation should still proceed
+      }
+    }
 
     if (!mounted) {
       return;
@@ -353,32 +393,7 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                           ),
                         ),
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: horizontalBtnPadding,
-                          child: ElevatedButton(
-                            onPressed: null,
-                            style: actionBtnBase.copyWith(
-                              backgroundColor: ElevatedButton.styleFrom(backgroundColor: AppColors.darkGreen).backgroundColor,
-                              foregroundColor: ElevatedButton.styleFrom(foregroundColor: Colors.white).foregroundColor,
-                            ),
-                            child: Text(AppStr.acceptButtonLabel, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: horizontalBtnPadding,
-                          child: ElevatedButton(
-                            onPressed: null,
-                            style: actionBtnBase.copyWith(
-                              backgroundColor: ElevatedButton.styleFrom(backgroundColor: AppColors.red).backgroundColor,
-                              foregroundColor: ElevatedButton.styleFrom(foregroundColor: Colors.white).foregroundColor,
-                            ),
-                            child: Text(AppStr.rejectButtonLabel, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
-                          ),
-                        ),
-                      ),
+                      // Accept/Reject buttons removed — they were stubs and non-functional
                       Expanded(
                         child: Padding(
                           padding: horizontalBtnPadding,

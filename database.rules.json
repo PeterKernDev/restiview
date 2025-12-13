@@ -1,0 +1,186 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users_by_email": {
+      "$normalizedEmail": {
+        ".read": "auth != null",
+        ".write": "auth != null && newData.child('uid').val() === auth.uid",
+
+        "uid": { ".read": "auth != null", ".write": false },
+        "email": { ".read": "auth != null", ".write": false },
+        "displayName": { ".read": "auth != null", ".write": false },
+        "userName": { ".read": "auth != null", ".write": false },
+        "updatedAt": { ".read": "auth != null", ".write": false },
+
+        "requests": {
+          "$reqId": {
+            ".read": "auth != null",
+            ".write": "(\n  (\n    !data.exists() && newData.exists() &&\n    newData.child('fromUid').isString() && newData.child('fromUid').val() === auth.uid &&\n    newData.child('statusCode').isNumber() &&\n    newData.child('createdAt').isString() &&\n    newData.child('clientRequestId').isString()\n  )\n  ||\n  (\n    root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid\n  )\n  ||\n  (\n    newData.exists() && $reqId.matches(/.*_autogen$/) &&\n    newData.child('processedBy').isString() && newData.child('processedBy').val() === auth.uid\n  )\n  ||\n  (\n    !newData.exists() && data.exists() && (\n      (data.child('fromUid').isString() && data.child('fromUid').val() === auth.uid)\n      ||\n      (root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid)\n    )\n  )\n)",
+            ".validate": "((data.exists() || newData.exists()) ? true : false)",
+
+            "fromUid": { ".validate": "newData.isString()" },
+            "createdAt": { ".validate": "newData.isString()" },
+            "clientRequestId": { ".validate": "newData.isString()" },
+
+            "statusCode": {
+              ".write": "auth != null && ( !data.exists() ? true : root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid )",
+              ".validate": "newData.isNumber()"
+            },
+
+            "processedAt": {
+              ".write": "auth != null && (\n  root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid\n  ||\n  ( $reqId.matches(/.*_autogen$/) && newData.parent().child('processedBy').val() === auth.uid )\n )",
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+
+            "processedBy": {
+              ".write": "auth != null && (\n  root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid\n  ||\n  ( $reqId.matches(/.*_autogen$/) && newData.val() === auth.uid )\n )",
+              ".validate": "newData.isString() && newData.val() === auth.uid"
+            }
+          }
+        },
+
+        "requested_reviews": {
+          "$requestId": {
+            ".read": "auth != null && (\n              root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid\n              ||\n              (data.exists() && data.child('meta').child('providerUid').val() === auth.uid)\n            )",
+
+            ".write": "auth != null && (\n              (\n                !data.exists() && newData.exists() &&\n                newData.child('meta').child('providerUid').isString() &&\n                newData.child('meta').child('providerUid').val() === auth.uid &&\n                newData.child('meta').child('providedAt').isString() &&\n                newData.child('meta').child('rqCount').isNumber()\n              )\n              ||\n              (\n                root.child('users_by_email').child($normalizedEmail).child('uid').val() === auth.uid\n              )\n            )",
+
+            ".validate": "((data.exists() || newData.exists()) ? true : false)",
+
+            "meta": {
+              ".validate": "(\n                newData.child('providerUid').isString() &&\n                newData.child('providedAt').isString() &&\n                newData.child('rqCount').isNumber() &&\n                (\n                  !newData.hasChild('provider-message')\n                  ||\n                  (newData.child('provider-message').isString() && newData.child('provider-message').val().length <= 200)\n                )\n              )"
+            },
+
+            "reviews": {
+              "$revId": {
+                ".validate": "(\n                  newData.hasChildren() &&\n                  newData.child('providedByUid').isString() &&\n                  (newData.child('providedByUid').val() === auth.uid)\n                )"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "public_profiles": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        "displayName": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "updatedAt": { ".validate": "newData.isString()" }
+      }
+    },
+
+    "requests_by_email": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "friend_accept_audit": {
+      "$pair": {
+        "$pushId": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "(\n              (\n                newData.hasChildren(['acceptedBy','acceptedFor','at']) &&\n                newData.child('acceptedBy').isString() &&\n                newData.child('acceptedBy').val() === auth.uid &&\n                newData.child('acceptedFor').isString() &&\n                newData.child('at').isString()\n              )\n           ||\n              (\n                newData.hasChildren(['action','actor','target','at']) &&\n                newData.child('action').isString() &&\n                newData.child('actor').isString() &&\n                newData.child('actor').val() === auth.uid &&\n                newData.child('target').isString() &&\n                newData.child('at').isString()\n              )\n           )"
+        }
+      }
+    },
+
+    "friend_reject_audit": {
+      "$pair": {
+        "$pushId": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "(\n              (\n                newData.hasChildren(['rejectedBy','rejectedFor','at']) &&\n                newData.child('rejectedBy').isString() &&\n                newData.child('rejectedBy').val() === auth.uid &&\n                newData.child('rejectedFor').isString() &&\n                newData.child('at').isString()\n              )\n           ||\n              (\n                newData.hasChildren(['action','actor','target','at']) &&\n                newData.child('action').isString() &&\n                newData.child('actor').isString() &&\n                newData.child('actor').val() === auth.uid &&\n                newData.child('target').isString() &&\n                newData.child('at').isString()\n              )\n           )"
+        }
+      }
+    },
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        
+        "friends": {
+          "$friendUid": {
+            ".write": "auth != null && (auth.uid === $uid || auth.uid === $friendUid)",
+            ".read": "auth != null && (auth.uid === $uid || auth.uid === $friendUid)",
+            ".validate": "(\n              !newData.exists()\n              ||\n              (\n                newData.hasChild('statusCode') && newData.child('statusCode').isNumber()\n                &&\n                (!newData.hasChild('username') || newData.child('username').isString())\n                &&\n                (!newData.hasChild('email') || newData.child('email').isString())\n                &&\n                (!newData.hasChild('mailboxReqId') || newData.child('mailboxReqId').isString())\n                &&\n                (!newData.hasChild('mailboxNormalized') || newData.child('mailboxNormalized').isString())\n                &&\n                (\n                  !newData.hasChild('statusCode') || newData.child('statusCode').val() !== 99\n                  ||\n                  (\n                    newData.child('pendingDeleteBy').isString()\n                    && newData.child('pendingDeleteBy').val() === auth.uid\n                    && newData.child('pendingDeleteAt').isString()\n                    && newData.child('pendingDeleteAt').val().length > 0\n                  )\n                )\n              )\n            )",
+            "statusCode": { ".validate": "newData.isNumber()" },
+            "username": { ".validate": "newData.isString()" },
+            "email": { ".validate": "newData.isString()" },
+            "mailboxReqId": { ".validate": "newData.isString()" },
+            "mailboxNormalized": { ".validate": "newData.isString()" },
+            "pendingDeleteBy": { ".validate": "newData.isString()" },
+            "pendingDeleteAt": { ".validate": "newData.isString()" },
+
+            "___validateAcceptReject": {
+              ".write": false,
+              ".validate": "(\n                !(newData.parent().child('statusCode').val() === 1 || newData.parent().child('statusCode').val() === 8)\n                ||\n                (\n                  newData.parent().child('mailboxReqId').isString() &&\n                  newData.parent().child('mailboxReqId').val().length > 0 &&\n                  newData.parent().child('mailboxNormalized').isString() &&\n                  newData.parent().child('mailboxNormalized').val().length > 0 &&\n                  (\n                    root.child('users_by_email')\n                      .child(newData.parent().child('mailboxNormalized').val())\n                      .child('requests')\n                      .child(newData.parent().child('mailboxReqId').val())\n                      .child('processedBy')\n                      .val() === auth.uid\n                    ||\n                    root.child('users_by_email')\n                      .child(newData.parent().child('mailboxNormalized').val())\n                      .child('requests')\n                      .child(newData.parent().child('mailboxReqId').val())\n                      .child('processedBy')\n                      .val() === auth.uid\n                  )\n                )\n              )"
+            }
+          }
+        },
+
+        "requested_reviews": {
+          "$importId": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "(!newData.exists()) || (newData.hasChild('meta') && newData.hasChild('reviews'))",
+            
+            "meta": {
+              ".validate": "newData.child('importedFromProvider').isString() && newData.child('importedFromEmail').isString() && newData.child('count').isNumber()"
+            },
+            
+            "reviews": {
+              "$revId": {
+                ".validate": "newData.hasChildren()"
+              }
+            }
+          }
+        },
+
+        "ube": {
+          "requests": {
+            "$providerUid": {
+              "$requestId": {
+                ".read": "auth != null && (auth.uid === $uid || auth.uid === $providerUid)",
+                ".write": "auth != null && auth.uid === $providerUid",
+                ".validate": "(!newData.exists()) || ( newData.hasChild('meta') && newData.child('meta').child('providerUid').val() === auth.uid && newData.child('meta').child('providedAt').isString() && newData.child('meta').child('count').isNumber() )",
+                "meta": {
+                  ".validate": "newData.child('providerUid').val() === auth.uid && newData.child('providedAt').isString() && newData.child('count').isNumber() && ( !newData.hasChild('providerMessageShort') || (newData.child('providerMessageShort').isString() && newData.child('providerMessageShort').val().length <= 40) )"
+                },
+                "reviews": {
+                  "$revId": {
+                    ".validate": "newData.hasChildren() && newData.child('providedByUid').isString() && newData.child('providedByUid').val() === auth.uid"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "friend_mark_pending_delete_audit": {
+      "$pair": {
+        "$pushKey": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['action','actor','target','at']) &&\n             newData.child('action').isString() &&\n             newData.child('actor').isString() &&\n             newData.child('actor').val() === auth.uid &&\n             newData.child('target').isString() &&\n             newData.child('at').isString()"
+        }
+      }
+    },
+
+    "friend_finalize_pending_delete_audit": {
+      "$pair": {
+        "$pushKey": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['action','actor','target','at']) &&\n             newData.child('action').isString() &&\n             newData.child('actor').isString() &&\n             newData.child('actor').val() === auth.uid &&\n             newData.child('target').isString() &&\n             newData.child('at').isString()"
+        }
+      }
+    }
+  }
+}

@@ -6,7 +6,7 @@
 // Writes a small public_profiles/<uid> record (displayName/email) so clients can read
 // minimal public profile info without accessing private /users/<uid>.
 // All user-visible strings must come from AppStr. Uses braced blocks, mounted guards,
-// defensive parsing and diagnostic debugPrints.
+// and defensive parsing.
 //
 // Updated to call ensureUserSetup(...) helper to create mapping, public_profile, and
 // ensure users/$uid/userSettings7 exists for older accounts. Passes acceptsFriends flag
@@ -14,7 +14,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+// import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'services/session_cache.dart';
@@ -159,34 +159,24 @@ class _SignInScreenState extends State<SignInScreen> {
 
     _toggleLoading(true);
     try {
-      debugPrint('SignIn: start sign-in attempt for email="$email"');
-      final bool netOk = await _probeNetwork();
-      debugPrint('SignIn: network probe result: $netOk');
-
       try {
         final UserCredential userCredential = await FirebaseAuth.instance
             .signInWithEmailAndPassword(email: email, password: password);
-        debugPrint('SignIn: FirebaseAuth sign-in succeeded for uid=${userCredential.user?.uid}');
         await _onSignedIn(userCredential, email, password);
         return;
-      } on FirebaseAuthException catch (e, st) {
-        debugPrint('SignIn: FirebaseAuthException code=${e.code} message=${e.message}\n$st');
-
+      } on FirebaseAuthException catch (e) {
         final bool isRecaptchaOrNetwork = e.message?.toLowerCase().contains('recaptcha') == true ||
             e.message?.toLowerCase().contains('network') == true ||
             e.code == 'network-request-failed';
 
         if (isRecaptchaOrNetwork) {
-          debugPrint('SignIn: transient network/recaptcha error detected, retrying in 1s');
           await Future<void>.delayed(const Duration(seconds: 1));
           try {
             final UserCredential retryCredential = await FirebaseAuth.instance
                 .signInWithEmailAndPassword(email: email, password: password);
-            debugPrint('SignIn: retry succeeded for uid=${retryCredential.user?.uid}');
             await _onSignedIn(retryCredential, email, password);
             return;
-          } catch (retryErr, retrySt) {
-            debugPrint('SignIn: retry failed: $retryErr\n$retrySt');
+          } catch (retryErr) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('${AppStr.signInFailed}: ${retryErr.toString()}')),
@@ -219,22 +209,19 @@ class _SignInScreenState extends State<SignInScreen> {
         await SessionCache.setStaySignedIn(false);
         await SessionCache.clearCredentials();
         return;
-      } on FirebaseException catch (fe, st) {
-        debugPrint('SignIn: FirebaseException ${fe.code} ${fe.message}\n$st');
+      } on FirebaseException catch (fe) {
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: ${fe.message ?? fe.code}')));
         }
         return;
-      } catch (e, st) {
-        debugPrint('SignIn: unexpected exception: $e\n$st');
+      } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: $e')));
         }
         return;
       }
     } finally {
-      debugPrint('SignIn: finishing sign-in attempt for email="$email" (loading false)');
       _toggleLoading(false);
     }
   }
@@ -242,21 +229,17 @@ class _SignInScreenState extends State<SignInScreen> {
   Future<void> _onSignedIn(UserCredential userCredential, String email, String password) async {
     final String? uid = userCredential.user?.uid;
     if (uid == null) {
-      debugPrint('SignIn._onSignedIn: missing uid after sign-in');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.signInFailed)));
       }
       return;
     }
-    debugPrint('SignIn._onSignedIn: uid=$uid email=$email');
 
     // Ensure /users/$uid exists (heal orphaned profile)
     final DataSnapshot snapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
-    debugPrint('SignIn._onSignedIn: users/$uid exists=${snapshot.exists}');
 
     if (!snapshot.exists) {
       final String defaultCountry = getSystemCountryNames().first;
-      debugPrint('SignIn._onSignedIn: creating default user record for uid=$uid');
       await FirebaseDatabase.instance.ref('users/$uid').set({
         'userName': 'New User',
         'userSettings1': 'Name',
@@ -272,13 +255,11 @@ class _SignInScreenState extends State<SignInScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.healingOrphanedAccount)));
       }
-      debugPrint('SignIn._onSignedIn: created users/$uid');
     }
 
     // Build mapping refs
     final String mailboxEmail = email.toLowerCase();
     final String normalizedMailbox = normalizeEmailForPath(mailboxEmail);
-    debugPrint('SignIn._onSignedIn: mailbox normalized="$normalizedMailbox"');
 
     // Gather displayName for mapping/public profile (best-effort)
     String currentDisplayName = userCredential.user?.displayName ?? '';
@@ -316,8 +297,8 @@ class _SignInScreenState extends State<SignInScreen> {
       } else {
         // If missing, keep default true — helper will create userSettings7 if needed
       }
-    } catch (e, st) {
-      debugPrint('SignIn._onSignedIn: failed to read userSettings7 for uid=$uid: $e\n$st');
+    } catch (e) {
+      // Keep default on error
     }
 
     // Ensure mapping, public profile, and userSettings7 via helper (pass acceptsFriends)
@@ -328,9 +309,7 @@ class _SignInScreenState extends State<SignInScreen> {
         displayName: currentDisplayName,
         acceptsFriends: acceptsFriends,
       );
-      debugPrint('SignIn._onSignedIn: ensureUserSetup completed for uid=$uid (acceptsFriends=$acceptsFriends)');
-    } catch (e, st) {
-      debugPrint('SignIn._onSignedIn: ensureUserSetup failed: $e\n$st');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('${AppStr.mappingWriteFailed}: $e')));
@@ -340,13 +319,11 @@ class _SignInScreenState extends State<SignInScreen> {
     // Re-read user record to extract display name / homeCountry if needed
     final DataSnapshot dataSnapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
     final Object? data = dataSnapshot.value;
-    debugPrint('SignIn._onSignedIn: re-read users/$uid exists=${dataSnapshot.exists}');
 
     String userName;
     String homeCountry;
     if (data is! Map) {
       final String defaultCountry = getSystemCountryNames().first;
-      debugPrint('SignIn._onSignedIn: user record missing or malformed, writing defaults');
       await FirebaseDatabase.instance.ref('users/$uid').set({
         'userName': 'New User',
         'userSettings1': 'Name',
@@ -364,47 +341,36 @@ class _SignInScreenState extends State<SignInScreen> {
       final Map<dynamic, dynamic> userMap = Map<dynamic, dynamic>.from(data);
       userName = (userMap['userName'] as String?) ?? 'User';
       homeCountry = (userMap['userSettings2'] as String?) ?? getSystemCountryNames().first;
-      debugPrint('SignIn._onSignedIn: extracted userName="$userName" homeCountry="$homeCountry"');
 
       // Ensure userSettings7 exists for existing accounts; helper already attempted to set it,
       // but keep this defensive write to cover rare races
       try {
         if (!userMap.containsKey('userSettings7')) {
-          debugPrint('SignIn._onSignedIn: userSettings7 missing for uid=$uid, setting to true');
           await FirebaseDatabase.instance.ref('users/$uid/userSettings7').set(true);
-          debugPrint('SignIn._onSignedIn: userSettings7 set for uid=$uid');
         }
-      } catch (e, st) {
-        debugPrint('SignIn._onSignedIn: failed to set userSettings7 for uid=$uid: $e\n$st');
+      } catch (e) {
+        // Silently handle error
       }
     }
 
     await SessionCache.setStaySignedIn(_staySignedIn);
     if (_staySignedIn) {
       await SessionCache.setCredentials(email, password);
-      debugPrint('SignIn._onSignedIn: saved credentials for staySignedIn=true');
     } else {
       await SessionCache.clearCredentials();
-      debugPrint('SignIn._onSignedIn: cleared saved credentials for staySignedIn=false');
     }
 
-    debugPrint('SignIn._onSignedIn: running startup tasks');
     await runStartupTasks(uid: uid, userName: userName, userEmail: email, homeCountry: homeCountry);
-    debugPrint('SignIn._onSignedIn: startup tasks completed');
 
     try {
-      debugPrint('SignIn._onSignedIn: starting mailbox processing for $normalizedMailbox');
       await _processPendingFriendRequests(uid, normalizedMailbox);
-      debugPrint('SignIn._onSignedIn: mailbox processing complete for $normalizedMailbox');
-    } catch (e, st) {
-      debugPrint('SignIn._onSignedIn: processPendingFriendRequests failed: $e\n$st');
+    } catch (e) {
+      // Silently handle error
     }
 
     if (!mounted) {
-      debugPrint('SignIn._onSignedIn: widget unmounted, aborting navigation');
       return;
     }
-    debugPrint('SignIn._onSignedIn: navigating to /main with userName="$userName"');
     Navigator.pushReplacementNamed(context, '/main', arguments: userName);
   }
 
@@ -431,9 +397,7 @@ class _SignInScreenState extends State<SignInScreen> {
     // Prefer mapping, then public_profiles; do NOT attempt clients to read private /users
     if (username.isEmpty || email.isEmpty) {
       try {
-        debugPrint('SignIn.resolveProfile: reading public_profiles/$uid as preferred public source');
         final DataSnapshot pub = await FirebaseDatabase.instance.ref('public_profiles/$uid').get();
-        debugPrint('SignIn.resolveProfile: public_profiles/$uid exists=${pub.exists}');
         if (pub.exists && pub.value != null && pub.value is Map) {
           final Map<dynamic, dynamic> pm = Map<dynamic, dynamic>.from(pub.value as Map);
           if ((pm['displayName'] is String) && (pm['displayName'] as String).isNotEmpty) {
@@ -444,49 +408,41 @@ class _SignInScreenState extends State<SignInScreen> {
           }
         }
       } catch (e) {
-        debugPrint('SignIn.resolveProfile: public_profiles read failed (non-fatal): $e');
+        // Non-fatal, continue
       }
     }
 
     if (email.isEmpty) email = uid;
     if (username.isEmpty) username = email;
-    debugPrint('SignIn.resolveProfile: resolved uid=$uid email=$email username=$username');
     return {'email': email, 'username': username};
   }
 
   Future<void> _processPendingFriendRequests(String myUid, String normalizedMailbox) async {
     final DatabaseReference ref = FirebaseDatabase.instance.ref('users_by_email/$normalizedMailbox/requests');
-    debugPrint('SignIn.processMailbox: reading mailbox path=${ref.path}');
 
     DataSnapshot snap;
     try {
       snap = await ref.get();
-    } catch (e, st) {
-      debugPrint('SignIn.processMailbox: Failed to read mailbox for $normalizedMailbox: $e\n$st');
+    } catch (e) {
       return;
     }
 
     if (!snap.exists || snap.value == null) {
-      debugPrint('SignIn.processMailbox: mailbox empty for $normalizedMailbox');
       return;
     }
 
     final Object? raw = snap.value;
     if (raw is! Map) {
-      debugPrint('SignIn.processMailbox: mailbox payload unexpected type=${raw.runtimeType}');
       return;
     }
 
     final Map<String, dynamic> entries = Map<String, dynamic>.from(raw);
-    debugPrint('SignIn.processMailbox: entries found=${entries.length}');
 
     for (final MapEntry<String, dynamic> entry in entries.entries) {
       final String reqId = entry.key;
       final Object? requestData = entry.value;
-      debugPrint('SignIn.processMailbox: handling reqId=$reqId');
 
       if (requestData is! Map) {
-        debugPrint('SignIn.processMailbox: skipping malformed reqId=$reqId');
         continue;
       }
 
@@ -507,21 +463,15 @@ class _SignInScreenState extends State<SignInScreen> {
           statusCode = -1;
         }
       }
-      debugPrint('SignIn.processMailbox: reqId=$reqId parsed statusCode=$statusCode');
 
       final String fromUid = m['fromUid']?.toString() ?? '';
       final String clientRequestId = m['clientRequestId']?.toString() ?? '';
       final String comment = m['comment']?.toString() ?? '';
 
-      debugPrint(
-          'SignIn.processMailbox: reqId=$reqId fromUid="$fromUid" clientRequestId="$clientRequestId" comment="$comment"');
-
       if (statusCode < 0) {
-        debugPrint('SignIn.processMailbox: reqId=$reqId unknown statusCode, skipping');
         continue;
       }
       if (fromUid.isEmpty) {
-        debugPrint('SignIn.processMailbox: reqId=$reqId missing fromUid, skipping');
         continue;
       }
 
@@ -533,13 +483,10 @@ class _SignInScreenState extends State<SignInScreen> {
         final Map<String, String> canonical = await _resolveCanonicalProfile(fromUid, mapping);
         final String fromEmail = canonical['email']!;
         final String fromDisplayName = canonical['username']!;
-        debugPrint(
-            'SignIn.processMailbox: reqId=$reqId canonical fromEmail="$fromEmail" fromDisplayName="$fromDisplayName"');
 
         // Idempotency check: skip if friend stub already has same clientRequestId
         final DatabaseReference friendRef = FirebaseDatabase.instance.ref('users/$myUid/friends/$fromUid');
         final DataSnapshot friendSnap = await friendRef.get();
-        debugPrint('SignIn.processMailbox: reqId=$reqId friend stub exists=${friendSnap.exists}');
 
         bool shouldWriteFriend = true;
         if (friendSnap.exists && friendSnap.value != null && friendSnap.value is Map) {
@@ -548,8 +495,6 @@ class _SignInScreenState extends State<SignInScreen> {
               f['clientRequestId'] != null &&
               f['clientRequestId'].toString() == clientRequestId) {
             shouldWriteFriend = false;
-            debugPrint(
-                'SignIn.processMailbox: reqId=$reqId existing stub has matching clientRequestId, skipping write');
           }
         }
 
@@ -580,56 +525,27 @@ class _SignInScreenState extends State<SignInScreen> {
             'users_by_email/$normalizedMailbox/requests/$reqId/processedAt': DateTime.now().toIso8601String(),
             'users_by_email/$normalizedMailbox/requests/$reqId/processedBy': myUid,
           };
-          debugPrint('SignIn.processMailbox: reqId=$reqId performing atomic update with keys: ${atomic.keys}');
           await FirebaseDatabase.instance.ref().update(atomic);
-          debugPrint('SignIn.processMailbox: reqId=$reqId atomic update succeeded');
         } else {
           final Map<String, dynamic> processedMark = <String, dynamic>{
             'processedAt': DateTime.now().toIso8601String(),
             'processedBy': myUid,
           };
-          debugPrint('SignIn.processMailbox: reqId=$reqId marking entry processed only');
           await FirebaseDatabase.instance
               .ref('users_by_email/$normalizedMailbox/requests/$reqId')
               .update(processedMark);
-          debugPrint('SignIn.processMailbox: reqId=$reqId processed mark written');
         }
-      } catch (e, st) {
-        debugPrint('SignIn.processMailbox: reqId=$reqId failed processing: $e\n$st');
+      } catch (e) {
+        // Silently handle error
       }
     }
-  }
-
-  Future<bool> _probeNetwork() async {
-    final List<String> urls = <String>[
-      'https://www.gstatic.com/recaptcha/releases/',
-      'https://www.googleapis.com/',
-      'https://firebase.googleapis.com/'
-    ];
-
-    for (final String url in urls) {
-      try {
-        final http.Response r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
-        debugPrint('SignIn.probeNetwork: GET $url status=${r.statusCode} len=${r.contentLength ?? r.body.length}');
-        if (r.statusCode >= 200 && r.statusCode < 500) {
-          return true;
-        }
-      } on TimeoutException catch (te) {
-        debugPrint('SignIn.probeNetwork: timeout for $url: $te');
-      } catch (e, st) {
-        debugPrint('SignIn.probeNetwork: error for $url: $e\n$st');
-      }
-    }
-    debugPrint('SignIn.probeNetwork: all probes failed');
-    return false;
   }
 
   void _logEnvironmentHints() {
     try {
-      debugPrint('SignIn.env: starting diagnostics');
-      debugPrint('SignIn.env: platform locale=${WidgetsBinding.instance.platformDispatcher.locale}');
+      // Environment diagnostics removed
     } catch (e) {
-      debugPrint('SignIn.env: env hint failed: $e');
+      // Silently handle error
     }
   }
 
@@ -743,7 +659,6 @@ class _SignInScreenState extends State<SignInScreen> {
                         _passwordController.clear();
                         await SessionCache.setStaySignedIn(false);
                         await SessionCache.clearCredentials();
-                        debugPrint('SignIn: user toggled staySignedIn -> false, cleared cached creds');
                       }
                     },
                     activeThumbColor: AppColors.darkGreen,

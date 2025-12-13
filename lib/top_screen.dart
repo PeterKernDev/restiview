@@ -60,7 +60,6 @@ class _TopScreenState extends State<TopScreen> {
           }
         }
       } catch (e) {
-        debugPrint('TopScreen: failed to read userSettings7 for $userId: $e');
         // keep default true
       }
 

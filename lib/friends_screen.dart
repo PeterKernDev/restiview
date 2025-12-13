@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+// import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'constants/colors.dart';
@@ -16,6 +17,8 @@ import 'sub_friends_screen/friend_row.dart';
 import 'sub_friends_screen/friend_actions.dart';
 import 'services/db_utils.dart';
 import 'services/review_counter.dart';
+import 'services/ube_provider.dart';
+import 'services/accept_provided_reviews.dart';
 import '/sub_friends_screen/friends_delete.dart';
 
 // Canonical status codes
@@ -24,6 +27,7 @@ const int statusAccepted = 1;
 const int statusRequested = 2; // FR-WANTED (recipient)
 const int statusRvWants = 3; // RV-WANTED (recipient)
 const int statusRvAsked = 4; // RV-ASKED (requester)
+const int statusProvided = 5; // provider has shared reviews (local marker)
 const int statusDeclined = 8;
 const int statusUnknown = 9;
 const int statusPendingDelete = 99;
@@ -237,6 +241,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
 
       _resolveMissingRvCounts(myUid, rawFriendVmaps);
+      _loadProvidedReviewsMetadata(myUid);
     }, onError: (Object err, StackTrace? st) {
       if (!mounted) {
         return;
@@ -320,25 +325,39 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
 
     try {
-      final dynamic reviewObj = vmap['review'];
-      if (reviewObj == null || reviewObj is! Map) {
+      // Read review criteria from mailbox instead of nested review object
+      final String? mailboxNormalized = (vmap['mailboxNormalized'] is String) ? vmap['mailboxNormalized'] as String : null;
+      final String? mailboxReqId = (vmap['mailboxReqId'] is String) ? vmap['mailboxReqId'] as String : null;
+      
+      if (mailboxNormalized == null || mailboxNormalized.isEmpty ||
+          mailboxReqId == null || mailboxReqId.isEmpty) {
         return;
       }
 
-      final Map<dynamic, dynamic> r = Map<dynamic, dynamic>.from(reviewObj);
-      final Map<dynamic, dynamic> filtersMap = (r['filters'] is Map) ? Map<dynamic, dynamic>.from(r['filters'] as Map) : <dynamic, dynamic>{};
+      // Fetch review criteria from mailbox
+      final DatabaseReference mailboxRef = FirebaseDatabase.instance.ref(
+        'users_by_email/$mailboxNormalized/requests/$mailboxReqId',
+      );
+      final DataSnapshot mailboxSnap = await mailboxRef.get();
+      
+      if (!mailboxSnap.exists || mailboxSnap.value is! Map) {
+        return;
+      }
 
-      String? country = (filtersMap['country'] is String) ? filtersMap['country'] as String : null;
-      String? cuisine = (filtersMap['cuisine'] is String) ? filtersMap['cuisine'] as String : null;
-      String? city = (filtersMap['city'] is String) ? filtersMap['city'] as String : null;
-
-      country ??= (r['country'] is String) ? r['country'] as String : null;
-      cuisine ??= (r['cuisine'] is String) ? r['cuisine'] as String : null;
-      city ??= (r['city'] is String) ? r['city'] as String : null;
+      final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(mailboxSnap.value as Map);
+      
+      // Read filter criteria directly from request root (not nested)
+      String? country = (requestData['country'] is String) ? requestData['country'] as String : null;
+      String? cuisine = (requestData['cuisine'] is String) ? requestData['cuisine'] as String : null;
+      String? city = (requestData['city'] is String) ? requestData['city'] as String : null;
 
       if (country == null || country.trim().isEmpty) {
         return;
       }
+      
+      // Convert 'none' to null for filtering
+      if (cuisine == 'none') cuisine = null;
+      if (city == 'none') city = null;
 
       final String myUidNow = FirebaseAuth.instance.currentUser?.uid ?? '';
       final int found = await countMatchingReviews(ownerUid: myUidNow, country: country, cuisine: cuisine, city: city);
@@ -352,16 +371,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
       final String nowIso = DateTime.now().toUtc().toIso8601String();
 
-      final String reviewPath = 'users/$myUid/friends/$friendUid/review';
-      final Map<String, dynamic> reviewPatch = <String, dynamic>{
-        '$reviewPath/rvCount': found,
-        '$reviewPath/exCount': exCount,
-        '$reviewPath/exKeys': exKeysMap,
-        '$reviewPath/updatedAt': nowIso,
+      // Write rvCount back to mailbox (directly to request root, not nested under 'review')
+      final Map<String, dynamic> mailboxPatch = <String, dynamic>{
+        'users_by_email/$mailboxNormalized/requests/$mailboxReqId/rvCount': found,
+        'users_by_email/$mailboxNormalized/requests/$mailboxReqId/exCount': exCount,
+        'users_by_email/$mailboxNormalized/requests/$mailboxReqId/exKeys': exKeysMap,
+        'users_by_email/$mailboxNormalized/requests/$mailboxReqId/updatedAt': nowIso,
       };
 
       try {
-        await FirebaseDatabase.instance.ref().update(reviewPatch);
+        await FirebaseDatabase.instance.ref().update(mailboxPatch);
       } catch (_) {}
 
       if (!mounted) {
@@ -372,8 +391,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return;
       }
 
+      // Update local state with count for display
       local.review ??= ReviewData(filters: <String, String>{});
-
       local.review!.rvCount = found;
       local.review!.exCount = exCount;
       local.review!.exKeys = exKeysMap;
@@ -390,6 +409,49 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
     } catch (_) {
       // ignore
+    }
+  }
+
+  Future<void> _loadProvidedReviewsMetadata(String myUid) async {
+    try {
+      final String myEmail = FirebaseAuth.instance.currentUser?.email ?? '';
+      if (myEmail.isEmpty) {
+        return;
+      }
+
+      final Map<String, Map<String, dynamic>> metadata = await loadProvidedReviewsMetadata(
+        myUid: myUid,
+        myEmail: myEmail,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      // Update friend entries with metadata
+      bool updated = false;
+      for (final MapEntry<String, Map<String, dynamic>> entry in metadata.entries) {
+        final String providerUid = entry.key;
+        final Map<String, dynamic> data = entry.value;
+
+        final FriendEntry? friend = _friendByUid[providerUid];
+        if (friend != null) {
+          friend.providedRequestId = data['requestId'] as String?;
+          friend.providedRqCount = data['rqCount'] as int?;
+          friend.providedMessageShort = data['providerMessage'] as String?;
+          updated = true;
+        }
+      }
+
+      if (updated && mounted) {
+        setState(() {
+          _friends
+            ..clear()
+            ..addAll(_friendByUid.values);
+        });
+      }
+    } catch (e) {
+      // Silently handle error
     }
   }
 
@@ -423,7 +485,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (f.accepted == true || f.fsc == statusAccepted) {
       return false;
     }
-    return f.fsc == statusRequested || f.fsc == statusRequesterSent || f.fsc == statusRvAsked || f.fsc == statusRvWants;
+    return f.fsc == statusRequested || f.fsc == statusRequesterSent || f.fsc == statusRvAsked || f.fsc == statusRvWants || f.fsc == statusProvided;
   }
 
   bool get _selectedIsDeletable {
@@ -518,27 +580,365 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _handleAccept() async {
+    debugPrint('[_handleAccept] Called');
     if (_selectedUid == null) {
+      debugPrint('[_handleAccept] No selected UID');
       return;
     }
     final FriendEntry? selected = _friendByUid[_selectedUid];
     if (selected == null) {
+      debugPrint('[_handleAccept] Selected friend not found');
       return;
     }
     if (!selected.isActionableByMe) {
+      debugPrint('[_handleAccept] Friend not actionable by me');
       return;
     }
 
     final User? currentUser = FirebaseAuth.instance.currentUser;
     final String me = currentUser?.uid ?? '';
     if (me.isEmpty) {
+      debugPrint('[_handleAccept] No user UID');
       return;
     }
+
+    debugPrint('[_handleAccept] Friend UID: ${selected.uid}, Status: ${selected.fsc}');
 
     setState(() {
       _accepting = true;
     });
+    
+    // If this is accepting provided reviews (statusCode=5), relocate reviews and reset status
+    if (selected.fsc == statusProvided) {
+      debugPrint('[_handleAccept] Handling statusProvided case');
+      try {
+        final String myEmail = currentUser?.email ?? '';
+        if (myEmail.isEmpty) {
+          debugPrint('[_handleAccept] User email is empty');
+          throw Exception('User email not available');
+        }
+        
+        final String? requestId = selected.providedRequestId;
+        debugPrint('[_handleAccept] providedRequestId: $requestId');
+        if (requestId == null || requestId.isEmpty) {
+          debugPrint('[_handleAccept] Request ID is null or empty');
+          throw Exception('Request ID not found');
+        }
+        
+        final AcceptProvidedReviewsResult result = await acceptProvidedReviews(
+          myUid: me,
+          myEmail: myEmail,
+          providerUid: selected.uid,
+          requestId: requestId,
+        );
+        
+        if (!mounted) return;
+        
+        if (result.success) {
+          setState(() {
+            selected.fsc = statusAccepted;
+            selected.accepted = true;
+            selected.providedRequestId = null;
+            selected.providedRqCount = null;
+            selected.providedMessageShort = null;
+            selected.providedAt = null;
+            _selectedUid = null;
+            _accepting = false;
+          });
+          
+          final String message = result.reviewsAccepted > 0
+              ? '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s)'
+              : '${AppStr.accept} — reviews already received';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        } else {
+          setState(() {
+            _accepting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${AppStr.requestSendFailed}: ${result.errorMessage ?? "Unknown error"}')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _accepting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${AppStr.requestSendFailed}: $e')),
+          );
+        }
+      }
+      return;
+    }
+    
+    // If this is a review request (recipient wants reviews), run the provider flow
+    if (selected.fsc == statusRvWants) {
+      // Gather matching reviews first, enforce 0/50 limits and then collect provider comment.
+      final String myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final List<Map<dynamic, dynamic>> toProvide = <Map<dynamic, dynamic>>[];
+      int totalMatches = 0;
+      try {
+        // Read review criteria from mailbox instead of friend's nested review
+        final String? mailboxNormalized = selected.mailboxNormalized;
+        final String? mailboxReqId = selected.mailboxReqId;
+        
+        if (mailboxNormalized == null || mailboxNormalized.isEmpty ||
+            mailboxReqId == null || mailboxReqId.isEmpty) {
+          throw Exception('Missing mailbox reference');
+        }
 
+        final String mailboxPath = 'users_by_email/$mailboxNormalized/requests/$mailboxReqId';
+        final DataSnapshot mailboxSnap = await FirebaseDatabase.instance.ref(mailboxPath).get();
+        
+        if (!mailboxSnap.exists || mailboxSnap.value is! Map) {
+          throw Exception('Request not found in mailbox');
+        }
+
+        final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(mailboxSnap.value as Map);
+        
+        // Read filter criteria directly from request root (not nested)
+        String? country = (requestData['country'] is String && (requestData['country'] as String).trim().isNotEmpty)
+            ? (requestData['country'] as String).trim()
+            : null;
+        String? cuisine = (requestData['cuisine'] is String && (requestData['cuisine'] as String).trim().isNotEmpty)
+            ? (requestData['cuisine'] as String).trim()
+            : null;
+        String? city = (requestData['city'] is String && (requestData['city'] as String).trim().isNotEmpty)
+            ? (requestData['city'] as String).trim()
+            : null;
+        
+        // Convert 'none' to null for filtering
+        if (cuisine == 'none') cuisine = null;
+        if (city == 'none') city = null;
+
+        final Set<String> excludedKeys = <String>{};
+        // Parse exclusions if present (can be Map or List)
+        try {
+          final dynamic exRaw = requestData['exKeys'];
+          if (exRaw is Map) {
+            for (final dynamic k in exRaw.keys) {
+              if (k != null) excludedKeys.add(k.toString());
+            }
+          } else if (exRaw is List) {
+            for (final dynamic v in exRaw) {
+              if (v != null) excludedKeys.add(v.toString());
+            }
+          }
+        } catch (_) {}
+
+        // Normalize for comparison
+        final String nc = (country ?? '').trim().toLowerCase();
+        final String nu = (cuisine ?? '').trim().toLowerCase();
+        final String ny = (city ?? '').trim().toLowerCase();
+
+        // Read my reviews and filter client-side
+        final DatabaseReference myReviewsRef = FirebaseDatabase.instance.ref('users/$myUid/reviews');
+        final DataSnapshot myRvSnap = await myReviewsRef.get();
+        if (myRvSnap.exists && myRvSnap.value != null && myRvSnap.value is Map) {
+          final Map<dynamic, dynamic> all = Map<dynamic, dynamic>.from(myRvSnap.value as Map);
+          for (final dynamic k in all.keys) {
+            final dynamic v = all[k];
+            if (v is! Map) continue;
+            final Map<dynamic, dynamic> rv = Map<dynamic, dynamic>.from(v);
+
+            String rvCountry = '';
+            String rvCuisine = '';
+            String rvCity = '';
+            try {
+              if (rv['country'] is String) rvCountry = (rv['country'] as String).trim().toLowerCase();
+              if (rv['restcountry'] is String && rvCountry.isEmpty) rvCountry = (rv['restcountry'] as String).trim().toLowerCase();
+            } catch (_) {}
+            try {
+              if (rv['cuisine'] is String) rvCuisine = (rv['cuisine'] as String).trim().toLowerCase();
+              if (rv['restcuisine'] is String && rvCuisine.isEmpty) rvCuisine = (rv['restcuisine'] as String).trim().toLowerCase();
+            } catch (_) {}
+            try {
+              if (rv['city'] is String) rvCity = (rv['city'] as String).trim().toLowerCase();
+              if (rv['restcity'] is String && rvCity.isEmpty) rvCity = (rv['restcity'] as String).trim().toLowerCase();
+            } catch (_) {}
+
+            if (nc.isNotEmpty && rvCountry != nc) continue;
+            if (nu.isNotEmpty && rvCuisine != nu) continue;
+            if (ny.isNotEmpty && rvCity != ny) continue;
+
+            final String keyStr = k.toString();
+            // Skip excluded keys configured in ReviewReviewsScreen
+            if (excludedKeys.contains(keyStr)) {
+              continue;
+            }
+
+            totalMatches += 1;
+            debugPrint('[friends_screen] matched review key=$keyStr (match #$totalMatches)');
+            if (toProvide.length < 50) {
+              final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(rv);
+              item['key'] = keyStr;
+              toProvide.add(item);
+              debugPrint('[friends_screen] queued for provide (index=${toProvide.length - 1}): key=$keyStr');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[friends_screen] failed to gather matching reviews: $e');
+      }
+
+      // If zero matches, cannot accept — inform user and abort
+      if (totalMatches == 0) {
+        if (mounted) {
+          setState(() {
+            _accepting = false;
+          });
+          showDialog<void>(
+            context: context,
+            builder: (BuildContext ctx) {
+              return AlertDialog(
+                title: const Text(AppStr.reviewReviewsTitle),
+                content: const Text('No matching reviews found; cannot accept this request.'),
+                actions: <Widget>[
+                  TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text(AppStr.ok)),
+                ],
+              );
+            },
+          );
+        }
+        return;
+      }
+
+      // If there are more than 50 matches, the toProvide list contains the first 50.
+      // Show a combined dialog to collect provider comment and confirm sending.
+      // First, check if a provider comment was already saved on the
+      // review-details screen at users/<me>/friends/<friendUid>/review/providerComment.
+      // If found, prefer that value and skip prompting the user again.
+      String? dialogResult;
+      try {
+        final String pcPath = 'users/$myUid/friends/${selected.uid}/review/providerComment';
+        final DataSnapshot pcSnap = await FirebaseDatabase.instance.ref(pcPath).get();
+        if (pcSnap.exists && pcSnap.value is String && (pcSnap.value as String).trim().isNotEmpty) {
+          dialogResult = (pcSnap.value as String).trim();
+          // Enforce 40 char limit (trim if necessary)
+          if (dialogResult.length > 40) {
+            dialogResult = dialogResult.substring(0, 40);
+          }
+          debugPrint('[friends_screen] found stored providerComment for ${selected.uid}: "$dialogResult"');
+        } else {
+          debugPrint('[friends_screen] no stored providerComment for ${selected.uid} (will use empty)');
+        }
+      } catch (e) {
+        // ignore read errors and fall back to empty
+        debugPrint('[friends_screen] error reading providerComment for ${selected.uid}: $e');
+        dialogResult = null;
+      }
+
+      // If no stored comment is present, use an empty provider comment
+      // (do not prompt the user here — the review-request-details screen is the place to edit it).
+      dialogResult ??= '';
+      // Build and perform update
+      try {
+        final DatabaseReference rootRef = FirebaseDatabase.instance.ref();
+        final Map<String, dynamic> updates = await buildProvideUpdate(
+          rootRef: rootRef,
+          providerUid: me,
+          requesterUid: selected.uid,
+          reviews: toProvide,
+          providerCommentShort: dialogResult,
+        );
+
+        debugPrint('[friends_screen] built provider update for ${selected.uid}');
+        await performProvide(rootRef: rootRef, updates: updates);
+
+        // Post-write confirmation: read the exact meta node and extract rqCount/requestId
+        String? requestId;
+        int providedCount = 0;
+        try {
+          String? metaKeyPath;
+          for (final String k in updates.keys) {
+            if (k.endsWith('/meta')) {
+              metaKeyPath = k; // this is the full DB path to the meta node
+              break;
+            }
+          }
+          if (metaKeyPath != null) {
+            final DataSnapshot metaSnap = await rootRef.child(metaKeyPath).get();
+            if (metaSnap.exists && metaSnap.value != null) {
+              debugPrint('[friends_screen] confirmed meta at $metaKeyPath exists after update');
+              try {
+                final Map<dynamic, dynamic> metaMap = Map<dynamic, dynamic>.from(metaSnap.value as Map);
+                // prefer 'rqCount' then legacy 'count'
+                providedCount = (metaMap['rqCount'] is int)
+                    ? metaMap['rqCount'] as int
+                    : ((metaMap['count'] is int) ? metaMap['count'] as int : 0);
+                // extract requestId from the metaKeyPath
+                final List<String> parts = metaKeyPath.split('/');
+                final int idx = parts.indexOf('requested_reviews');
+                if (idx >= 0 && parts.length > idx + 1) {
+                  requestId = parts[idx + 1];
+                }
+              } catch (e) {
+                debugPrint('[friends_screen] failed to parse meta at $metaKeyPath: $e');
+              }
+            } else {
+              debugPrint('[friends_screen] meta at $metaKeyPath NOT found after update (may be eventual)');
+            }
+          }
+        } catch (e) {
+          debugPrint('[friends_screen] post-write confirmation read failed: $e');
+        }
+
+        final String nowIso = DateTime.now().toUtc().toIso8601String();
+        if (mounted) {
+          setState(() {
+            selected.fsc = statusProvided;
+            selected.accepted = true;
+            selected.review = null;
+            selected.providedRequestId = requestId;
+            selected.providedRqCount = providedCount;
+            selected.providedMessageShort = dialogResult;
+            selected.providedAt = nowIso;
+            _selectedUid = null;
+            _accepting = false;
+          });
+            // Best-effort: remove the original mailbox request so it no longer appears in the recipient's mailbox
+            try {
+              final String? norm = selected.mailboxNormalized;
+              final String? reqId = selected.mailboxReqId;
+              if (norm != null && norm.isNotEmpty && reqId != null && reqId.isNotEmpty) {
+                final String mailboxPath = 'users_by_email/$norm/requests/$reqId';
+                final Map<String, dynamic> del = <String, dynamic>{};
+                del[mailboxPath] = null;
+                try {
+                  await rootRef.update(del);
+                  debugPrint('[friends_screen] removed mailbox request at $mailboxPath via multi-path update');
+                } catch (_) {
+                  // fallback to single-path remove
+                  try {
+                    await rootRef.child(mailboxPath).remove();
+                    debugPrint('[friends_screen] removed mailbox request at $mailboxPath via remove()');
+                  } catch (e) {
+                    debugPrint('[friends_screen] failed to remove mailbox request at $mailboxPath: $e');
+                  }
+                }
+              }
+            } catch (e) {
+              debugPrint('[friends_screen] mailbox request deletion attempt failed: $e');
+            }
+          if (!mounted) return;
+          final String infoMsg = '${AppStr.accept} — provided $providedCount review(s) (reqId=${requestId ?? 'unknown'})';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(infoMsg)));
+          debugPrint('[friends_screen] provide complete: reqId=${requestId ?? 'null'} providedCount=$providedCount');
+        }
+        return;
+      } catch (e) {
+        debugPrint('[friends_screen] provide failed: $e');
+        if (mounted) {
+          setState(() {
+            _accepting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.requestSendFailed)));
+        }
+        return;
+      }
+    }
     bool success = false;
     String snackbarMsg = AppStr.requestSendFailed;
 
@@ -630,6 +1030,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
     setState(() {
       _declining = true;
     });
+
+    // If this is a review request (recipient wants reviews), run the stub handler
+    if (selected.fsc == statusRvWants) {
+      // TODO: implement real decline-review-request flow. For now just debug-print.
+      debugPrint('Stub: Decline review request for uid=${selected.uid}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Decline review request (stub)')));
+        setState(() {
+          _declining = false;
+          _selectedUid = null;
+        });
+      }
+      return;
+    }
 
     bool success = false;
     String snackbarMsg = AppStr.requestSendFailed;

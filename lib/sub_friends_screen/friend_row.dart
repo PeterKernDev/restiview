@@ -45,6 +45,8 @@ class FriendRow extends StatelessWidget {
     switch (entry.status) {
       case FriendStatus.accepted:
         return AppStr.friendLabel;
+      case FriendStatus.provided:
+        return AppStr.rvProvidedLabel;
       case FriendStatus.requested:
         return AppStr.frWantedLabel;
       case FriendStatus.recipientPending:
@@ -96,7 +98,7 @@ class FriendRow extends StatelessWidget {
       try {
         await FirebaseDatabase.instance.ref().update(reviewPatch);
       } catch (e) {
-        debugPrint('[FriendRow] failed to write resolved rvCount for ${entry.uid}: $e');
+        // Silently handle write failure
       }
 
       // Update local model (best-effort)
@@ -106,14 +108,25 @@ class FriendRow extends StatelessWidget {
       entry.rvCount = found;
       entry.rvCountLastCheckedAt = nowIso;
     } catch (e) {
-      debugPrint('[FriendRow] rvCount resolution failed for ${entry.uid}: $e');
+      // Silently handle resolution failure
     }
   }
 
   // Compose final token; append rvCount/exCount for RV states when available and non-negative.
+  // For RV-PROVIDED (statusCode=5), append providedRqCount.
   // If rvCount == -1, schedule resolution and return base token placeholder.
   String _statusTokenWithCounts() {
     final String base = _baseStatusToken();
+    
+    // For RV-PROVIDED status, show count from metadata
+    if (entry.status == FriendStatus.provided) {
+      final int? providedCount = entry.providedRqCount;
+      if (providedCount != null && providedCount > 0) {
+        return '$base ($providedCount)';
+      }
+      return base;
+    }
+    
     final int? rvCount = entry.review?.rvCount ?? entry.rvCount;
     final int exCount = entry.review?.exCount ?? 0;
 
@@ -144,6 +157,8 @@ class FriendRow extends StatelessWidget {
     switch (entry.status) {
       case FriendStatus.accepted:
         return AppColors.darkGreen;
+      case FriendStatus.provided:
+        return AppColors.blueAccent; // Use same color as review requests
       case FriendStatus.requested:
       case FriendStatus.recipientPending:
         return Colors.orange;
@@ -167,9 +182,18 @@ class FriendRow extends StatelessWidget {
     //  - there is a non-empty comment, AND
     //  - the relationship is not accepted (we hide friend-comments after accept),
     //    OR the relationship is a review request state (RV-ASKED / RV-WANTS).
-    final String? rawComment = (entry.comment != null && entry.comment!.trim().isNotEmpty) ? entry.comment!.trim() : null;
-    final bool showReviewComment = (entry.status == FriendStatus.rvAsked || entry.status == FriendStatus.rvWants);
-    final String? comment = (rawComment != null && (entry.status != FriendStatus.accepted || showReviewComment)) ? rawComment : null;
+    // For RV-PROVIDED status, show the provider message instead.
+    String? comment;
+    if (entry.status == FriendStatus.provided) {
+      // Show provider message for RV-PROVIDED
+      comment = (entry.providedMessageShort != null && entry.providedMessageShort!.trim().isNotEmpty) 
+          ? entry.providedMessageShort!.trim() 
+          : null;
+    } else {
+      final String? rawComment = (entry.comment != null && entry.comment!.trim().isNotEmpty) ? entry.comment!.trim() : null;
+      final bool showReviewComment = (entry.status == FriendStatus.rvAsked || entry.status == FriendStatus.rvWants);
+      comment = (rawComment != null && (entry.status != FriendStatus.accepted || showReviewComment)) ? rawComment : null;
+    }
 
     const int bgAlpha = 31;
     const int borderAlpha = 51;

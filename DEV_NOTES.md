@@ -222,6 +222,26 @@ Add these rules to guide development and code reviews. These are project convent
 - Release build command used by the project:
   - `flutter build appbundle --release`
 
+
+## REMINDERS (owner supplied)
+
+The project owner supplied the following hard constraints and reminders. These are authoritative and should be followed for all subsequent edits unless the owner explicitly authorizes a change.
+
+- Don’t change anything unless I have asked you to change it, or we have agreed the change.
+- Statements in an if should be enclosed in a block.
+- Remember all text messages should be stored in `strings.dart`.
+  - Example pattern: class AppStr { static const String strName = "String name"; }
+- Remember - `value` is deprecated and shouldn't be used. Use `initialValue` instead to set the initial value for form fields (deprecated after v3.33.0-1.0.pre).
+- Remember - `withOpacity` is deprecated and shouldn't be used. Use `.withValues()` to avoid precision loss. Try replacing deprecated members with the replacement.
+- Remember - always use braced blocks for for/if/while bodies and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state. Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
+- Remember not to use `MaterialStateProperty` — it is deprecated.
+- Remember `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated.
+- Remember we put the file name and a brief description in a comment at the top of every `*.dart` file. Preserve existing comments and add them if they are missing.
+- Don’t use `return` in a `finally` clause.
+- Don’t use `kDebugMode`; use `debugPrint` instead.
+
+NOTE: The code in `lib/review_request_details_screen.dart` contained three occurrences where `BuildContext` could be used across async gaps; these were corrected to guard with `mounted`. Follow the same pattern elsewhere when you find similar issues.
+
 Include or reference this section in code reviews and the repository README so new contributors see the conventions.
 
 ## Friend / Friend-request flow (summary)
@@ -270,3 +290,69 @@ Notes and recommendations
 - When deploying, audit mailbox removal rules carefully to avoid deleting someone else's mailbox entry; the existing helper marks processed by default when uncertain.
 
 End of friend-request flow summary.
+
+## Heavy-copy "Provide Reviews" design (provider → requester) — ACTUAL IMPLEMENTATION
+
+Goals
+- Allow a provider to accept a review request from a friend and publish up to 50 reviews into the requester's users_by_email mailbox, without copying photos/paths.
+- Let the requester import the reviews into their personal requested_reviews area, or decline (delete them).
+- Keep operations idempotent and traceable. Enforce a strict limit of 50 reviews maximum.
+- Use client-side multi-path atomic updates.
+
+IDs and defaults
+- requestId: use a Firebase push key to create unique request IDs.
+- Review limit: Maximum 50 reviews per transfer (strictly enforced, no chunking).
+- Provenance fields added to each copied review: `providedByUid`, `providedAt` (ISO UTC).
+- Status code for "RV-PROVIDED": 5 (requester's friend stub is set to 5, provider's stub set to 1).
+
+Provider-side publish (actual storage location)
+- Destination:
+  - users_by_email/<requester_normalized_email>/requested_reviews/<requestId>/meta
+  - users_by_email/<requester_normalized_email>/requested_reviews/<requestId>/reviews/<revKey>
+- The `meta` node contains: { provider-message, rqCount, providerUid, providedAt }
+- Each review under `reviews/` is a copy of the provider's review object with photo/photoPath fields removed plus the provenance fields (providedByUid, providedAt).
+
+Friend pointer updates (atomic with publish)
+- In the same multi-path update:
+  - Requester's friend stub: users/<requesterUid>/friends/<providerUid>/statusCode = 5 (RV-PROVIDED)
+  - Provider's friend stub: users/<providerUid>/friends/<requesterUid>/statusCode = 1 (FRIEND/accepted)
+  - Both stubs get updatedAt timestamp
+
+Requester import (accept) - TO BE IMPLEMENTED
+- When requester accepts/imports the provided reviews, perform an atomic update that:
+  - Copies reviews from users_by_email/<norm>/requested_reviews/<requestId>/reviews/* to users/<requesterUid>/requested_reviews/<importId>/reviews/*
+  - Writes users/<requesterUid>/requested_reviews/<importId>/meta with provenance
+  - Sets both friend stubs status back to 1 (accepted)
+  - Deletes users_by_email/<norm>/requested_reviews/<requestId>
+- Mark the imported transfer with provenance to make the import idempotent.
+
+Requester decline - TO BE IMPLEMENTED
+- If requester declines, delete the users_by_email transfer and reset friend statuses to accepted (status=1).
+
+Current Implementation Status (as of 2025-12-13)
+- Provider-side publish: IMPLEMENTED in lib/services/ube_provider.dart
+  - buildProvideBatches() creates atomic update maps (note: function name uses "batches" but enforces 50-review limit)
+  - performProvide() executes the update
+  - Storage: users_by_email/<norm>/requested_reviews/<requestId>/
+  - Friend stubs updated: requester=5, provider=1
+- Requester-side accept/import: NOT YET IMPLEMENTED
+  - Need to read from users_by_email/<norm>/requested_reviews/
+  - Copy to users/<requesterUid>/requested_reviews/
+  - Update friend stubs back to status=1
+  - Delete users_by_email transfer
+- Requester-side decline: NOT YET IMPLEMENTED
+  - Delete users_by_email transfer
+  - Reset friend stubs to status=1
+
+Files changed so far
+- `lib/friends_screen.dart` — provider publish flow added (statusCode=3 triggers provide flow)
+- `lib/services/ube_provider.dart` — buildProvideBatches() and performProvide() implemented
+- `lib/services/db_utils.dart` — stripPhotosFromReview() already existed
+
+Files still needed for requester accept/decline
+- `lib/friends_screen.dart` — add logic for when statusCode=5 (RV-PROVIDED) to accept/import reviews
+- New service or helpers to build import/decline update maps
+
+---
+
+End of heavy-copy design notes (2025-12-13).

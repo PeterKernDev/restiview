@@ -21,6 +21,37 @@ String normalizeEmailForPath(String email) {
 
 String _pushKeyFor(DatabaseReference ref) => ref.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
 
+/// Public safe push key helper. Returns a unique key for the given ref or a
+/// timestamp-based fallback when the push key is null.
+String safePushKey(DatabaseReference ref) => ref.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+/// Return a shallow copy of the review map with known photo/photo-path keys
+/// removed so that objects copied into other users' trees do not include
+/// local file paths or large binary blobs. This intentionally strips keys like
+/// `photos`, `photoPath0..N`, `photoPaths` and any key that begins with
+/// `photo`.
+Map<String, dynamic> stripPhotosFromReview(Map<dynamic, dynamic> review) {
+  final Map<String, dynamic> out = <String, dynamic>{};
+  try {
+    review.forEach((dynamic k, dynamic v) {
+      final String key = k?.toString() ?? '';
+      if (key.isEmpty) {
+        return;
+      }
+      final String lower = key.toLowerCase();
+      if (lower == 'photos' || lower == 'photopaths' || lower == 'photopath' || lower.startsWith('photopath') || lower.startsWith('photo')) {
+        // skip photo-related keys
+        return;
+      }
+      out[key] = v;
+    });
+  } catch (_) {
+    // on unexpected structure, return an empty map rather than crash
+    return <String, dynamic>{};
+  }
+  return out;
+}
+
 Map<String, dynamic> makeAuditUpdate({
   required DatabaseReference rootRef,
   required String actorUid,

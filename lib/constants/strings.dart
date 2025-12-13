@@ -252,6 +252,7 @@ class AppStr {
   static const String frWants = 'FR-WANTS';
   static const String rvAsked = 'RV-ASKED';
   static const String rvWants = 'RV-WANTS';
+  static const String rvProvidedLabel = 'RV-PROVIDED';
 
   static const String declined = 'DECLINED';
   static const String rejected = 'REJECTED';
@@ -344,6 +345,9 @@ class AppStr {
   static const String includedLabel = 'Included';
   static const String excludedLabel = 'Excluded';
   static const String noMatchingReviews = 'No matching reviews';
+  static const String foundMatchesFmt = 'Found %d matching reviews.';
+  static const String foundMatchesLimitedFmt = 'Found %d matching reviews. Only the first 50 will be shared.';
+  static const String noMatchingReviewsCannotAccept = 'No matching reviews found; cannot accept this request.';
 
   static const String exclude = 'Exclude';
   static const String include = 'Include';

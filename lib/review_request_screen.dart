@@ -2,7 +2,7 @@
 // Dedicated screen for creating a review request targeted at a selected friend.
 // Requester stub = 4 (RV-ASKED), Recipient stub = 3 (RV-WANTED).
 // MailboxNormalized points to the recipient normalized path (the mailbox we write).
-// Recipient stub is primed with rvCount = -1 in the nested review node so the recipient's client will resolve counts.
+// Review details are stored ONLY in users_by_email/<normalized>/requests/<clientRequestId>.
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -300,12 +300,11 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
     final Map<String, dynamic> updates = <String, dynamic>{};
     final String mailboxPath = 'users_by_email/$normalized/requests/$clientRequestId';
 
-    final Map<String, dynamic> reviewPayload = <String, dynamic>{
-      'country': _selectedCountry,
-      if (_selectedCuisine != null && _selectedCuisine!.isNotEmpty) 'cuisine': _selectedCuisine,
-      if (city.isNotEmpty) 'city': city,
-      'comment': comment,
-    };
+    // Store filter criteria directly (not nested under 'review')
+    // Country always has a value, use 'none' for empty city/cuisine
+    final String countryValue = _selectedCountry ?? '';
+    final String cuisineValue = (_selectedCuisine != null && _selectedCuisine!.isNotEmpty) ? _selectedCuisine! : 'none';
+    final String cityValue = city.isNotEmpty ? city : 'none';
 
     updates[mailboxPath] = <String, dynamic>{
       'statusCode': 0,
@@ -314,13 +313,15 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
       'fromEmail': fromEmail,
       'fromDisplayName': fromDisplayName,
       'comment': comment,
-      'review': reviewPayload,
+      'country': countryValue,
+      'cuisine': cuisineValue,
+      'city': cityValue,
       'createdAt': DateTime.now().toIso8601String(),
       'clientRequestId': clientRequestId,
     };
 
     // Correct RV mapping:
-    // requester stub = RV-ASKED (4) - keep review payload at nested 'review'
+    // requester stub = RV-ASKED (4) - no nested review, reference mailbox via mailboxReqId
     updates['users/$senderUid/friends/$recipientUid'] = <String, dynamic>{
       'statusCode': statusRvAsked, // 4
       'email': recipientEmail,
@@ -329,14 +330,10 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
       'clientRequestId': clientRequestId,
       'mailboxReqId': clientRequestId,
       'mailboxNormalized': normalized, // recipient mailbox normalized
-      'review': <String, dynamic>{
-        ...reviewPayload,
-      },
       'updatedAt': DateTime.now().toIso8601String(),
     };
 
-    // recipient stub = RV-WANTED (3)
-    // place review details under the nested review subnode and prime rvCount = -1 there
+    // recipient stub = RV-WANTED (3) - no nested review, reference mailbox via mailboxReqId
     updates['users/$recipientUid/friends/$senderUid'] = <String, dynamic>{
       'statusCode': statusRvWants, // 3
       'email': fromEmail,
@@ -345,12 +342,6 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
       'clientRequestId': clientRequestId,
       'mailboxReqId': clientRequestId,
       'mailboxNormalized': normalized, // recipient mailbox normalized
-      'review': <String, dynamic>{
-        ...reviewPayload,
-        'rvCount': -1,
-        'exCount': 0,
-        'exKeys': <String, bool>{},
-      },
       'updatedAt': DateTime.now().toIso8601String(),
     };
 

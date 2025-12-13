@@ -65,20 +65,25 @@ class FriendActions extends StatelessWidget {
         child: ElevatedButton(
           onPressed: onPressed,
           style: _actionBtnBaseStyle(onPressed != null ? activeColor : Colors.grey, textColor),
-          child: loading
-              ? SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(textColor),
-                  ),
-                )
-              : Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppFonts.bold.copyWith(color: textColor),
-                ),
+          child: SizedBox(
+            height: 20,
+            child: Center(
+              child: loading
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                      ),
+                    )
+                  : Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.bold.copyWith(color: textColor),
+                    ),
+            ),
+          ),
         ),
       ),
     );
