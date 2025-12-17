@@ -182,6 +182,7 @@ Map<String, dynamic> makeFriendStubUpdates({
   final Map<String, dynamic> updates = <String, dynamic>{};
   final String now = DateTime.now().toUtc().toIso8601String();
 
+  // Only update the actor's own friend stub, not the friend's stub
   updates['users/$sActor/friends/$sFriend/statusCode'] = statusCode;
   updates['users/$sActor/friends/$sFriend/username'] = friendDisplayName;
   updates['users/$sActor/friends/$sFriend/email'] = friendEmail;
@@ -189,14 +190,6 @@ Map<String, dynamic> makeFriendStubUpdates({
     updates['users/$sActor/friends/$sFriend/accepted'] = acceptedFlag;
   }
   updates['users/$sActor/friends/$sFriend/updatedAt'] = now;
-
-  updates['users/$sFriend/friends/$sActor/statusCode'] = statusCode;
-  updates['users/$sFriend/friends/$sActor/username'] = actorDisplayName;
-  updates['users/$sFriend/friends/$sActor/email'] = actorEmail;
-  if (acceptedFlag != null) {
-    updates['users/$sFriend/friends/$sActor/accepted'] = acceptedFlag;
-  }
-  updates['users/$sFriend/friends/$sActor/updatedAt'] = now;
 
   return updates;
 }
@@ -224,6 +217,7 @@ Future<Map<String, dynamic>> buildAcceptUpdateMap({
     mailboxNormalized: mailboxNormalized,
   );
 
+  // Update only the actor's own friend stub
   updates.addAll(makeFriendStubUpdates(
     actorUid: actorUid,
     friendUid: friendUid,
@@ -234,6 +228,22 @@ Future<Map<String, dynamic>> buildAcceptUpdateMap({
     statusCode: 1,
     acceptedFlag: true,
   ));
+
+  // Create a mailbox entry for the friend to notify them of acceptance
+  // The friend will update their own stub when they sign in
+  final String friendEmailNormalized = normalizeEmailForPath(friendPublicEmail.toLowerCase());
+  final String acceptClientRequestId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String friendMailboxPath = 'users_by_email/$friendEmailNormalized/requests/$acceptClientRequestId';
+  
+  updates[friendMailboxPath] = <String, dynamic>{
+    'statusCode': 1, // 1 = accepted
+    'fromUid': actorUid,
+    'fromEmail': actorPublicEmail,
+    'fromDisplayName': actorDisplayName,
+    'clientRequestId': acceptClientRequestId,
+    'createdAt': DateTime.now().toIso8601String(),
+    'type': 'friend_accept',
+  };
 
   // audit write included for accept flow
   updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'accept'));
@@ -251,6 +261,8 @@ Future<Map<String, dynamic>> buildRejectUpdateMap({
   String? mailboxNormalized,
   required String friendDisplayName,
   required String friendPublicEmail,
+  required String actorDisplayName,
+  required String actorPublicEmail,
 }) async {
   final Map<String, dynamic> updates = <String, dynamic>{};
 
@@ -262,6 +274,7 @@ Future<Map<String, dynamic>> buildRejectUpdateMap({
     mailboxNormalized: mailboxNormalized,
   );
 
+  // Update only the actor's (PK1's) own friend stub to statusCode=9 (unknown/not interested)
   updates.addAll(makeFriendStubUpdates(
     actorUid: actorUid,
     friendUid: friendUid,
@@ -269,9 +282,25 @@ Future<Map<String, dynamic>> buildRejectUpdateMap({
     actorEmail: '',
     friendDisplayName: friendDisplayName,
     friendEmail: friendPublicEmail,
-    statusCode: 8,
+    statusCode: 9,
     acceptedFlag: false,
   ));
+
+  // Create a mailbox entry for the friend to notify them of rejection
+  // The friend will update their own stub when they sign in
+  final String friendEmailNormalized = normalizeEmailForPath(friendPublicEmail.toLowerCase());
+  final String declineClientRequestId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String friendMailboxPath = 'users_by_email/$friendEmailNormalized/requests/$declineClientRequestId';
+  
+  updates[friendMailboxPath] = <String, dynamic>{
+    'statusCode': 8, // 8 = declined
+    'fromUid': actorUid,
+    'fromEmail': actorPublicEmail,
+    'fromDisplayName': actorDisplayName,
+    'clientRequestId': declineClientRequestId,
+    'createdAt': DateTime.now().toIso8601String(),
+    'type': 'friend_decline',
+  };
 
   // audit write included for reject flow
   updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'reject'));

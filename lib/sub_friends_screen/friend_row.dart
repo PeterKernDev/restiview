@@ -70,11 +70,21 @@ class FriendRow extends StatelessWidget {
         return;
       }
 
-      // Read filters from nested review if present
-      final Map<String, String>? filters = entry.review?.filters;
-      String? country = (filters != null && filters.containsKey('country')) ? filters['country'] : null;
-      String? cuisine = (filters != null && filters.containsKey('cuisine')) ? filters['cuisine'] : null;
-      String? city = (filters != null && filters.containsKey('city')) ? filters['city'] : null;
+      // Read filters from reviewRequest if present, otherwise legacy review structure
+      String? country;
+      String? cuisine;
+      String? city;
+      
+      if (entry.reviewRequest != null) {
+        country = entry.reviewRequest!.filterCountry;
+        cuisine = entry.reviewRequest!.filterCuisine;
+        city = entry.reviewRequest!.filterCity;
+      } else {
+        final Map<String, String>? filters = entry.review?.filters;
+        country = (filters != null && filters.containsKey('country')) ? filters['country'] : null;
+        cuisine = (filters != null && filters.containsKey('cuisine')) ? filters['cuisine'] : null;
+        city = (filters != null && filters.containsKey('city')) ? filters['city'] : null;
+      }
 
       if (country == null || country.trim().isEmpty) {
         // nothing to count
@@ -89,24 +99,35 @@ class FriendRow extends StatelessWidget {
       }
 
       final String nowIso = DateTime.now().toUtc().toIso8601String();
-      final String reviewPath = 'users/$myUidNow/friends/${entry.uid}/review';
-      final Map<String, dynamic> reviewPatch = <String, dynamic>{
-        '$reviewPath/rvCount': found,
-        '$reviewPath/updatedAt': nowIso,
-      };
+      
+      // Write to review_request if present, otherwise legacy review structure
+      final Map<String, dynamic> patch = <String, dynamic>{};
+      if (entry.reviewRequest != null) {
+        patch['users/$myUidNow/friends/${entry.uid}/review_request/rvCount'] = found;
+        patch['users/$myUidNow/friends/${entry.uid}/review_request/updatedAt'] = nowIso;
+        patch['users/$myUidNow/friends/${entry.uid}/rvCount'] = found;
+        patch['users/$myUidNow/friends/${entry.uid}/rvCountLastCheckedAt'] = nowIso;
+      } else {
+        patch['users/$myUidNow/friends/${entry.uid}/review/rvCount'] = found;
+        patch['users/$myUidNow/friends/${entry.uid}/review/updatedAt'] = nowIso;
+      }
 
       try {
-        await FirebaseDatabase.instance.ref().update(reviewPatch);
+        await FirebaseDatabase.instance.ref().update(patch);
       } catch (e) {
         // Silently handle write failure
       }
 
       // Update local model (best-effort)
-      entry.review ??= ReviewData(filters: <String, String>{});
-      entry.review!.rvCount = found;
-      entry.review!.updatedAt = nowIso;
       entry.rvCount = found;
       entry.rvCountLastCheckedAt = nowIso;
+      if (entry.reviewRequest != null) {
+        // reviewRequest updates are handled by the parent screen's subscription
+      } else {
+        entry.review ??= ReviewData(filters: <String, String>{});
+        entry.review!.rvCount = found;
+        entry.review!.updatedAt = nowIso;
+      }
     } catch (e) {
       // Silently handle resolution failure
     }
@@ -128,7 +149,7 @@ class FriendRow extends StatelessWidget {
     }
     
     final int? rvCount = entry.review?.rvCount ?? entry.rvCount;
-    final int exCount = entry.review?.exCount ?? 0;
+    final int exCount = entry.reviewRequest?.exCount ?? entry.review?.exCount ?? 0;
 
     if (entry.status == FriendStatus.rvWants || entry.status == FriendStatus.rvAsked) {
       if (rvCount == null) {
@@ -180,7 +201,7 @@ class FriendRow extends StatelessWidget {
 
     // Show comment when:
     //  - there is a non-empty comment, AND
-    //  - the relationship is not accepted (we hide friend-comments after accept),
+    //  - the relationship is not accepted or declined (we hide comments after accept/decline),
     //    OR the relationship is a review request state (RV-ASKED / RV-WANTS).
     // For RV-PROVIDED status, show the provider message instead.
     String? comment;
@@ -192,7 +213,8 @@ class FriendRow extends StatelessWidget {
     } else {
       final String? rawComment = (entry.comment != null && entry.comment!.trim().isNotEmpty) ? entry.comment!.trim() : null;
       final bool showReviewComment = (entry.status == FriendStatus.rvAsked || entry.status == FriendStatus.rvWants);
-      comment = (rawComment != null && (entry.status != FriendStatus.accepted || showReviewComment)) ? rawComment : null;
+      final bool hideComment = (entry.status == FriendStatus.accepted || entry.status == FriendStatus.declined);
+      comment = (rawComment != null && (!hideComment || showReviewComment)) ? rawComment : null;
     }
 
     const int bgAlpha = 31;

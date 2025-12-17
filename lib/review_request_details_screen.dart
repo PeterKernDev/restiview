@@ -75,32 +75,26 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
 
     Map<dynamic, dynamic>? reviewMap;
     try {
-      // Read from mailbox instead of friend's nested review
-      final String? mailboxNormalized = widget.friendEntry.mailboxNormalized;
-      final String? mailboxReqId = widget.friendEntry.mailboxReqId;
-      
-      if (mailboxNormalized != null && mailboxNormalized.isNotEmpty &&
-          mailboxReqId != null && mailboxReqId.isNotEmpty) {
-        final DatabaseReference ref =
-            FirebaseDatabase.instance.ref('users_by_email/$mailboxNormalized/requests/$mailboxReqId');
-        final DataSnapshot snap = await ref.get();
-        if (snap.exists && snap.value is Map) {
-          reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
-        }
+      // Read from friend stub's review_request subnode
+      final DatabaseReference ref =
+          FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review_request');
+      final DataSnapshot snap = await ref.get();
+      if (snap.exists && snap.value is Map) {
+        reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
       }
 
       if (reviewMap != null) {
-        // Read filter criteria directly from request root (not nested)
-        _country = (reviewMap['country'] is String) ? reviewMap['country'] as String : null;
-        _cuisine = (reviewMap['cuisine'] is String) ? reviewMap['cuisine'] as String : null;
-        _city = (reviewMap['city'] is String) ? reviewMap['city'] as String : null;
+        // Read filter criteria from review_request structure
+        _country = (reviewMap['filterCountry'] is String) ? reviewMap['filterCountry'] as String : null;
+        _cuisine = (reviewMap['filterCuisine'] is String) ? reviewMap['filterCuisine'] as String : null;
+        _city = (reviewMap['filterCity'] is String) ? reviewMap['filterCity'] as String : null;
         
         // Convert 'none' to null for display
         if (_cuisine == 'none') _cuisine = null;
         if (_city == 'none') _city = null;
 
-        _requestComment = (reviewMap['comment'] is String && (reviewMap['comment'] as String).isNotEmpty)
-            ? reviewMap['comment'] as String
+        _requestComment = (reviewMap['requestComment'] is String && (reviewMap['requestComment'] as String).isNotEmpty)
+            ? reviewMap['requestComment'] as String
             : null;
 
         if (reviewMap['rvCount'] is int) {
@@ -169,16 +163,16 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
   }
 
   Future<void> _onBack() async {
-    // persist provider comment (trimmed) to the review subnode
+    // persist provider comment (trimmed) to the review_request subnode
     final String trimmed = _providerCommentController.text.trim();
     if (myUid.isNotEmpty) {
       final DatabaseReference ref = FirebaseDatabase.instance.ref();
       try {
         if (trimmed.isEmpty) {
           // remove the field by setting it to null
-          await ref.child('users/$myUid/friends/$friendUid/review/providerComment').set(null);
+          await ref.child('users/$myUid/friends/$friendUid/review_request/providerComment').set(null);
         } else {
-          await ref.child('users/$myUid/friends/$friendUid/review/providerComment').set(trimmed);
+          await ref.child('users/$myUid/friends/$friendUid/review_request/providerComment').set(trimmed);
         }
       } catch (_) {
         // ignore write failure
@@ -209,7 +203,7 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
     // persist provider comment before navigating so it's available to the review screen
     final String trimmed = _providerCommentController.text.trim();
     if (myUid.isNotEmpty) {
-      final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review/providerComment');
+      final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review_request/providerComment');
       try {
         if (trimmed.isEmpty) {
           await ref.set(null);

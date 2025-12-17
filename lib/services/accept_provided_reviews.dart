@@ -1,10 +1,10 @@
 // lib/services/accept_provided_reviews.dart
 // Service to handle accepting provided reviews (statusCode=5) from friends.
-// Relocates reviews from users_by_email/<normalized>/requested_reviews/<requestId>
+// Relocates reviews from users_by_email/<normalized>/requests/<requestId>
 // to users/<uid>/requested_reviews/ in a flat structure.
 
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
+// import 'package:flutter/foundation.dart';
 import 'db_utils.dart';
 
 /// Result of accepting provided reviews operation
@@ -63,7 +63,7 @@ Future<Map<String, Map<String, dynamic>>> loadProvidedReviewsMetadata({
 
       // Find corresponding request in users_by_email
       final DatabaseReference requestsRef = FirebaseDatabase.instance.ref(
-        'users_by_email/$normalizedEmail/requested_reviews',
+        'users_by_email/$normalizedEmail/requests',
       );
       final DataSnapshot requestsSnap = await requestsRef.get();
 
@@ -120,10 +120,7 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
   try {
     final String normalizedEmail = normalizeEmailForPath(myEmail);
     final String sourceBasePath =
-        'users_by_email/$normalizedEmail/requested_reviews/$requestId';
-    
-    debugPrint('[acceptProvidedReviews] Starting for myUid=$myUid, providerUid=$providerUid, requestId=$requestId');
-    debugPrint('[acceptProvidedReviews] Source path: $sourceBasePath');
+        'users_by_email/$normalizedEmail/requests/$requestId';
 
     // 1. Read all reviews from source
     final DatabaseReference reviewsRef = FirebaseDatabase.instance.ref(
@@ -132,7 +129,6 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
     final DataSnapshot reviewsSnap = await reviewsRef.get();
 
     if (!reviewsSnap.exists || reviewsSnap.value == null) {
-      debugPrint('[acceptProvidedReviews] No reviews found at source path');
       return AcceptProvidedReviewsResult(
         success: false,
         errorMessage: 'No reviews found to accept',
@@ -142,12 +138,9 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
     final Map<dynamic, dynamic> reviews = Map<dynamic, dynamic>.from(
       reviewsSnap.value as Map,
     );
-    
-    debugPrint('[acceptProvidedReviews] Found ${reviews.length} reviews at source');
 
     // 2. Prepare destination writes (flat structure)
     final String destBasePath = 'users/$myUid/requested_reviews';
-    debugPrint('[acceptProvidedReviews] Destination path: $destBasePath');
     
     final Map<String, dynamic> updates = <String, dynamic>{};
     int reviewsAccepted = 0;
@@ -157,7 +150,6 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
       final dynamic reviewData = entry.value;
 
       if (reviewData is! Map) {
-        debugPrint('[acceptProvidedReviews] Skipping non-map review: $reviewKey');
         continue;
       }
 
@@ -171,34 +163,23 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
         // Add to updates map
         updates['$destBasePath/$reviewKey'] = reviewData;
         reviewsAccepted++;
-        debugPrint('[acceptProvidedReviews] Queued review for move: $reviewKey');
-      } else {
-        debugPrint('[acceptProvidedReviews] Skipping duplicate review: $reviewKey');
       }
     }
 
-    debugPrint('[acceptProvidedReviews] Prepared $reviewsAccepted reviews for relocation');
-
     // 3. Write reviews individually (avoid permission issues with atomic update)
-    debugPrint('[acceptProvidedReviews] Writing reviews to destination');
     for (final MapEntry<String, dynamic> entry in updates.entries) {
       final String path = entry.key;
       final dynamic value = entry.value;
       await FirebaseDatabase.instance.ref(path).set(value);
-      debugPrint('[acceptProvidedReviews] Wrote: $path');
     }
-    debugPrint('[acceptProvidedReviews] All reviews written successfully');
 
     // 4. Update friend record back to FRIEND status
     final String nowIso = DateTime.now().toUtc().toIso8601String();
     await FirebaseDatabase.instance.ref('users/$myUid/friends/$providerUid/statusCode').set(1);
     await FirebaseDatabase.instance.ref('users/$myUid/friends/$providerUid/updatedAt').set(nowIso);
-    debugPrint('[acceptProvidedReviews] Friend stub updated to statusCode=1');
 
-    // 6. Cleanup - delete source requested_reviews
-    debugPrint('[acceptProvidedReviews] Deleting source at: $sourceBasePath');
+    // 6. Cleanup - delete source request record
     await FirebaseDatabase.instance.ref(sourceBasePath).remove();
-    debugPrint('[acceptProvidedReviews] Source cleanup complete');
 
     // Note: The original request from provider's mailbox was already deleted
     // when the provider accepted the request and provided the reviews

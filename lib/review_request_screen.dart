@@ -307,7 +307,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
     final String cityValue = city.isNotEmpty ? city : 'none';
 
     updates[mailboxPath] = <String, dynamic>{
-      'statusCode': 0,
+      'statusCode': 3, // RV-WANTED (recipient perspective)
       'type': 'review_request',
       'fromUid': senderUid,
       'fromEmail': fromEmail,
@@ -321,7 +321,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
     };
 
     // Correct RV mapping:
-    // requester stub = RV-ASKED (4) - no nested review, reference mailbox via mailboxReqId
+    // requester stub = RV-ASKED (4) - only sender creates their own stub
     updates['users/$senderUid/friends/$recipientUid'] = <String, dynamic>{
       'statusCode': statusRvAsked, // 4
       'email': recipientEmail,
@@ -333,17 +333,8 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
       'updatedAt': DateTime.now().toIso8601String(),
     };
 
-    // recipient stub = RV-WANTED (3) - no nested review, reference mailbox via mailboxReqId
-    updates['users/$recipientUid/friends/$senderUid'] = <String, dynamic>{
-      'statusCode': statusRvWants, // 3
-      'email': fromEmail,
-      'username': fromDisplayName,
-      'comment': comment,
-      'clientRequestId': clientRequestId,
-      'mailboxReqId': clientRequestId,
-      'mailboxNormalized': normalized, // recipient mailbox normalized
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
+    // NOTE: Recipient stub is NOT created here. The recipient will create their own
+    // friend stub when they sign in and process the mailbox entry.
 
     _toggleLoading(true);
     try {

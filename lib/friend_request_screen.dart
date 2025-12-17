@@ -378,6 +378,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
     };
 
     // Requester stub = FR-ASKED (0) — always under current signed-in user
+    // Only the sender creates their own stub. The recipient will create theirs on sign-in.
     final Map<String, dynamic> senderStub = <String, dynamic>{
       'statusCode': statusRequesterSent,
       'email': recipientEmail,
@@ -390,18 +391,8 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
     };
     updates['users/$finalSenderUid/friends/$finalRecipientUid'] = senderStub;
 
-    // Recipient stub = FR-WANTED (2) — always under recipient's user node
-    final Map<String, dynamic> recipientStub = <String, dynamic>{
-      'statusCode': statusRequested,
-      'email': fromEmail,
-      'username': fromDisplayName,
-      'comment': commentTrim,
-      'clientRequestId': clientRequestId,
-      'mailboxReqId': clientRequestId,
-      'mailboxNormalized': normalized,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
-    updates['users/$finalRecipientUid/friends/$finalSenderUid'] = recipientStub;
+    // NOTE: Recipient stub is NOT created here. The recipient will create their own
+    // friend stub when they sign in and process the mailbox entry.
 
     if (mounted) {
       _toggleLoading(true);
@@ -411,7 +402,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
       if (kDebugMode) {
         debugPrint('[FriendRequestScreen] about to update DB. mailbox=$mailboxPath');
         debugPrint('[FriendRequestScreen] senderStubPath=users/$finalSenderUid/friends/$finalRecipientUid senderStub=$senderStub');
-        debugPrint('[FriendRequestScreen] recipientStubPath=users/$finalRecipientUid/friends/$finalSenderUid recipientStub=$recipientStub');
+        debugPrint('[FriendRequestScreen] Recipient stub will be created when recipient signs in and processes mailbox');
       }
       await _updateWithRetry(updates, maxAttempts: 3);
 

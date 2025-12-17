@@ -499,33 +499,81 @@ class _SignInScreenState extends State<SignInScreen> {
         }
 
         if (shouldWriteFriend) {
-          final int recipientViewStatus = (statusCode == 0) ? 2 : statusCode;
-          final Map<String, dynamic> recipientStub = <String, dynamic>{
-            'statusCode': recipientViewStatus,
-            'email': fromEmail,
-            'username': fromDisplayName,
-            'comment': comment,
-            'clientRequestId': clientRequestId,
-            'updatedAt': DateTime.now().toIso8601String(),
-          };
-          final String myEmail = (FirebaseAuth.instance.currentUser?.email ?? '').trim().toLowerCase();
-          final Map<String, dynamic> senderStub = <String, dynamic>{
-            'statusCode': statusCode,
-            'email': myEmail,
-            'username': (FirebaseAuth.instance.currentUser?.displayName ?? myEmail),
-            'comment': comment,
-            'clientRequestId': clientRequestId,
-            'updatedAt': DateTime.now().toIso8601String(),
-          };
+          // Handle different statusCode values:
+          // - statusCode=0: incoming friend/review request
+          // - statusCode=1: friend acceptance notification
+          // - statusCode=8: friend decline notification
+          
+          if (statusCode == 1) {
+            // This is a friend acceptance notification
+            // Update my existing friend stub to accepted status
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 1,
+              'users/$myUid/friends/$fromUid/accepted': true,
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else if (statusCode == 8) {
+            // This is a friend decline notification
+            // Update my existing friend stub to declined status
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 8,
+              'users/$myUid/friends/$fromUid/accepted': false,
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else if (statusCode == 3) {
+            // This is a review request notification
+            // Update the friend stub to add review_request structure
+            final String filterCountry = m['country']?.toString() ?? '';
+            final String filterCuisine = m['cuisine']?.toString() ?? '';
+            final String filterCity = m['city']?.toString() ?? '';
+            
+            // Create review_request structure
+            final Map<String, dynamic> reviewRequestData = <String, dynamic>{
+              'requestComment': comment,
+              'filterCountry': filterCountry,
+              'filterCity': filterCity.isEmpty ? 'none' : filterCity,
+              'filterCuisine': filterCuisine.isEmpty ? 'none' : filterCuisine,
+              'exCount': 0,
+              'fromEmail': fromEmail,
+              'fromDisplayName': fromDisplayName,
+              'exKeys': <String>[],
+            };
+            
+            // Atomic multi-path update: update statusCode, add review_request, and delete mailbox entry
+            // This preserves existing friend data while adding the review request
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 3,
+              'users/$myUid/friends/$fromUid/review_request': reviewRequestData,
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else if (statusCode == 0) {
+            // This is an incoming friend request (not review request)
+            // Create the recipient's own friend stub (my stub).
+            // The sender has already created their own stub when they sent the request.
+            final Map<String, dynamic> recipientStub = <String, dynamic>{
+              'statusCode': 2, // FR-WANTED
+              'email': fromEmail,
+              'username': fromDisplayName,
+              'comment': comment,
+              'clientRequestId': clientRequestId,
+              'mailboxReqId': clientRequestId,
+              'mailboxNormalized': normalizedMailbox,
+              'updatedAt': DateTime.now().toIso8601String(),
+            };
 
-          // Atomic multi-path update: create both friend stubs and mark processed
-          final Map<String, dynamic> atomic = <String, dynamic>{
-            'users/$myUid/friends/$fromUid': recipientStub,
-            'users/$fromUid/friends/$myUid': senderStub,
-            'users_by_email/$normalizedMailbox/requests/$reqId/processedAt': DateTime.now().toIso8601String(),
-            'users_by_email/$normalizedMailbox/requests/$reqId/processedBy': myUid,
-          };
-          await FirebaseDatabase.instance.ref().update(atomic);
+            // Atomic multi-path update: create recipient's friend stub and delete mailbox entry
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid': recipientStub,
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          }
         } else {
           final Map<String, dynamic> processedMark = <String, dynamic>{
             'processedAt': DateTime.now().toIso8601String(),

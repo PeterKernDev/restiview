@@ -1,8 +1,31 @@
 // lib/sub_friends_screen/friend_entry.dart
 // Data model for a friend entry as read from users/<me>/friends.
 // - Contains canonical fields used by FriendsScreen, FriendRow, and actions.
-// - Includes nested ReviewData for review-request details.
+// - Includes nested ReviewRequestData for review-request details.
 
+class ReviewRequestData {
+  ReviewRequestData({
+    this.requestComment,
+    this.filterCountry,
+    this.filterCity,
+    this.filterCuisine,
+    this.exCount,
+    this.fromEmail,
+    this.fromDisplayName,
+    this.exKeys,
+  });
+
+  String? requestComment;
+  String? filterCountry;
+  String? filterCity;
+  String? filterCuisine;
+  int? exCount;
+  String? fromEmail;
+  String? fromDisplayName;
+  List<String>? exKeys;
+}
+
+// Legacy ReviewData class for backward compatibility
 class ReviewData {
   ReviewData({
     required this.filters,
@@ -48,6 +71,7 @@ class FriendEntry {
     this.pendingDeleteBy,
     this.rvCount,
     this.rvCountLastCheckedAt,
+    this.reviewRequest,
     this.review,
     this.providedRequestId,
     this.providedRqCount,
@@ -70,7 +94,10 @@ class FriendEntry {
   int? rvCount;
   String? rvCountLastCheckedAt;
 
-  // Nested review request details (nullable)
+  // Nested review request details (new structure)
+  ReviewRequestData? reviewRequest;
+
+  // Legacy nested review request details (nullable) - for backward compatibility
   ReviewData? review;
 
   // Provider metadata when this user has performed a provide operation
@@ -95,6 +122,8 @@ class FriendEntry {
         return FriendStatus.provided;
       case 8:
         return FriendStatus.declined;
+      case 9:
+        return FriendStatus.declined; // 9 = decliner's view (not interested)
       default:
         return FriendStatus.unknown;
     }

@@ -31,7 +31,7 @@ Future<Map<String, dynamic>> buildProvideUpdate({
       : reviews;
 
   final String nowIso = DateTime.now().toUtc().toIso8601String();
-  // Determine requester's normalized email so we can write under users_by_email/<norm>/requested_reviews
+  // Determine requester's normalized email so we can write under users_by_email/<norm>/requests
   String requesterEmail = '';
   try {
     final DataSnapshot pubEmailSnap = await rootRef.child('public_profiles/$requesterUid/email').get();
@@ -56,13 +56,19 @@ Future<Map<String, dynamic>> buildProvideUpdate({
     norm = safePushKey(rootRef.child('users_by_email')).toString();
   }
 
-  // Use a push key under the users_by_email/<norm>/requested_reviews
-  final String requestId = safePushKey(rootRef.child('users_by_email').child(norm).child('requested_reviews'));
+  // Use a push key under the users_by_email/<norm>/requests (standardized location)
+  final String requestId = safePushKey(rootRef.child('users_by_email').child(norm).child('requests'));
 
-  final String metaPath = 'users_by_email/$norm/requested_reviews/$requestId/meta';
-  final String reviewsBase = 'users_by_email/$norm/requested_reviews/$requestId/reviews';
+  final String metaPath = 'users_by_email/$norm/requests/$requestId/meta';
+  final String reviewsBase = 'users_by_email/$norm/requests/$requestId/reviews';
 
   final Map<String, dynamic> updates = <String, dynamic>{};
+
+  // Top-level request record fields (standardized)
+  updates['users_by_email/$norm/requests/$requestId/statusCode'] = 5; // RV-PROVIDED
+  updates['users_by_email/$norm/requests/$requestId/type'] = 'review_provided';
+  updates['users_by_email/$norm/requests/$requestId/fromUid'] = providerUid;
+  updates['users_by_email/$norm/requests/$requestId/createdAt'] = nowIso;
 
   // Meta: minimal fields as requested
   updates[metaPath] = <String, dynamic>{
@@ -83,7 +89,7 @@ Future<Map<String, dynamic>> buildProvideUpdate({
         destKey = '';
       }
       if (destKey.isEmpty) {
-        destKey = safePushKey(rootRef.child('users_by_email').child(norm).child('requested_reviews').child(requestId).child('reviews'));
+        destKey = safePushKey(rootRef.child('users_by_email').child(norm).child('requests').child(requestId).child('reviews'));
       }
 
   final Map<String, dynamic> clean = stripPhotosFromReview(Map<String, dynamic>.from(r));

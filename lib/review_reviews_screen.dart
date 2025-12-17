@@ -90,24 +90,27 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
 
     try {
       final DatabaseReference friendReviewRef =
-          FirebaseDatabase.instance.ref('users/$myUid/friends/${widget.friendUid}/review');
+          FirebaseDatabase.instance.ref('users/$myUid/friends/${widget.friendUid}/review_request');
       final DataSnapshot friendSnap = await friendReviewRef.get();
       if (friendSnap.exists && friendSnap.value != null && friendSnap.value is Map) {
         final Map<dynamic, dynamic> friendReview = Map<dynamic, dynamic>.from(friendSnap.value as Map);
-        final Map<dynamic, dynamic> ffilters =
-            (friendReview['filters'] is Map) ? Map<dynamic, dynamic>.from(friendReview['filters'] as Map) : <dynamic, dynamic>{};
+        
+        // Read from review_request structure (filterCountry, filterCity, filterCuisine)
+        countryFilter = (friendReview['filterCountry'] is String && (friendReview['filterCountry'] as String).trim().isNotEmpty)
+            ? (friendReview['filterCountry'] as String).trim()
+            : null;
 
-        countryFilter = (ffilters['country'] is String && (ffilters['country'] as String).trim().isNotEmpty)
-            ? (ffilters['country'] as String).trim()
-            : (friendReview['country'] is String && (friendReview['country'] as String).trim().isNotEmpty ? (friendReview['country'] as String).trim() : null);
+        cuisineFilter = (friendReview['filterCuisine'] is String && (friendReview['filterCuisine'] as String).trim().isNotEmpty)
+            ? (friendReview['filterCuisine'] as String).trim()
+            : null;
 
-        cuisineFilter = (ffilters['cuisine'] is String && (ffilters['cuisine'] as String).trim().isNotEmpty)
-            ? (ffilters['cuisine'] as String).trim()
-            : (friendReview['cuisine'] is String && (friendReview['cuisine'] as String).trim().isNotEmpty ? (friendReview['cuisine'] as String).trim() : null);
-
-        cityFilter = (ffilters['city'] is String && (ffilters['city'] as String).trim().isNotEmpty)
-            ? (ffilters['city'] as String).trim()
-            : (friendReview['city'] is String && (friendReview['city'] as String).trim().isNotEmpty ? (friendReview['city'] as String).trim() : null);
+        cityFilter = (friendReview['filterCity'] is String && (friendReview['filterCity'] as String).trim().isNotEmpty)
+            ? (friendReview['filterCity'] as String).trim()
+            : null;
+        
+        // Convert 'none' to null for filtering
+        if (cuisineFilter == 'none') cuisineFilter = null;
+        if (cityFilter == 'none') cityFilter = null;
       } else {
         // fallback to widget.filters (older calling pattern)
         countryFilter = (widget.filters['country'] ?? '').trim().isEmpty ? null : widget.filters['country']?.trim();
@@ -304,13 +307,13 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
       _saving = true;
     });
 
-    final String reviewPath = 'users/$myUid/friends/${widget.friendUid}/review';
+    final String reviewPath = 'users/$myUid/friends/${widget.friendUid}/review_request';
     final DatabaseReference rootRef = FirebaseDatabase.instance.ref();
 
     final int exCount = _excludedKeys.length;
     final Map<String, dynamic> patch = <String, dynamic>{};
 
-    // Always persist the correct exCount and exKeys values. Do not touch rvCount.
+    // Always persist the correct exCount and exKeys values to review_request. Do not touch rvCount.
     patch['$reviewPath/exCount'] = exCount;
     patch['$reviewPath/exKeys'] = _excludedKeys.isNotEmpty ? _excludedKeys.toList() : <String>[];
     patch['$reviewPath/updatedAt'] = DateTime.now().toUtc().toIso8601String();
