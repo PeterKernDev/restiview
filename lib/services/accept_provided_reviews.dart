@@ -1,7 +1,8 @@
 // lib/services/accept_provided_reviews.dart
 // Service to handle accepting provided reviews (statusCode=5) from friends.
 // Relocates reviews from users_by_email/<normalized>/requests/<requestId>
-// to users/<uid>/requested_reviews/ in a flat structure.
+// to users/<uid>/reviews_requested/ in a flat structure.
+// Preserves owner_email field for filtering by provider.
 
 import 'package:firebase_database/firebase_database.dart';
 // import 'package:flutter/foundation.dart';
@@ -139,8 +140,19 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
       reviewsSnap.value as Map,
     );
 
-    // 2. Prepare destination writes (flat structure)
-    final String destBasePath = 'users/$myUid/requested_reviews';
+    // 2. Get provider's email to use as owner_email
+    String providerEmail = '';
+    try {
+      final DataSnapshot providerEmailSnap = await FirebaseDatabase.instance.ref(
+        'public_profiles/$providerUid/email',
+      ).get();
+      if (providerEmailSnap.exists && providerEmailSnap.value is String) {
+        providerEmail = (providerEmailSnap.value as String).trim();
+      }
+    } catch (_) {}
+
+    // 3. Prepare destination writes (flat structure under reviews_requested)
+    final String destBasePath = 'users/$myUid/reviews_requested';
     
     final Map<String, dynamic> updates = <String, dynamic>{};
     int reviewsAccepted = 0;
@@ -160,25 +172,37 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
       final DataSnapshot existingSnap = await existingRef.get();
 
       if (!existingSnap.exists) {
+        // Ensure owner_email field is present for filtering
+        final Map<String, dynamic> reviewMap = Map<String, dynamic>.from(reviewData);
+        if (providerEmail.isNotEmpty && !reviewMap.containsKey('owner_email')) {
+          reviewMap['owner_email'] = providerEmail;
+        }
         // Add to updates map
-        updates['$destBasePath/$reviewKey'] = reviewData;
+        updates['$destBasePath/$reviewKey'] = reviewMap;
         reviewsAccepted++;
       }
     }
 
-    // 3. Write reviews individually (avoid permission issues with atomic update)
+    // 4. Write reviews individually (avoid permission issues with atomic update)
     for (final MapEntry<String, dynamic> entry in updates.entries) {
       final String path = entry.key;
       final dynamic value = entry.value;
       await FirebaseDatabase.instance.ref(path).set(value);
     }
 
-    // 4. Update friend record back to FRIEND status
+    // 5. Update friend record back to FRIEND status (statusCode=1)
     final String nowIso = DateTime.now().toUtc().toIso8601String();
-    await FirebaseDatabase.instance.ref('users/$myUid/friends/$providerUid/statusCode').set(1);
-    await FirebaseDatabase.instance.ref('users/$myUid/friends/$providerUid/updatedAt').set(nowIso);
+    final Map<String, dynamic> friendUpdates = <String, dynamic>{
+      'users/$myUid/friends/$providerUid/statusCode': 1,
+      'users/$myUid/friends/$providerUid/updatedAt': nowIso,
+      'users/$myUid/friends/$providerUid/providedRequestId': null,
+      'users/$myUid/friends/$providerUid/providedRqCount': null,
+      'users/$myUid/friends/$providerUid/comment': null,
+      'users/$myUid/friends/$providerUid/providedAt': null,
+    };
+    await FirebaseDatabase.instance.ref().update(friendUpdates);
 
-    // 6. Cleanup - delete source request record
+    // 6. Cleanup - delete source request record from mailbox
     await FirebaseDatabase.instance.ref(sourceBasePath).remove();
 
     // Note: The original request from provider's mailbox was already deleted

@@ -14,6 +14,7 @@ Future<int> countMatchingReviews({
   String? country,
   String? cuisine,
   String? city,
+  Set<String>? excludeKeys,
 }) async {
   // Resolve owner UID: prefer provided ownerUid, fall back to current user.
   String resolvedOwner = ownerUid;
@@ -55,7 +56,15 @@ Future<int> countMatchingReviews({
 
     final Map<dynamic, dynamic> map = Map<dynamic, dynamic>.from(snap.value as Map);
     int count = 0;
-    for (final dynamic val in map.values) {
+    for (final MapEntry<dynamic, dynamic> entry in map.entries) {
+      final String reviewKey = entry.key?.toString() ?? '';
+      final dynamic val = entry.value;
+      
+      // Skip if this review key is in the exclusion set
+      if (excludeKeys != null && reviewKey.isNotEmpty && excludeKeys.contains(reviewKey)) {
+        continue;
+      }
+      
       if (val == null || val is! Map) {
         continue;
       }

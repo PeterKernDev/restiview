@@ -147,24 +147,11 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
 
     try {
       if (myUid.isNotEmpty) {
+        // Only check our own friend stub - no need to read the other user's data
         final DataSnapshot myFriendSnap =
             await FirebaseDatabase.instance.ref('users/$myUid/friends/$mappedUid').get();
         if (myFriendSnap.exists && myFriendSnap.value != null) {
           final int? code = _extractStatusCode(myFriendSnap.value);
-          if (code == 8 || code == 9) {
-            messenger.showSnackBar(SnackBar(content: Text(AppStr.userNotAvailable)));
-            return;
-          }
-          if (code == 1) {
-            messenger.showSnackBar(SnackBar(content: Text(AppStr.alreadyFriends)));
-            return;
-          }
-        }
-
-        final DataSnapshot theirFriendSnap =
-            await FirebaseDatabase.instance.ref('users/$mappedUid/friends/$myUid').get();
-        if (theirFriendSnap.exists && theirFriendSnap.value != null) {
-          final int? code = _extractStatusCode(theirFriendSnap.value);
           if (code == 8 || code == 9) {
             messenger.showSnackBar(SnackBar(content: Text(AppStr.userNotAvailable)));
             return;
@@ -310,20 +297,6 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
           await FirebaseDatabase.instance.ref('users/$currentUserUid/friends/$recipientUid').get();
       if (myFriendSnap.exists && myFriendSnap.value != null) {
         final int? code = _extractStatusCode(myFriendSnap.value);
-        if (code == 1) {
-          messenger.showSnackBar(SnackBar(content: Text(AppStr.alreadyFriends)));
-          return;
-        }
-        if (code == 8 || code == 9) {
-          messenger.showSnackBar(SnackBar(content: Text(AppStr.userNotAvailable)));
-          return;
-        }
-      }
-
-      final DataSnapshot theirFriendSnap =
-          await FirebaseDatabase.instance.ref('users/$recipientUid/friends/$currentUserUid').get();
-      if (theirFriendSnap.exists && theirFriendSnap.value != null) {
-        final int? code = _extractStatusCode(theirFriendSnap.value);
         if (code == 1) {
           messenger.showSnackBar(SnackBar(content: Text(AppStr.alreadyFriends)));
           return;

@@ -54,6 +54,7 @@ enum FriendStatus {
   rvWants,
   rvAsked,
   provided,
+  rvDeclined,
   declined,
 }
 
@@ -75,7 +76,6 @@ class FriendEntry {
     this.review,
     this.providedRequestId,
     this.providedRqCount,
-    this.providedMessageShort,
     this.providedAt,
   });
 
@@ -103,7 +103,6 @@ class FriendEntry {
   // Provider metadata when this user has performed a provide operation
   String? providedRequestId;
   int? providedRqCount;
-  String? providedMessageShort;
   String? providedAt;
 
   FriendStatus get status {
@@ -120,6 +119,8 @@ class FriendEntry {
         return FriendStatus.rvAsked;
       case 5:
         return FriendStatus.provided;
+      case 6:
+        return FriendStatus.rvDeclined; // provider declined review request
       case 8:
         return FriendStatus.declined;
       case 9:
@@ -132,8 +133,9 @@ class FriendEntry {
   bool get isActionableByMe {
     // The current user can act when they are the recipient of a friend request (2)
     // or when they have an RV-WANTS/ASKED entry to resolve (3 or 4)
-    // or when they need to accept provided reviews (5).
-    return (fsc == 2 || fsc == 3 || fsc == 4 || fsc == 5);
+    // or when they need to accept provided reviews (5)
+    // or when they need to acknowledge a declined review request (6).
+    return (fsc == 2 || fsc == 3 || fsc == 4 || fsc == 5 || fsc == 6);
   }
 
   static int mapStringStatusToFsc(String s) {
@@ -155,6 +157,9 @@ class FriendEntry {
     }
     if (v == 'provided' || v == '5') {
       return 5;
+    }
+    if (v == 'rv-declined' || v == '6' || v.contains('rv-declined')) {
+      return 6;
     }
     if (v == 'declined' || v == '8') {
       return 8;

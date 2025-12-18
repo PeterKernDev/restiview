@@ -13,8 +13,11 @@ class SortFilterPanel extends StatefulWidget {
   final String? currentCountry;
   final String? currentCity;
   final String? currentCuisine;
+  final String? currentFriend;
   final List<Map<String, dynamic>> allReviews;
-  final void Function(String sort, String? ct, String? cy, String? cz) onApply;
+  final Map<String, String> friendsMap; // email -> username
+  final bool isRequestedMode;
+  final void Function(String sort, String? ct, String? cy, String? cz, String? fr) onApply;
   final VoidCallback onClear;
 
   const SortFilterPanel({
@@ -23,7 +26,10 @@ class SortFilterPanel extends StatefulWidget {
     required this.currentCountry,
     required this.currentCity,
     required this.currentCuisine,
+    this.currentFriend,
     required this.allReviews,
+    this.friendsMap = const {},
+    this.isRequestedMode = false,
     required this.onApply,
     required this.onClear,
   });
@@ -37,6 +43,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
   String? _selectedCT;
   String? _selectedCY;
   String? _selectedCZ;
+  String? _selectedFR;
 
   @override
   void initState() {
@@ -47,6 +54,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
         (SessionCache.defaultCountry != 'Any' ? SessionCache.defaultCountry : null);
     _selectedCY = widget.currentCity;
     _selectedCZ = widget.currentCuisine;
+    _selectedFR = widget.currentFriend;
 
     SessionCache.goodForNotifier.addListener(_onGoodForChanged);
   }
@@ -69,6 +77,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
     final country = (rawCountry == 'ALL') ? null : rawCountry;
     final city = _selectedCY;
     final cuisine = _selectedCZ;
+    final friend = _selectedFR;
     final tags = SessionCache.goodForFilter;
 
     final filtered = widget.allReviews.where((review) {
@@ -81,6 +90,9 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
       final countryMatch = country == null ||
           (review['restcountry']?.toString().toLowerCase() == country.toLowerCase());
 
+      final friendMatch = friend == null || friend == 'ALL' ||
+          (review['userEmail']?.toString() == friend);
+
       final binary = review['goodfor'] ?? '';
       final goodForMatch = tags.isEmpty ||
           tags.every((tag) {
@@ -88,7 +100,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
             return index >= 0 && index < binary.length && binary[index] == 'Y';
           });
 
-      return cityMatch && cuisineMatch && countryMatch && goodForMatch;
+      return cityMatch && cuisineMatch && countryMatch && friendMatch && goodForMatch;
     });
 
     return filtered.length;
@@ -97,17 +109,23 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
   List<String> getAvailableCountries() {
     final Set<String> countries = {};
 
-    SessionCache.indexedMatrix.forEach((ct, cityMap) {
-      if (_selectedCY != null && !cityMap.containsKey(_selectedCY!)) {
-        return;
-      }
+    for (final review in widget.allReviews) {
+      final country = review['restcountry']?.toString();
+      final city = review['restcity']?.toString();
+      final cuisine = review['restcuisine']?.toString();
 
-      final hasCuisine = _selectedCZ == null ||
-          cityMap.values.any((czSet) => czSet.contains(_selectedCZ));
-      if (hasCuisine) {
-        countries.add(ct);
+      if (country != null && country.isNotEmpty) {
+        // Filter by selected city if any
+        if (_selectedCY != null && city?.toLowerCase() != _selectedCY!.toLowerCase()) {
+          continue;
+        }
+        // Filter by selected cuisine if any
+        if (_selectedCZ != null && cuisine?.toLowerCase() != _selectedCZ!.toLowerCase()) {
+          continue;
+        }
+        countries.add(country);
       }
-    });
+    }
 
     if (_selectedCT != null && !countries.contains(_selectedCT!)) {
       countries.add(_selectedCT!);
@@ -123,18 +141,23 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
   List<String> getAvailableCities() {
     final Set<String> cities = {};
 
-    SessionCache.indexedMatrix.forEach((ct, cityMap) {
-      if (_selectedCT != null && _selectedCT != 'ALL' && ct != _selectedCT) {
-        return;
-      }
+    for (final review in widget.allReviews) {
+      final country = review['restcountry']?.toString();
+      final city = review['restcity']?.toString();
+      final cuisine = review['restcuisine']?.toString();
 
-      cityMap.forEach((cy, czSet) {
-        if (_selectedCZ != null && !czSet.contains(_selectedCZ)) {
-          return;
+      if (city != null && city.isNotEmpty) {
+        // Filter by selected country if any
+        if (_selectedCT != null && _selectedCT != 'ALL' && country?.toLowerCase() != _selectedCT!.toLowerCase()) {
+          continue;
         }
-        cities.add(cy);
-      });
-    });
+        // Filter by selected cuisine if any
+        if (_selectedCZ != null && cuisine?.toLowerCase() != _selectedCZ!.toLowerCase()) {
+          continue;
+        }
+        cities.add(city);
+      }
+    }
 
     if (_selectedCY != null && !cities.contains(_selectedCY!)) {
       cities.add(_selectedCY!);
@@ -147,18 +170,23 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
   List<String> getAvailableCuisines() {
     final Set<String> cuisines = {};
 
-    SessionCache.indexedMatrix.forEach((ct, cityMap) {
-      if (_selectedCT != null && _selectedCT != 'ALL' && ct != _selectedCT) {
-        return;
-      }
+    for (final review in widget.allReviews) {
+      final country = review['restcountry']?.toString();
+      final city = review['restcity']?.toString();
+      final cuisine = review['restcuisine']?.toString();
 
-      cityMap.forEach((cy, czSet) {
-        if (_selectedCY != null && cy != _selectedCY) {
-          return;
+      if (cuisine != null && cuisine.isNotEmpty) {
+        // Filter by selected country if any
+        if (_selectedCT != null && _selectedCT != 'ALL' && country?.toLowerCase() != _selectedCT!.toLowerCase()) {
+          continue;
         }
-        cuisines.addAll(czSet);
-      });
-    });
+        // Filter by selected city if any
+        if (_selectedCY != null && city?.toLowerCase() != _selectedCY!.toLowerCase()) {
+          continue;
+        }
+        cuisines.add(cuisine);
+      }
+    }
 
     if (_selectedCZ != null && !cuisines.contains(_selectedCZ!)) {
       cuisines.add(_selectedCZ!);
@@ -174,7 +202,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
     SessionCache.cityFilter = _selectedCY;
     SessionCache.cuisineFilter = _selectedCZ;
 
-    widget.onApply(_selectedSort, _selectedCT, _selectedCY, _selectedCZ);
+    widget.onApply(_selectedSort, _selectedCT, _selectedCY, _selectedCZ, _selectedFR);
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -187,6 +215,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
       _selectedCT = SessionCache.defaultCountry != 'Any' ? SessionCache.defaultCountry : null;
       _selectedCY = null;
       _selectedCZ = null;
+      _selectedFR = widget.isRequestedMode ? 'ALL' : null;
     });
     widget.onClear();
   }
@@ -237,6 +266,32 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
               ],
             ),
             const SizedBox(height: 12),
+            if (widget.isRequestedMode) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _selectedFR,
+                items: [
+                  const DropdownMenuItem(value: 'ALL', child: Text('ALL')),
+                  ...widget.friendsMap.entries.map((e) {
+                    final displayText = '${e.key}(${e.value})';
+                    return DropdownMenuItem(
+                      value: e.key,
+                      child: Text(displayText, style: AppFonts.standard),
+                    );
+                  }),
+                ],
+                onChanged: (val) {
+                  if (!mounted) return;
+                  setState(() {
+                    _selectedFR = val;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Friend',
+                  labelStyle: AppFonts.standard,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             DropdownButtonFormField<String>(
               initialValue: _selectedCT,
               items: ctOptions.map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppFonts.standard))).toList(),

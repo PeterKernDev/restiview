@@ -356,3 +356,268 @@ Files still needed for requester accept/decline
 ---
 
 End of heavy-copy design notes (2025-12-13).
+
+## Review Sharing Flow — Complete Implementation (2025-12-18)
+
+This section documents the full end-to-end review sharing flow including provider publish, requester accept/decline, and the comment field consolidation.
+
+### Overview
+
+The review sharing system allows users to:
+1. Request reviews from friends with specific filters (country, city, cuisine)
+2. Providers can accept and share up to 50 matching reviews
+3. Requesters can accept (import) or decline the shared reviews
+4. Providers can decline review requests with an optional message
+5. All state transitions are tracked via friend stub statusCode changes
+
+### Status Code Flow
+
+Complete status code lifecycle for review sharing:
+
+**Normal Flow:**
+- **statusCode=4** (RV-ASKED): Requester's stub after sending review request
+- **statusCode=3** (RV-WANTS): Provider's stub after receiving review request
+- **statusCode=5** (RV-PROVIDED): Requester's stub after provider shares reviews
+- **statusCode=1** (FRIEND): Both stubs return to friends status after accept/decline
+
+**Decline Flow:**
+- **statusCode=6** (RV-DECLINED): Requester's stub when provider declines request
+- **statusCode=1** (FRIEND): Provider's stub immediately after declining
+
+### Comment Field Consolidation (2025-12-18)
+
+Previously, three separate fields were used for different message types:
+- `comment` - for friend/review request comments
+- `providedMessageShort` - for provider messages when sharing reviews
+- `declinedMessage` - for provider messages when declining requests
+
+**Simplified Design:**
+Now a single `comment` field handles all message types:
+- Friend request comments (statusCode 0/2)
+- Review request comments (statusCode 3/4)
+- Provider messages when sharing reviews (statusCode 5)
+- Provider decline messages (statusCode 6)
+- **Automatically cleared** when statusCode transitions to 1 (FRIENDS)
+
+**Benefits:**
+- Single source of truth for display logic
+- Consistent behavior across all request types
+- Simplified data model (3 fields → 1 field)
+- Clear lifecycle: comment exists during request flow, cleared when returning to friends
+
+**Files Modified:**
+- `lib/signin_screen.dart` - mailbox processing writes to `comment` field
+- `lib/friends_screen.dart` - all state transitions use `comment` field, clear on accept
+- `lib/sub_friends_screen/friend_entry.dart` - removed deprecated fields from model
+- `lib/sub_friends_screen/friend_row.dart` - simplified display logic to always use `comment`
+- `lib/services/db_utils.dart` - clear `comment` in buildAcceptUpdateMap
+- `lib/services/accept_provided_reviews.dart` - clear `comment` when accepting reviews
+
+### Provider Publish Flow (IMPLEMENTED)
+
+**Entry Point:** `friends_screen.dart` _handleAccept() when statusCode=3
+
+**Process:**
+1. Count matching reviews using `review_counter.dart` with filters from review_request subnode
+2. Enforce 50-review limit (show message if more, no action if zero)
+3. Read optional provider comment from `review_request/providerComment` (set by ReviewRequestDetailsScreen)
+4. Build atomic update via `ube_provider.dart` buildProvideUpdate():
+   - Copy reviews to `users_by_email/<norm>/requests/<requestId>/reviews/*`
+   - Strip photo fields from each review
+   - Add provenance: `providedByUid`, `providedByEmail`, `providedAt`
+   - Write meta node with provider message and count
+   - Update requester stub: statusCode=5, comment=provider message
+   - Update provider stub: statusCode=1, comment=null, clear review_request
+5. Execute via performProvide() with retry logic
+
+**Storage Location:**
+```
+users_by_email/<requester_normalized>/requests/<requestId>/
+  ├─ meta: { provider-message, rqCount, providerUid, providedAt }
+  └─ reviews/
+      ├─ <reviewKey1>: { review data without photos + provenance }
+      ├─ <reviewKey2>: { ... }
+      └─ ...
+```
+
+### Requester Accept Flow (IMPLEMENTED)
+
+**Entry Point:** `friends_screen.dart` _handleAccept() when statusCode=5
+
+**Process:**
+1. Call `accept_provided_reviews.dart` acceptProvidedReviews()
+2. Read request metadata to get requestId
+3. Atomic operation:
+   - Copy reviews from `users_by_email/<norm>/requests/<requestId>/reviews/*`
+   - Write to `users/<requesterUid>/requested_reviews/<reviewKey>` (flattened, not nested)
+   - Add import timestamp and requester provenance
+   - Update requester stub: statusCode=1, comment=null, clear provider metadata
+   - Delete source `users_by_email/<norm>/requests/<requestId>`
+4. Show success message with count of accepted reviews
+
+**Key Design Decision:**
+Reviews are stored flat at `users/<uid>/requested_reviews/<reviewKey>` rather than nested under a request folder. This allows:
+- Easy querying and filtering
+- Consistent structure with user's own reviews
+- Simpler list screen implementation
+
+### Requester Decline Flow (IMPLEMENTED)
+
+**Entry Point:** `friends_screen.dart` _handleDecline() when statusCode=5
+
+**Process:**
+1. Atomic update:
+   - Delete `users_by_email/<norm>/requests/<requestId>` (entire request)
+   - Update requester stub: statusCode=1, comment=null, clear provider metadata
+2. Show confirmation message
+
+### Provider Decline Flow (IMPLEMENTED)
+
+**Entry Point:** `friends_screen.dart` _handleDecline() when statusCode=3
+
+**Process:**
+1. Read optional provider message from `review_request/providerComment`
+2. Create mailbox entry with statusCode=6 and meta containing decline message
+3. Atomic update:
+   - Write decline notification to `users_by_email/<requester_norm>/requests/<requestId>`
+   - Update provider stub: statusCode=1, comment=null, clear review_request
+4. Requester processes notification via signin_screen mailbox processing:
+   - Sets requester stub: statusCode=6, comment=decline message
+
+### Decline Acknowledgment Flow (IMPLEMENTED)
+
+**Entry Point:** `friends_screen.dart` _handleAccept() when statusCode=6
+
+**Process:**
+1. Atomic update:
+   - Update stub: statusCode=1, comment=null
+2. Show "Decline acknowledged" message
+3. Relationship returns to normal friends status
+
+### Review Request Details Screen (IMPLEMENTED)
+
+**File:** `lib/review_request_details_screen.dart`
+
+**Purpose:** Provider views incoming review request details and can add optional comment
+
+**Features:**
+- Displays requester info and filter criteria (country, city, cuisine)
+- Shows calculated matching review count
+- Provider can add single-line comment (persisted to review_request/providerComment)
+- Navigate to ReviewReviewsScreen to inspect/exclude specific reviews
+- Comment is read by provide/decline flows
+
+**Data Flow:**
+- Read from: `users/<providerUid>/friends/<requesterUid>/review_request`
+- Write to: `users/<providerUid>/friends/<requesterUid>/review_request/providerComment`
+
+### Review Exclusion System (IMPLEMENTED)
+
+**File:** `lib/review_reviews_screen.dart`
+
+**Purpose:** Provider can exclude specific reviews before sharing
+
+**Features:**
+- Lists all matching reviews based on request filters
+- Toggle switches to exclude/include each review
+- Exclusions saved to `review_request/exKeys` array
+- Excluded reviews not counted in final share
+- UI shows "To Provide: X reviews" with dynamic count
+
+**Storage:**
+```
+users/<providerUid>/friends/<requesterUid>/review_request/
+  ├─ exKeys: ["reviewKey1", "reviewKey3"]  // excluded review keys
+  └─ exCount: 2                              // count of excluded
+```
+
+### Mailbox Processing (signin_screen.dart)
+
+**Notification Types Processed:**
+
+1. **statusCode=3** (Review Request):
+   - Creates review_request structure with filters and calculated rvCount
+   - Sets comment field with request message
+   - Recipient stub → statusCode=3
+
+2. **statusCode=5** (Provided Reviews):
+   - Reads meta from mailbox
+   - Sets providedRequestId, providedRqCount, providedAt
+   - Sets comment field with provider message
+   - Recipient stub → statusCode=5
+
+3. **statusCode=6** (Declined Request):
+   - Reads decline message from meta
+   - Sets comment field with decline message
+   - Recipient stub → statusCode=6
+   - Deletes mailbox entry
+
+### Data Consistency Rules
+
+1. **Comment Lifecycle:**
+   - Set during request creation
+   - Updated during state transitions (provide/decline)
+   - Cleared when returning to statusCode=1 (FRIENDS)
+
+2. **Atomic Operations:**
+   - All state transitions use multi-path updates
+   - Friend stubs and mailbox always updated together
+   - No partial states
+
+3. **Idempotency:**
+   - clientRequestId prevents duplicate processing
+   - Request metadata includes timestamps for tracking
+   - Import operations check for existing reviews
+
+4. **50-Review Limit:**
+   - Enforced in UI (friends_screen.dart)
+   - Provider warned if more matches exist
+   - Only first 50 reviews shared
+
+### Files Involved
+
+**Core Flow:**
+- `lib/friends_screen.dart` - Main state machine for all accept/decline flows
+- `lib/signin_screen.dart` - Mailbox processing for incoming notifications
+- `lib/review_request_screen.dart` - Create review request
+- `lib/review_request_details_screen.dart` - Provider views request details
+- `lib/review_reviews_screen.dart` - Provider excludes specific reviews
+
+**Services:**
+- `lib/services/ube_provider.dart` - Build provider publish atomic update
+- `lib/services/accept_provided_reviews.dart` - Requester accept/import logic
+- `lib/services/review_counter.dart` - Count matching reviews with filters
+- `lib/services/db_utils.dart` - Friend stub updates, strip photos
+
+**Data Models:**
+- `lib/sub_friends_screen/friend_entry.dart` - Friend stub data model
+- `lib/sub_friends_screen/friend_row.dart` - Friend list item display
+
+**UI Components:**
+- `lib/sub_request_screen/filter_summary_panel.dart` - Display request filters
+- `lib/sub_friends_screen/friend_actions.dart` - Action button rendering
+
+### Future Enhancements
+
+1. **Viewing Requested Reviews (Next Stage - STAGE 6):**
+   - New screen to list reviews from `users/<uid>/requested_reviews`
+   - Filter by owner_email (provider who shared them)
+   - Read-only preview mode
+   - Navigate from "FRIEND REVIEWS" button on top_screen
+
+2. **Photo Handling:**
+   - Currently photos are stripped during share
+   - Future: consider cloud storage upload/share mechanism
+
+3. **Review Limits:**
+   - Current: 50 reviews hard limit
+   - Future: consider pagination or configurable limits
+
+4. **Analytics:**
+   - Track share/accept rates
+   - Most requested cuisines/countries
+   - Provider response times
+
+---
+
+End of review sharing flow documentation (2025-12-18).

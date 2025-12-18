@@ -253,6 +253,7 @@ class AppStr {
   static const String rvAsked = 'RV-ASKED';
   static const String rvWants = 'RV-WANTS';
   static const String rvProvidedLabel = 'RV-PROVIDED';
+  static const String rvDeclinedLabel = 'RV-DECLINED';
 
   static const String declined = 'DECLINED';
   static const String rejected = 'REJECTED';

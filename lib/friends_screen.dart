@@ -28,6 +28,7 @@ const int statusRequested = 2; // FR-WANTED (recipient)
 const int statusRvWants = 3; // RV-WANTED (recipient)
 const int statusRvAsked = 4; // RV-ASKED (requester)
 const int statusProvided = 5; // provider has shared reviews (local marker)
+const int statusRvDeclined = 6; // provider declined review request (recipient marker)
 const int statusDeclined = 8;
 const int statusUnknown = 9;
 const int statusPendingDelete = 99;
@@ -81,6 +82,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends');
     _sub = ref.onValue.listen((DatabaseEvent event) async {
+      debugPrint('[_subscribeToFriends] onValue callback fired for myUid=$myUid');
       final DataSnapshot snap = event.snapshot;
       final Map<String, FriendEntry> nextMap = <String, FriendEntry>{};
       final Map<String, Map<dynamic, dynamic>> rawFriendVmaps = <String, Map<dynamic, dynamic>>{};
@@ -105,6 +107,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
           String? rvCountLastCheckedAt;
           ReviewData? reviewData;
           ReviewRequestData? reviewRequestData;
+          String? providedRequestId;
+          int? providedRqCount;
+          String? providedAt;
 
           try {
             if (val is int) {
@@ -144,11 +149,33 @@ class _FriendsScreenState extends State<FriendsScreen> {
               } else if (vmap['accepted'] is int) {
                 acceptedFlag = (vmap['accepted'] as int) == 1;
               }
-              if (vmap['rvCount'] is int) {
+              // Read rvCount - prioritize review_request subnode over top-level field
+              if (vmap['review_request'] is Map) {
+                final Map<dynamic, dynamic> rrMapTemp = Map<dynamic, dynamic>.from(vmap['review_request'] as Map);
+                if (rrMapTemp['rvCount'] is int) {
+                  rvCount = rrMapTemp['rvCount'] as int;
+                }
+                if (rrMapTemp['rvCountLastCheckedAt'] is String && (rrMapTemp['rvCountLastCheckedAt'] as String).isNotEmpty) {
+                  rvCountLastCheckedAt = rrMapTemp['rvCountLastCheckedAt'] as String;
+                }
+              }
+              // Fallback to top-level rvCount if not in review_request
+              if (rvCount == null && vmap['rvCount'] is int) {
                 rvCount = vmap['rvCount'] as int;
               }
-              if (vmap['rvCountLastCheckedAt'] is String && (vmap['rvCountLastCheckedAt'] as String).isNotEmpty) {
+              if (rvCountLastCheckedAt == null && vmap['rvCountLastCheckedAt'] is String && (vmap['rvCountLastCheckedAt'] as String).isNotEmpty) {
                 rvCountLastCheckedAt = vmap['rvCountLastCheckedAt'] as String;
+              }
+              
+              // Parse provider metadata (for RV-PROVIDED status)
+              if (vmap['providedRequestId'] is String && (vmap['providedRequestId'] as String).isNotEmpty) {
+                providedRequestId = vmap['providedRequestId'] as String;
+              }
+              if (vmap['providedRqCount'] is int) {
+                providedRqCount = vmap['providedRqCount'] as int;
+              }
+              if (vmap['providedAt'] is String && (vmap['providedAt'] as String).isNotEmpty) {
+                providedAt = vmap['providedAt'] as String;
               }
 
               try {
@@ -243,6 +270,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
             rvCountLastCheckedAt: rvCountLastCheckedAt,
             reviewRequest: reviewRequestData,
             review: reviewData,
+            providedRequestId: providedRequestId,
+            providedRqCount: providedRqCount,
+            providedAt: providedAt,
           );
         });
       }
@@ -270,6 +300,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         }
       }
 
+      debugPrint('[_subscribeToFriends] About to call _resolveMissingRvCounts. Total friends loaded: ${_friendByUid.length}');
       _resolveMissingRvCounts(myUid, rawFriendVmaps);
       _loadProvidedReviewsMetadata(myUid);
     }, onError: (Object err, StackTrace? st) {
@@ -283,12 +314,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   void _resolveMissingRvCounts(String myUid, Map<String, Map<dynamic, dynamic>> rawFriendVmaps) {
+    debugPrint('[_resolveMissingRvCounts] Called for myUid=$myUid');
     const int maxConcurrent = 3;
     final List<String> queue = <String>[];
 
     for (final MapEntry<String, FriendEntry> e in _friendByUid.entries) {
       final String friendUid = e.key;
       final FriendEntry fe = e.value;
+      
+      debugPrint('[_resolveMissingRvCounts] Checking friend $friendUid with fsc=${fe.fsc}');
 
       // Only attempt to resolve when the local stub is recipient-side RV-WANTS.
       // Do NOT attempt when the status is requester-side RV-ASKED.
@@ -296,36 +330,54 @@ class _FriendsScreenState extends State<FriendsScreen> {
         continue;
       }
 
+      debugPrint('[_resolveMissingRvCounts] Friend $friendUid has RV-WANTS status');
+      
       final int? cur = fe.review?.rvCount ?? fe.rvCount;
       final String? lastChecked = fe.rvCountLastCheckedAt ?? fe.review?.updatedAt;
+      
+      debugPrint('[_resolveMissingRvCounts] Current rvCount=$cur, lastChecked=$lastChecked');
+      
       bool needs = false;
       if (cur == null) {
         needs = true;
+        debugPrint('[_resolveMissingRvCounts] Needs update: cur is null');
       } else if (cur == -1) {
         needs = true;
+        debugPrint('[_resolveMissingRvCounts] Needs update: cur is -1');
       } else if (lastChecked != null) {
         try {
           final DateTime then = DateTime.parse(lastChecked).toUtc();
           final DateTime now = DateTime.now().toUtc();
-          if (now.difference(then).inSeconds >= rvCountTtlSeconds) {
+          final int ageSec = now.difference(then).inSeconds;
+          debugPrint('[_resolveMissingRvCounts] Age: $ageSec seconds, TTL: $rvCountTtlSeconds seconds');
+          if (ageSec >= rvCountTtlSeconds) {
             needs = true;
+            debugPrint('[_resolveMissingRvCounts] Needs update: age exceeds TTL');
           }
         } catch (_) {
           needs = true;
+          debugPrint('[_resolveMissingRvCounts] Needs update: lastChecked parse failed');
         }
       } else {
         needs = true;
+        debugPrint('[_resolveMissingRvCounts] Needs update: lastChecked is null');
       }
 
       if (needs) {
+        debugPrint('[_resolveMissingRvCounts] QUEUED friend $friendUid for count resolution');
         queue.add(friendUid);
+      } else {
+        debugPrint('[_resolveMissingRvCounts] SKIPPED friend $friendUid - does not need update');
       }
     }
 
     if (queue.isEmpty) {
+      debugPrint('[_resolveMissingRvCounts] Queue is empty, nothing to resolve');
       return;
     }
 
+    debugPrint('[_resolveMissingRvCounts] Queue has ${queue.length} friends to resolve');
+    
     int inFlight = 0;
     int idx = 0;
 
@@ -350,7 +402,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _resolveOneRvCount(String myUid, String friendUid, Map<dynamic, dynamic>? vmap) async {
+    debugPrint('[_resolveOneRvCount] START for friendUid=$friendUid, vmap=${vmap != null ? "present" : "null"}');
+    
     if (vmap == null) {
+      debugPrint('[_resolveOneRvCount] EXIT: vmap is null');
       return;
     }
 
@@ -362,6 +417,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final DataSnapshot reviewRequestSnap = await reviewRequestRef.get();
       
       if (!reviewRequestSnap.exists || reviewRequestSnap.value is! Map) {
+        debugPrint('[_resolveOneRvCount] EXIT: review_request not found or not a Map');
         return;
       }
 
@@ -373,6 +429,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       String? city = (requestData['filterCity'] is String) ? requestData['filterCity'] as String : null;
 
       if (country == null || country.trim().isEmpty) {
+        debugPrint('[_resolveOneRvCount] EXIT: country filter is null or empty');
         return;
       }
       
@@ -380,23 +437,38 @@ class _FriendsScreenState extends State<FriendsScreen> {
       if (cuisine == 'none') cuisine = null;
       if (city == 'none') city = null;
 
+      // Read exKeys BEFORE counting so we can exclude already-provided reviews
+      final Set<String> exKeysSet = <String>{};
+      if (requestData['exKeys'] is List) {
+        for (final dynamic item in requestData['exKeys'] as List) {
+          if (item is String) {
+            exKeysSet.add(item);
+          }
+        }
+      }
+      
       final String myUidNow = FirebaseAuth.instance.currentUser?.uid ?? '';
-      final int found = await countMatchingReviews(ownerUid: myUidNow, country: country, cuisine: cuisine, city: city);
+      
+      debugPrint('[_resolveOneRvCount] Calculating count for friendUid=$friendUid');
+      debugPrint('[_resolveOneRvCount] Filters: country="$country", cuisine="$cuisine", city="$city"');
+      debugPrint('[_resolveOneRvCount] exKeysSet size: ${exKeysSet.length}');
+      
+      final int found = await countMatchingReviews(
+        ownerUid: myUidNow, 
+        country: country, 
+        cuisine: cuisine, 
+        city: city,
+        excludeKeys: exKeysSet.isNotEmpty ? exKeysSet : null,
+      );
+
+      debugPrint('[_resolveOneRvCount] Result: found=$found reviews');
 
       if (found < 0) {
         return;
       }
 
-      // Read current exCount and exKeys from review_request
+      // exKeys already read above, just get exCount
       final int exCount = (requestData['exCount'] is int) ? requestData['exCount'] as int : 0;
-      final List<String> exKeys = <String>[];
-      if (requestData['exKeys'] is List) {
-        for (final dynamic item in requestData['exKeys'] as List) {
-          if (item is String) {
-            exKeys.add(item);
-          }
-        }
-      }
 
       final String nowIso = DateTime.now().toUtc().toIso8601String();
 
@@ -435,7 +507,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           exCount: exCount,
           fromEmail: local.reviewRequest!.fromEmail,
           fromDisplayName: local.reviewRequest!.fromDisplayName,
-          exKeys: exKeys.isNotEmpty ? exKeys : null,
+          exKeys: exKeysSet.isNotEmpty ? exKeysSet.toList() : null,
         );
       }
 
@@ -477,7 +549,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         if (friend != null) {
           friend.providedRequestId = data['requestId'] as String?;
           friend.providedRqCount = data['rqCount'] as int?;
-          friend.providedMessageShort = data['providerMessage'] as String?;
+          friend.comment = data['providerMessage'] as String?;
           updated = true;
         }
       }
@@ -523,7 +595,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
     
     // Check if status code is actionable
-    final bool isActionableStatus = f.fsc == statusRequested || f.fsc == statusRequesterSent || f.fsc == statusRvAsked || f.fsc == statusRvWants || f.fsc == statusProvided;
+    final bool isActionableStatus = f.fsc == statusRequested || f.fsc == statusRequesterSent || f.fsc == statusRvAsked || f.fsc == statusRvWants || f.fsc == statusProvided || f.fsc == statusRvDeclined;
     
     // If status code is 1 (accepted with no pending request), not actionable
     if (f.fsc == statusAccepted) {
@@ -646,6 +718,44 @@ class _FriendsScreenState extends State<FriendsScreen> {
       _accepting = true;
     });
     
+    // If this is accepting a declined review request notification (statusCode=6), reset to FRIEND
+    if (selected.fsc == statusRvDeclined) {
+      try {
+        final String nowIso = DateTime.now().toUtc().toIso8601String();
+        final Map<String, dynamic> updates = <String, dynamic>{
+          'users/$me/friends/${selected.uid}/statusCode': 1,
+          'users/$me/friends/${selected.uid}/comment': null,
+          'users/$me/friends/${selected.uid}/updatedAt': nowIso,
+        };
+        
+        await FirebaseDatabase.instance.ref().update(updates);
+        
+        if (!mounted) return;
+        
+        setState(() {
+          selected.fsc = statusAccepted;
+          selected.accepted = true;
+          selected.comment = null;
+          _selectedUid = null;
+          _accepting = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Decline acknowledged')),
+        );
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _accepting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${AppStr.requestSendFailed}: $e')),
+          );
+        }
+      }
+      return;
+    }
+    
     // If this is accepting provided reviews (statusCode=5), relocate reviews and reset status
     if (selected.fsc == statusProvided) {
       try {
@@ -674,7 +784,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             selected.accepted = true;
             selected.providedRequestId = null;
             selected.providedRqCount = null;
-            selected.providedMessageShort = null;
+            selected.comment = null;
             selected.providedAt = null;
             _selectedUid = null;
             _accepting = false;
@@ -909,33 +1019,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
             selected.review = null;
             selected.providedRequestId = requestId;
             selected.providedRqCount = providedCount;
-            selected.providedMessageShort = dialogResult;
+            selected.comment = dialogResult;
             selected.providedAt = nowIso;
             _selectedUid = null;
             _accepting = false;
           });
-            // Best-effort: remove the original mailbox request so it no longer appears in the recipient's mailbox
-            try {
-              final String? norm = selected.mailboxNormalized;
-              final String? reqId = selected.mailboxReqId;
-              if (norm != null && norm.isNotEmpty && reqId != null && reqId.isNotEmpty) {
-                final String mailboxPath = 'users_by_email/$norm/requests/$reqId';
-                final Map<String, dynamic> del = <String, dynamic>{};
-                del[mailboxPath] = null;
-                try {
-                  await rootRef.update(del);
-                } catch (_) {
-                  // fallback to single-path remove
-                  try {
-                    await rootRef.child(mailboxPath).remove();
-                  } catch (e) {
-                    // Silently handle error
-                  }
-                }
-              }
-            } catch (e) {
-              // Silently handle error
-            }
+          // Note: The provider cannot delete the requester's mailbox entry due to permission rules.
+          // The requester will handle their own mailbox cleanup when they accept the provided reviews.
           if (!mounted) return;
           final String infoMsg = '${AppStr.accept} — provided $providedCount review(s) (reqId=${requestId ?? 'unknown'})';
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(infoMsg)));
@@ -1040,15 +1130,187 @@ class _FriendsScreenState extends State<FriendsScreen> {
       _declining = true;
     });
 
-    // If this is a review request (recipient wants reviews), run the stub handler
-    if (selected.fsc == statusRvWants) {
-      // TODO: implement real decline-review-request flow. For now just debug-print.
-      debugPrint('Stub: Decline review request for uid=${selected.uid}');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Decline review request (stub)')));
+    // If this is declining provided reviews (statusCode=5), warn and delete
+    if (selected.fsc == statusProvided) {
+      // Show confirmation dialog
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext ctx) {
+          return AlertDialog(
+            title: const Text('Decline Provided Reviews'),
+            content: const Text(
+              'This will permanently delete the provided reviews. This action cannot be undone.\n\nDo you want to decline these reviews?',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop(false);
+                },
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop(true);
+                },
+                child: const Text('Decline', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true) {
+        // User cancelled
         setState(() {
           _declining = false;
-          _selectedUid = null;
+        });
+        return;
+      }
+
+      // User confirmed decline - proceed with deletion
+      bool success = false;
+      String snackbarMsg = AppStr.requestSendFailed;
+      
+      try {
+        final String myEmail = currentUser?.email ?? '';
+        if (myEmail.isEmpty) {
+          throw Exception('User email not available');
+        }
+        
+        // Get the mailbox request ID
+        final String? requestId = selected.providedRequestId;
+        if (requestId == null || requestId.isEmpty) {
+          throw Exception('Request ID not available');
+        }
+        
+        // Normalize my email for mailbox path
+        final String normalizedMailbox = normalizeEmailForPath(myEmail);
+        
+        final String nowIso = DateTime.now().toUtc().toIso8601String();
+        final Map<String, dynamic> updates = <String, dynamic>{};
+        
+        // Delete the request record in my mailbox (includes meta and reviews subnodes)
+        final String mailboxRequestPath = 'users_by_email/$normalizedMailbox/requests/$requestId';
+        updates[mailboxRequestPath] = null;
+        
+        // Reset my friend stub to status code 1 (FRIEND)
+        updates['users/$me/friends/${selected.uid}/statusCode'] = 1;
+        updates['users/$me/friends/${selected.uid}/updatedAt'] = nowIso;
+        
+        await FirebaseDatabase.instance.ref().update(updates);
+        success = true;
+        snackbarMsg = 'Provided reviews declined';
+      } catch (e) {
+        snackbarMsg = '${AppStr.requestSendFailed}: $e';
+      }
+      
+      if (!mounted) {
+        return;
+      }
+      
+      if (success) {
+        final FriendEntry? reloaded = _friendByUid[_selectedUid];
+        if (reloaded != null) {
+          setState(() {
+            reloaded.fsc = statusAccepted;
+            reloaded.accepted = true;
+            reloaded.providedRequestId = null;
+            reloaded.providedRqCount = null;
+            reloaded.comment = null;
+            reloaded.providedAt = null;
+            _selectedUid = null;
+          });
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snackbarMsg)));
+        setState(() {
+          _declining = false;
+        });
+      }
+      return;
+    }
+
+    // If this is a review request (recipient wants reviews), decline it
+    if (selected.fsc == statusRvWants) {
+      bool success = false;
+      String snackbarMsg = AppStr.requestSendFailed;
+      
+      try {
+        // Get requester's email for the mailbox
+        String requesterEmail = selected.email;
+        if (requesterEmail.isEmpty) {
+          throw Exception('Requester email not available');
+        }
+        
+        // Normalize the requester's email for mailbox path
+        final String normalizedMailbox = normalizeEmailForPath(requesterEmail);
+        
+        // Generate a request ID
+        final String requestId = DateTime.now().millisecondsSinceEpoch.toString();
+        final String nowIso = DateTime.now().toUtc().toIso8601String();
+        
+        // Read provider comment from friend stub (set on review_request_details_screen)
+        String providerMessage = '';
+        try {
+          final String pcPath = 'users/$me/friends/${selected.uid}/review_request/providerComment';
+          final DataSnapshot pcSnap = await FirebaseDatabase.instance.ref(pcPath).get();
+          if (pcSnap.exists && pcSnap.value is String && (pcSnap.value as String).trim().isNotEmpty) {
+            providerMessage = (pcSnap.value as String).trim();
+          }
+        } catch (_) {
+          // If can't read, use empty string
+        }
+        
+        // Build atomic update
+        final Map<String, dynamic> updates = <String, dynamic>{};
+        
+        // Create request record in requester's users_by_email mailbox with status code 6
+        final String requestBasePath = 'users_by_email/$normalizedMailbox/requests/$requestId';
+        updates['$requestBasePath/fromUid'] = me;
+        updates['$requestBasePath/statusCode'] = 6;
+        updates['$requestBasePath/createdAt'] = nowIso;
+        updates['$requestBasePath/clientRequestId'] = requestId;
+        updates['$requestBasePath/type'] = 'review_declined';
+        updates['$requestBasePath/meta'] = <String, dynamic>{
+          'provider-message': providerMessage,
+          'providerUid': me,
+          'declinedAt': nowIso,
+        };
+        
+        // Reset provider's (my) friend stub to status code 1 (FRIEND)
+        updates['users/$me/friends/${selected.uid}/statusCode'] = 1;
+        updates['users/$me/friends/${selected.uid}/review_request'] = null;
+        updates['users/$me/friends/${selected.uid}/comment'] = null;
+        updates['users/$me/friends/${selected.uid}/updatedAt'] = nowIso;
+        
+        await FirebaseDatabase.instance.ref().update(updates);
+        success = true;
+        snackbarMsg = 'Review request declined';
+      } catch (e) {
+        snackbarMsg = '${AppStr.requestSendFailed}: $e';
+      }
+      
+      if (!mounted) {
+        return;
+      }
+      
+      if (success) {
+        final FriendEntry? reloaded = _friendByUid[_selectedUid];
+        if (reloaded != null) {
+          setState(() {
+            reloaded.fsc = statusAccepted;
+            reloaded.reviewRequest = null;
+            _selectedUid = null;
+          });
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snackbarMsg)));
+        setState(() {
+          _declining = false;
         });
       }
       return;
@@ -1121,6 +1383,39 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
     final FriendEntry? selected = _friendByUid[_selectedUid];
     if (selected == null) {
+      return;
+    }
+
+    // Show confirmation dialog
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Friend', style: AppFonts.bold),
+          content: Text(
+            'Are you sure you want to delete this friend relationship?',
+            style: AppFonts.standard,
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: Text('No', style: AppFonts.standard),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: Text('Yes', style: AppFonts.standard),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If user didn't confirm, return without deleting
+    if (confirmed != true) {
       return;
     }
 
@@ -1377,7 +1672,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget build(BuildContext context) {
     final int accepted = _acceptedCount();
     final bool acceptEnabled = _selectedIsActionableByStatus() && !_accepting && !_declining && !_deleting;
-    final bool declineEnabled = _selectedIsActionableByStatus() && !_accepting && !_declining && !_deleting;
+    
+    // Decline button should not be active for RV-DECLINED status (no concept of declining a decline)
+    bool declineEnabled = _selectedIsActionableByStatus() && !_accepting && !_declining && !_deleting;
+    if (_selectedUid != null) {
+      final FriendEntry? selected = _friendByUid[_selectedUid];
+      if (selected != null && selected.fsc == statusRvDeclined) {
+        declineEnabled = false;
+      }
+    }
+    
     final bool deleteEnabled = _selectedIsDeletable && !_deleting && !_accepting && !_declining;
 
     String addButtonLabel;

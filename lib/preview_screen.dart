@@ -1165,6 +1165,29 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           ),
                         ],
                       ),
+                    )
+                  else if (widget.mode == 'requested')
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 200,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              // Return to requested reviews list
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.ochre,
+                              foregroundColor: Colors.white,
+                              textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              minimumSize: const Size(0, 44),
+                            ),
+                            child: const Text('Back', overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ),
                     ),
                 ],
               ),

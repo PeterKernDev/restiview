@@ -522,7 +522,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
               ),
             ),
 
-            // Bottom action buttons: Back (ochre), Accept (green), Reject (red), Review (orange)
+            // Bottom action buttons: Back (ochre), Request (green)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               color: Colors.transparent,
@@ -557,7 +557,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
                     ),
                   ),
 
-                  // Accept - green (sends request)
+                  // Request - green (sends request)
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6.0),
@@ -575,60 +575,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
                           textStyle: AppFonts.bold,
                         ),
                         child: Text(
-                          AppStr.acceptLabel,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: AppFonts.bold.copyWith(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Reject - red (cancel)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (!mounted) {
-                            return;
-                          }
-                          Navigator.pop(context, false);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          minimumSize: const Size(0, 44),
-                          textStyle: AppFonts.bold,
-                        ),
-                        child: Text(
-                          AppStr.declineLabel,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: AppFonts.bold.copyWith(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Review - orange (disabled placeholder to match requested color)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                      child: ElevatedButton(
-                        onPressed: null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          minimumSize: const Size(0, 44),
-                          textStyle: AppFonts.bold,
-                        ),
-                        child: Text(
-                          AppStr.reviewLabel,
+                          'REQUEST',
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                           softWrap: false,

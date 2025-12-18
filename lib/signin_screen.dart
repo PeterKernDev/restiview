@@ -21,6 +21,7 @@ import 'services/session_cache.dart';
 import 'services/startup_tasks.dart';
 import 'services/db_utils.dart'; // normalizeEmailForPath helper
 import 'services/user_setup.dart'; // ensureUserSetup helper
+import 'services/review_counter.dart'; // countMatchingReviews helper
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
@@ -531,12 +532,36 @@ class _SignInScreenState extends State<SignInScreen> {
             final String filterCuisine = m['cuisine']?.toString() ?? '';
             final String filterCity = m['city']?.toString() ?? '';
             
-            // Create review_request structure
+            // Calculate review count for this request
+            int rvCount = 0;
+            if (filterCountry.isNotEmpty) {
+              // Convert 'none' to null for filtering
+              String? cuisineFilter = (filterCuisine.isEmpty || filterCuisine == 'none') ? null : filterCuisine;
+              String? cityFilter = (filterCity.isEmpty || filterCity == 'none') ? null : filterCity;
+              
+              try {
+                rvCount = await countMatchingReviews(
+                  ownerUid: myUid,
+                  country: filterCountry,
+                  cuisine: cuisineFilter,
+                  city: cityFilter,
+                  excludeKeys: null, // No exclusions for initial request
+                );
+              } catch (e) {
+                rvCount = -1; // -1 indicates calculation failed
+              }
+            }
+            
+            final String nowIso = DateTime.now().toUtc().toIso8601String();
+            
+            // Create review_request structure with calculated count
             final Map<String, dynamic> reviewRequestData = <String, dynamic>{
               'requestComment': comment,
               'filterCountry': filterCountry,
               'filterCity': filterCity.isEmpty ? 'none' : filterCity,
               'filterCuisine': filterCuisine.isEmpty ? 'none' : filterCuisine,
+              'rvCount': rvCount,
+              'rvCountLastCheckedAt': nowIso,
               'exCount': 0,
               'fromEmail': fromEmail,
               'fromDisplayName': fromDisplayName,
@@ -547,7 +572,62 @@ class _SignInScreenState extends State<SignInScreen> {
             // This preserves existing friend data while adding the review request
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 3,
+              'users/$myUid/friends/$fromUid/comment': comment, // Store request message at top level for display
               'users/$myUid/friends/$fromUid/review_request': reviewRequestData,
+              'users/$myUid/friends/$fromUid/rvCount': rvCount,
+              'users/$myUid/friends/$fromUid/rvCountLastCheckedAt': nowIso,
+              'users/$myUid/friends/$fromUid/updatedAt': nowIso,
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else if (statusCode == 5) {
+            // This is a provided reviews notification (RV-PROVIDED)
+            // Extract metadata from mailbox record and store on friend stub
+            int rqCount = 0;
+            String providerMessage = '';
+            String providedAt = '';
+            
+            try {
+              if (m['meta'] is Map) {
+                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(m['meta'] as Map);
+                rqCount = (meta['rqCount'] is int) ? meta['rqCount'] as int : int.tryParse(meta['rqCount']?.toString() ?? '') ?? 0;
+                providerMessage = meta['provider-message']?.toString() ?? '';
+                providedAt = meta['providedAt']?.toString() ?? '';
+              }
+            } catch (_) {
+              // Use defaults if parsing fails
+            }
+            
+            // Update friend stub to statusCode=5 with metadata from mailbox
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 5,
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users/$myUid/friends/$fromUid/mailboxReqId': reqId,
+              'users/$myUid/friends/$fromUid/mailboxNormalized': normalizedMailbox,
+              'users/$myUid/friends/$fromUid/providedRequestId': reqId,
+              'users/$myUid/friends/$fromUid/providedRqCount': rqCount,
+              'users/$myUid/friends/$fromUid/comment': providerMessage,
+              'users/$myUid/friends/$fromUid/providedAt': providedAt,
+            };
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else if (statusCode == 6) {
+            // This is a declined review request notification (RV-DECLINED)
+            // Extract metadata from mailbox record and store on friend stub
+            String providerMessage = '';
+            
+            try {
+              if (m['meta'] is Map) {
+                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(m['meta'] as Map);
+                providerMessage = meta['provider-message']?.toString() ?? '';
+              }
+            } catch (_) {
+              // Use defaults if parsing fails
+            }
+            
+            // Update friend stub to statusCode=6 with declined message
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 6,
+              'users/$myUid/friends/$fromUid/comment': providerMessage,
               'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
               'users_by_email/$normalizedMailbox/requests/$reqId': null,
             };

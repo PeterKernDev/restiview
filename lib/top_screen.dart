@@ -27,11 +27,33 @@ class TopScreen extends StatefulWidget {
 class _TopScreenState extends State<TopScreen> {
   bool _isLoading = false;
   bool _acceptsFriends = true; // whether this user accepts friends (controls button enabled)
+  bool _hasRequestedReviews = false; // whether user has any requested reviews
 
   @override
   void initState() {
     super.initState();
     _loadAcceptsFriends();
+    _checkRequestedReviews();
+  }
+
+  Future<void> _checkRequestedReviews() async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      final DatabaseReference requestedRef = FirebaseDatabase.instance.ref('users/$userId/reviews_requested');
+      final DataSnapshot snapshot = await requestedRef.get();
+      
+      if (mounted) {
+        setState(() {
+          _hasRequestedReviews = snapshot.exists && snapshot.value is Map && (snapshot.value as Map).isNotEmpty;
+        });
+      }
+    } catch (e) {
+      // Silently handle error - button just won't show
+    }
   }
 
   Future<void> _loadAcceptsFriends() async {
@@ -98,6 +120,13 @@ class _TopScreenState extends State<TopScreen> {
     Navigator.pushReplacementNamed(context, '/');
   }
 
+  void _handleViewRequestedReviews() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ReviewListScreen(mode: 'requested')),
+    );
+  }
+
   Future<void> _handleViewReviews() async {
     if (!mounted) {
       return;
@@ -128,7 +157,7 @@ class _TopScreenState extends State<TopScreen> {
         if (snapshot.exists && snapshot.value is Map) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ReviewListScreen()),
+            MaterialPageRoute(builder: (_) => const ReviewListScreen(mode: 'list')),
           );
         } else {
           showDialog(
@@ -218,7 +247,7 @@ class _TopScreenState extends State<TopScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const SizedBox(height: 96),
+                  const SizedBox(height: 48),
                   Text(
                     AppStr.restaurantReviews,
                     style: AppFonts.bold.copyWith(fontSize: 24, color: AppColors.red),
@@ -252,6 +281,19 @@ class _TopScreenState extends State<TopScreen> {
                           )
                         : Text(AppStr.viewReviews, style: AppFonts.standard),
                   ),
+                  if (_hasRequestedReviews) ...<Widget>[
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.ochre,
+                        foregroundColor: Colors.black87,
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _handleViewRequestedReviews,
+                      child: Text('FRIEND REVIEWS', style: AppFonts.standard),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(

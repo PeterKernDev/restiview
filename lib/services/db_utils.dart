@@ -29,7 +29,8 @@ String safePushKey(DatabaseReference ref) => ref.push().key ?? DateTime.now().mi
 /// removed so that objects copied into other users' trees do not include
 /// local file paths or large binary blobs. This intentionally strips keys like
 /// `photos`, `photoPath0..N`, `photoPaths` and any key that begins with
-/// `photo`.
+/// `photo`. Also recursively strips photo paths from nested structures like
+/// detail items (details_cocktails, details_starters, etc.).
 Map<String, dynamic> stripPhotosFromReview(Map<dynamic, dynamic> review) {
   final Map<String, dynamic> out = <String, dynamic>{};
   try {
@@ -40,10 +41,36 @@ Map<String, dynamic> stripPhotosFromReview(Map<dynamic, dynamic> review) {
       }
       final String lower = key.toLowerCase();
       if (lower == 'photos' || lower == 'photopaths' || lower == 'photopath' || lower.startsWith('photopath') || lower.startsWith('photo')) {
-        // skip photo-related keys
+        // skip photo-related keys at top level
         return;
       }
-      out[key] = v;
+      
+      // Recursively process nested structures (e.g., details_cocktails, details_starters)
+      if (v is List) {
+        final List<dynamic> cleanedList = [];
+        for (final item in v) {
+          if (item is Map) {
+            // Strip photoPath from each detail item
+            final Map<String, dynamic> cleanedItem = {};
+            item.forEach((dynamic itemKey, dynamic itemValue) {
+              final String itemKeyStr = itemKey?.toString() ?? '';
+              final String itemKeyLower = itemKeyStr.toLowerCase();
+              // Skip any photo-related keys in detail items
+              if (itemKeyLower != 'photopath' && !itemKeyLower.startsWith('photo')) {
+                cleanedItem[itemKeyStr] = itemValue;
+              }
+            });
+            if (cleanedItem.isNotEmpty) {
+              cleanedList.add(cleanedItem);
+            }
+          } else {
+            cleanedList.add(item);
+          }
+        }
+        out[key] = cleanedList;
+      } else {
+        out[key] = v;
+      }
     });
   } catch (_) {
     // on unexpected structure, return an empty map rather than crash
@@ -228,6 +255,9 @@ Future<Map<String, dynamic>> buildAcceptUpdateMap({
     statusCode: 1,
     acceptedFlag: true,
   ));
+  
+  // Clear comment field when transitioning to accepted status
+  updates['users/$actorUid/friends/$friendUid/comment'] = null;
 
   // Create a mailbox entry for the friend to notify them of acceptance
   // The friend will update their own stub when they sign in

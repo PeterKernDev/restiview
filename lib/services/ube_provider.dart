@@ -1,6 +1,7 @@
 // lib/services/ube_provider.dart
 // Helper service to build and perform provider-side "heavy copy" (UBE).
 import 'package:firebase_database/firebase_database.dart';
+// import 'package:flutter/rendering.dart';
 import 'db_utils.dart';
 
 /// Maximum number of reviews to include in a single provide operation (strictly enforced).
@@ -56,21 +57,24 @@ Future<Map<String, dynamic>> buildProvideUpdate({
     norm = safePushKey(rootRef.child('users_by_email')).toString();
   }
 
-  // Use a push key under the users_by_email/<norm>/requests (standardized location)
-  final String requestId = safePushKey(rootRef.child('users_by_email').child(norm).child('requests'));
+  // Use a client request ID based on timestamp for the requests collection
+  final String clientRequestId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String requestId = clientRequestId;
 
-  final String metaPath = 'users_by_email/$norm/requests/$requestId/meta';
-  final String reviewsBase = 'users_by_email/$norm/requests/$requestId/reviews';
+  final String requestBasePath = 'users_by_email/$norm/requests/$requestId';
+  final String metaPath = '$requestBasePath/meta';
+  final String reviewsBase = '$requestBasePath/reviews';
 
   final Map<String, dynamic> updates = <String, dynamic>{};
 
-  // Top-level request record fields (standardized)
-  updates['users_by_email/$norm/requests/$requestId/statusCode'] = 5; // RV-PROVIDED
-  updates['users_by_email/$norm/requests/$requestId/type'] = 'review_provided';
-  updates['users_by_email/$norm/requests/$requestId/fromUid'] = providerUid;
-  updates['users_by_email/$norm/requests/$requestId/createdAt'] = nowIso;
+  // Top-level request fields (required by security rules)
+  updates['$requestBasePath/fromUid'] = providerUid;
+  updates['$requestBasePath/statusCode'] = 5; // RV-PROVIDED
+  updates['$requestBasePath/createdAt'] = nowIso;
+  updates['$requestBasePath/clientRequestId'] = clientRequestId;
+  updates['$requestBasePath/type'] = 'review_provided';
 
-  // Meta: minimal fields as requested
+  // Meta: provider details
   updates[metaPath] = <String, dynamic>{
     'provider-message': (providerCommentShort.isNotEmpty) ? providerCommentShort : '',
     'rqCount': reviewsToProvide.length,
@@ -101,12 +105,8 @@ Future<Map<String, dynamic>> buildProvideUpdate({
   updates['$reviewsBase/$destKey'] = clean;
   }
 
-  // Friend stub updates: set requester-side friend stub to RV-PROVIDED (5)
-  // and set provider-side friend stub to accepted (1)
-  final String requesterFriendPathBase = 'users/$requesterUid/friends/$providerUid';
-  updates['$requesterFriendPathBase/statusCode'] = 5; // RV-PROVIDED
-  updates['$requesterFriendPathBase/updatedAt'] = nowIso;
-
+  // Friend stub update: set provider-side friend stub to accepted (1)
+  // Note: requester will update their own stub when they process the mailbox notification
   final String providerFriendPathBase = 'users/$providerUid/friends/$requesterUid';
   updates['$providerFriendPathBase/statusCode'] = 1; // FRIEND / accepted
   updates['$providerFriendPathBase/updatedAt'] = nowIso;

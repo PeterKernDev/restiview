@@ -47,6 +47,8 @@ class FriendRow extends StatelessWidget {
         return AppStr.friendLabel;
       case FriendStatus.provided:
         return AppStr.rvProvidedLabel;
+      case FriendStatus.rvDeclined:
+        return AppStr.rvDeclinedLabel;
       case FriendStatus.requested:
         return AppStr.frWantedLabel;
       case FriendStatus.recipientPending:
@@ -180,6 +182,8 @@ class FriendRow extends StatelessWidget {
         return AppColors.darkGreen;
       case FriendStatus.provided:
         return AppColors.blueAccent; // Use same color as review requests
+      case FriendStatus.rvDeclined:
+        return AppColors.red; // Use red to indicate declined
       case FriendStatus.requested:
       case FriendStatus.recipientPending:
         return Colors.orange;
@@ -203,19 +207,16 @@ class FriendRow extends StatelessWidget {
     //  - there is a non-empty comment, AND
     //  - the relationship is not accepted or declined (we hide comments after accept/decline),
     //    OR the relationship is a review request state (RV-ASKED / RV-WANTS).
-    // For RV-PROVIDED status, show the provider message instead.
+    // The comment field now stores all types of messages:
+    //  - Friend request comments (statusCode 0/2)
+    //  - Review request comments (statusCode 3/4)
+    //  - Provider messages when reviews shared (statusCode 5)
+    //  - Provider decline messages (statusCode 6)
     String? comment;
-    if (entry.status == FriendStatus.provided) {
-      // Show provider message for RV-PROVIDED
-      comment = (entry.providedMessageShort != null && entry.providedMessageShort!.trim().isNotEmpty) 
-          ? entry.providedMessageShort!.trim() 
-          : null;
-    } else {
-      final String? rawComment = (entry.comment != null && entry.comment!.trim().isNotEmpty) ? entry.comment!.trim() : null;
-      final bool showReviewComment = (entry.status == FriendStatus.rvAsked || entry.status == FriendStatus.rvWants);
-      final bool hideComment = (entry.status == FriendStatus.accepted || entry.status == FriendStatus.declined);
-      comment = (rawComment != null && (!hideComment || showReviewComment)) ? rawComment : null;
-    }
+    final String? rawComment = (entry.comment != null && entry.comment!.trim().isNotEmpty) ? entry.comment!.trim() : null;
+    final bool showReviewComment = (entry.status == FriendStatus.rvAsked || entry.status == FriendStatus.rvWants);
+    final bool hideComment = (entry.status == FriendStatus.accepted || entry.status == FriendStatus.declined);
+    comment = (rawComment != null && (!hideComment || showReviewComment)) ? rawComment : null;
 
     const int bgAlpha = 31;
     const int borderAlpha = 51;
