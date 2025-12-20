@@ -25,6 +25,11 @@ class AppColors {
   static const Color lightOrange = Color(0xFFFFF2E0);
 
   static const Color blueAccent = Color(0xFF3B82F6);
+  static const Color blue = Color(0xFF2196F3);
+  static const Color grey = Color(0xFF9E9E9E);
+  static const Color greyShade300 = Color(0xFFE0E0E0);
+  static const Color greyShade400 = Color(0xFFBDBDBD);
+  static const Color orange = Color(0xFFFF9800);
 
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
@@ -32,6 +37,18 @@ class AppColors {
   static const Color black38 = Color(0x61000000);
   static const Color black54 = Color(0x8A000000);
   static const Color black87 = Color(0xDD000000);
+
+  // Standard button colors
+  static const Color btnDelete = red; // Red / Black text
+  static const Color btnBack = ochre; // Ochre / Black text
+  static const Color btnClear = grey; // Grey / Black text
+  static const Color btnSave = green; // Green / Black text
+  static const Color btnAdd = green; // Green / Black text
+  static const Color btnPreview = Color(
+    0xFFCE93D8,
+  ); // Light purple / Black text
+  static const Color btnRegister = orange; // Orange / Black text
+  static const Color btnText = black; // Standard button text color
 
   // Helper to construct overlay colors with variable alpha at runtime.
   // Not const because it returns a new Color instance computed from the alpha.

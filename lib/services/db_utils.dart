@@ -5,7 +5,6 @@
 // This version re-enables audit writes (previously disabled for testing)
 // and keeps mailbox removal helper behavior as before.
 
-import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 String safeKey(String s) {
@@ -18,8 +17,6 @@ String normalizeEmailForPath(String email) {
   }
   return safeKey(email.trim().toLowerCase());
 }
-
-String _pushKeyFor(DatabaseReference ref) => ref.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
 
 /// Public safe push key helper. Returns a unique key for the given ref or a
 /// timestamp-based fallback when the push key is null.
@@ -79,40 +76,6 @@ Map<String, dynamic> stripPhotosFromReview(Map<dynamic, dynamic> review) {
   return out;
 }
 
-Map<String, dynamic> makeAuditUpdate({
-  required DatabaseReference rootRef,
-  required String actorUid,
-  required String friendUid,
-  required String action,
-  Map<String, dynamic>? extra,
-}) {
-  final String sActor = safeKey(actorUid);
-  final String sFriend = safeKey(friendUid);
-  String auditParent;
-  if (action == 'mark_pending_delete') {
-    auditParent = 'friend_mark_pending_delete_audit/${sActor}_$sFriend';
-  } else if (action == 'finalize_pending_delete') {
-    auditParent = 'friend_finalize_pending_delete_audit/${sActor}_$sFriend';
-  } else if (action == 'accept') {
-    auditParent = 'friend_accept_audit/${sActor}_$sFriend';
-  } else if (action == 'reject') {
-    auditParent = 'friend_reject_audit/${sActor}_$sFriend';
-  } else {
-    auditParent = 'friend_misc_audit/${sActor}_$sFriend';
-  }
-
-  final String pushKey = _pushKeyFor(rootRef.child(auditParent));
-  final Map<String, dynamic> payload = <String, dynamic>{
-    'action': action,
-    'actor': actorUid,
-    'target': friendUid,
-    'at': DateTime.now().toUtc().toIso8601String(),
-    if (extra != null) 'extra': extra,
-  };
-  debugPrint('[db_utils] makeAuditUpdate: parent=$auditParent pushKey=$pushKey payload=$payload');
-  return <String, dynamic>{'$auditParent/$pushKey': payload};
-}
-
 // Helper that attempts to remove a mailbox request only when actor (auth.uid) is allowed to.
 // If deletion is not allowed, only set processedBy/processedAt when rules permit:
 //   - actor is mailbox owner (root.users_by_email/$norm/uid == actorUid), OR
@@ -123,9 +86,7 @@ Future<void> _addMailboxRemovalOrMark(Map<String, dynamic> updates, {
   String? mailboxReqId,
   String? mailboxNormalized,
 }) async {
-  debugPrint('[db_utils] _addMailboxRemovalOrMark: actor=$actorUid mailboxReqId=$mailboxReqId mailboxNormalized=$mailboxNormalized');
   if (mailboxReqId == null || mailboxReqId.isEmpty) {
-    debugPrint('[db_utils] _addMailboxRemovalOrMark: no reqId, nothing to do');
     return;
   }
 
@@ -137,31 +98,25 @@ Future<void> _addMailboxRemovalOrMark(Map<String, dynamic> updates, {
     try {
       final DataSnapshot mapping = await rootRef.child('users_by_email/$safeNorm/uid').get();
       final String ownerUid = (mapping.exists && mapping.value != null) ? mapping.value.toString() : '';
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: mailbox owner for $safeNorm = $ownerUid');
 
       if (ownerUid.isNotEmpty && ownerUid == actorUid) {
         // Actor owns the mailbox mapping; safe to delete the request entry.
         updates['users_by_email/$safeNorm/requests/$safeReq'] = null;
-        debugPrint('[db_utils] _addMailboxRemovalOrMark: actor is owner; scheduled deletion for $safeNorm/requests/$safeReq');
         return;
       }
 
       if (isAutogen) {
         updates['users_by_email/$safeNorm/requests/$safeReq/processedBy'] = actorUid;
         updates['users_by_email/$safeNorm/requests/$safeReq/processedAt'] = DateTime.now().toUtc().toIso8601String();
-        debugPrint('[db_utils] _addMailboxRemovalOrMark: autogen req; scheduled processedBy/processedAt for $safeNorm/requests/$safeReq');
         return;
       }
 
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: not owner and not autogen; leaving mailbox untouched');
       return;
     } catch (e) {
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: read failed for users_by_email/$safeNorm/uid error=$e');
       if (isAutogen) {
         final String safeReq = safeKey(mailboxReqId);
         updates['users_by_email/$safeNorm/requests/$safeReq/processedBy'] = actorUid;
         updates['users_by_email/$safeNorm/requests/$safeReq/processedAt'] = DateTime.now().toUtc().toIso8601String();
-        debugPrint('[db_utils] _addMailboxRemovalOrMark: on read error but autogen -> scheduled processedBy/processedAt for $safeNorm/requests/$safeReq');
         return;
       }
       final String myNorm = normalizeEmailForPath(actorUid);
@@ -170,13 +125,11 @@ Future<void> _addMailboxRemovalOrMark(Map<String, dynamic> updates, {
         final String safeReq = safeKey(mailboxReqId);
         updates['users_by_email/$safeMyNorm/requests/$safeReq/processedBy'] = actorUid;
         updates['users_by_email/$safeMyNorm/requests/$safeReq/processedAt'] = DateTime.now().toUtc().toIso8601String();
-        debugPrint('[db_utils] _addMailboxRemovalOrMark: fallback: scheduled processedBy under $safeMyNorm for $safeReq');
       }
       return;
     }
   } else {
     if (isAutogen) {
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: mailboxNormalized missing but req is autogen; cannot derive path, skipping');
       return;
     }
     final String myNorm = normalizeEmailForPath(actorUid);
@@ -185,9 +138,6 @@ Future<void> _addMailboxRemovalOrMark(Map<String, dynamic> updates, {
       final String safeReq = safeKey(mailboxReqId);
       updates['users_by_email/$safeMyNorm/requests/$safeReq/processedBy'] = actorUid;
       updates['users_by_email/$safeMyNorm/requests/$safeReq/processedAt'] = DateTime.now().toUtc().toIso8601String();
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: mailboxNormalized missing -> scheduled processedBy under $safeMyNorm for $safeReq');
-    } else {
-      debugPrint('[db_utils] _addMailboxRemovalOrMark: mailboxNormalized missing and cannot derive actor normalized email; skipping');
     }
     return;
   }
@@ -275,9 +225,6 @@ Future<Map<String, dynamic>> buildAcceptUpdateMap({
     'type': 'friend_accept',
   };
 
-  // audit write included for accept flow
-  updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'accept'));
-
   return updates;
 }
 
@@ -332,9 +279,6 @@ Future<Map<String, dynamic>> buildRejectUpdateMap({
     'type': 'friend_decline',
   };
 
-  // audit write included for reject flow
-  updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'reject'));
-
   return updates;
 }
 
@@ -366,10 +310,6 @@ Future<Map<String, dynamic>> buildMarkPendingDeleteUpdateMap({
     mailboxNormalized: mailboxNormalized,
   );
 
-  // Re-enable audit write
-  updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'mark_pending_delete'));
-
-  debugPrint('[db_utils] buildMarkPendingDeleteUpdateMap: final keys=${updates.keys.toList()}');
   return updates;
 }
 
@@ -405,8 +345,5 @@ Future<Map<String, dynamic>> buildFinalizePendingDeleteUpdateMap({
   updates['users/$sActor/friends/$sFriend/mailboxNormalized'] = null;
   updates['users/$sFriend/friends/$sActor/mailboxNormalized'] = null;
 
-  updates.addAll(makeAuditUpdate(rootRef: rootRef, actorUid: actorUid, friendUid: friendUid, action: 'finalize_pending_delete'));
-
-  debugPrint('[db_utils] buildFinalizePendingDeleteUpdateMap: final keys=${updates.keys.toList()}');
   return updates;
 }

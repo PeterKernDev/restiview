@@ -64,23 +64,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStr.deleteAccountError}: ${e.toString()}')),
+        SnackBar(
+          content: Text('${AppStr.deleteAccountError}: ${e.toString()}'),
+        ),
       );
       return;
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStr.deleteAccountSuccess)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppStr.deleteAccountSuccess)));
 
     Navigator.pushReplacementNamed(context, '/');
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.deleteAccountSignedOut)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.deleteAccountSignedOut)));
       }
     });
   }
@@ -143,9 +145,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SessionCache.allowAutoCapture = _allowAutoCapture;
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStr.settingsSaved)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.settingsSaved)));
     }
   }
 
@@ -167,7 +169,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AppStr.sortOptionCuisine,
     ];
 
-    final effectiveSort = sortOptions.contains(_selectedSort) ? _selectedSort : sortOptions.first;
+    final effectiveSort = sortOptions.contains(_selectedSort)
+        ? _selectedSort
+        : sortOptions.first;
 
     final countryList = SessionCache.customCountries.isNotEmpty
         ? SessionCache.customCountries
@@ -188,7 +192,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.darkGreen,
-        title: Text(AppStr.settingsTitle, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(
+          AppStr.settingsTitle,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -202,7 +209,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   '${SessionCache.userName} : ${SessionCache.userEmail}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppFonts.standard.copyWith(fontSize: 14, color: AppColors.darkGreen, fontWeight: FontWeight.w600),
+                  style: AppFonts.standard.copyWith(
+                    fontSize: 14,
+                    color: AppColors.darkGreen,
+                    fontWeight: FontWeight.w600,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -211,17 +222,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: effectiveSort,
-                items: sortOptions.map((sort) => DropdownMenuItem(value: sort, child: Text(sort, style: AppFonts.standard))).toList(),
+                items: sortOptions
+                    .map(
+                      (sort) => DropdownMenuItem(
+                        value: sort,
+                        child: Text(sort, style: AppFonts.standard),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) {
                   if (!mounted || value == null) return;
                   setState(() => _selectedSort = value);
                 },
-                decoration: InputDecoration(labelText: AppStr.sortByLabel, labelStyle: AppFonts.standard),
+                decoration: InputDecoration(
+                  labelText: AppStr.sortByLabel,
+                  labelStyle: AppFonts.standard,
+                ),
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                initialValue: effectiveCountry.isNotEmpty ? effectiveCountry : null,
-                items: countryList.map((country) => DropdownMenuItem(value: country, child: Text(country, style: AppFonts.standard))).toList(),
+                initialValue: effectiveCountry.isNotEmpty
+                    ? effectiveCountry
+                    : null,
+                items: countryList
+                    .map(
+                      (country) => DropdownMenuItem(
+                        value: country,
+                        child: Text(country, style: AppFonts.standard),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) {
                   if (!mounted || value == null) return;
                   final newCurrency = getCurrencyForCountry(value);
@@ -231,11 +261,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SessionCache.countryFilter = value;
                   });
                 },
-                decoration: InputDecoration(labelText: AppStr.countryLabel, labelStyle: AppFonts.standard),
+                decoration: InputDecoration(
+                  labelText: AppStr.countryLabel,
+                  labelStyle: AppFonts.standard,
+                ),
               ),
               const SizedBox(height: 24),
               SwitchListTile(
-                title: Text(AppStr.allowLocationLabel, style: AppFonts.standard),
+                title: Text(
+                  AppStr.allowLocationLabel,
+                  style: AppFonts.standard,
+                ),
                 value: _allowLocation,
                 onChanged: (value) {
                   if (!mounted) return;
@@ -276,8 +312,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeThumbColor: AppColors.darkGreen,
               ),
               SwitchListTile(
-                title: Text(AppStr.allowAutoCaptureLabel, style: AppFonts.standard),
-                subtitle: Text(AppStr.allowAutoCaptureSubtitle, style: AppFonts.standard),
+                title: Text(
+                  AppStr.allowAutoCaptureLabel,
+                  style: AppFonts.standard,
+                ),
+                subtitle: Text(
+                  AppStr.allowAutoCaptureSubtitle,
+                  style: AppFonts.standard,
+                ),
                 value: _allowAutoCapture,
                 onChanged: null,
                 activeThumbColor: AppColors.darkGreen,
@@ -289,14 +331,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomValuesScreen()));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CustomValuesScreen(),
+                          ),
+                        );
                       },
                       style: topActionStyle.copyWith(
-                        backgroundColor: WidgetStateProperty.all(Colors.orange),
-                        foregroundColor: WidgetStateProperty.all(Colors.black87),
+                        backgroundColor: WidgetStateProperty.all(AppColors.orange),
+                        foregroundColor: WidgetStateProperty.all(
+                          Colors.black87,
+                        ),
                         minimumSize: WidgetStateProperty.all(const Size(0, 48)),
                       ),
-                      child: Text(AppStr.customValuesButton, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        AppStr.customValuesButton,
+                        style: AppFonts.standard,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -304,11 +358,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: ElevatedButton(
                       onPressed: _confirmDeleteAccount,
                       style: topActionStyle.copyWith(
-                        backgroundColor: WidgetStateProperty.all(AppColors.red),
-                        foregroundColor: WidgetStateProperty.all(Colors.white),
+                        backgroundColor: WidgetStateProperty.all(
+                          AppColors.btnDelete,
+                        ),
+                        foregroundColor: WidgetStateProperty.all(
+                          AppColors.btnText,
+                        ),
                         minimumSize: WidgetStateProperty.all(const Size(0, 48)),
                       ),
-                      child: Text(AppStr.deleteAccountButton, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        AppStr.deleteAccountButton,
+                        style: AppFonts.standard,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ],
@@ -326,10 +389,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           backgroundColor: AppColors.ochre,
                           foregroundColor: Colors.black,
                           minimumSize: const Size(0, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           textStyle: AppFonts.standard,
                         ),
-                        child: Text(AppStr.back, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          AppStr.back,
+                          style: AppFonts.standard,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -337,13 +407,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: ElevatedButton(
                         onPressed: _saveSettings,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppColors.btnSave,
+                          foregroundColor: AppColors.btnText,
                           minimumSize: const Size(0, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           textStyle: AppFonts.standard,
                         ),
-                        child: Text(AppStr.saveChangesButton, style: AppFonts.standard.copyWith(color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          AppStr.saveChangesButton,
+                          style: AppFonts.standard.copyWith(
+                            color: AppColors.btnText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -351,13 +430,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: ElevatedButton(
                         onPressed: _resetSettings,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey,
+                          backgroundColor: AppColors.grey,
                           foregroundColor: Colors.black87,
                           minimumSize: const Size(0, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           textStyle: AppFonts.standard,
                         ),
-                        child: Text(AppStr.resetButton, style: AppFonts.standard, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          AppStr.resetButton,
+                          style: AppFonts.standard,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ],

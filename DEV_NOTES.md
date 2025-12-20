@@ -599,21 +599,15 @@ users/<providerUid>/friends/<requesterUid>/review_request/
 
 ### Future Enhancements
 
-1. **Viewing Requested Reviews (Next Stage - STAGE 6):**
-   - New screen to list reviews from `users/<uid>/requested_reviews`
-   - Filter by owner_email (provider who shared them)
-   - Read-only preview mode
-   - Navigate from "FRIEND REVIEWS" button on top_screen
-
-2. **Photo Handling:**
+1. **Photo Handling:**
    - Currently photos are stripped during share
    - Future: consider cloud storage upload/share mechanism
 
-3. **Review Limits:**
+2. **Review Limits:**
    - Current: 50 reviews hard limit
    - Future: consider pagination or configurable limits
 
-4. **Analytics:**
+3. **Analytics:**
    - Track share/accept rates
    - Most requested cuisines/countries
    - Provider response times
@@ -621,3 +615,279 @@ users/<providerUid>/friends/<requesterUid>/review_request/
 ---
 
 End of review sharing flow documentation (2025-12-18).
+
+---
+
+## Stage 6: Viewing & Filtering Requested Reviews (COMPLETED 2025-12-19)
+
+### Overview
+Implemented functionality allowing users to view, filter, and manage reviews they've requested from friends.
+
+### Key Features Implemented
+
+1. **Friend Reviews Screen (`review_reviews_screen.dart`):**
+   - Accessible via "FRIEND REVIEWS" button on top_screen
+   - Lists all reviews from `users/<uid>/requested_reviews`
+   - Filtering options:
+     - Filter by owner_email (provider who shared them)
+     - Reset filters to show all requested reviews
+   - Each review shows:
+     - Restaurant name
+     - Review date
+     - Provider email
+     - Preview summary
+   - Tap review to view full details in preview mode
+
+2. **Read-Only Preview Mode:**
+   - Preview screen supports `mode: 'friend-review'` parameter
+   - Disables edit/delete actions when viewing friend reviews
+   - Shows full review details including ratings, comments, photos, detail items
+   - Navigation back to review_reviews_screen
+
+3. **Data Structure:**
+   - Requested reviews stored at `users/<uid>/requested_reviews/<reviewKey>`
+   - Each entry contains:
+     - Full review payload (ratings, restaurant details, comments, etc.)
+     - `owner_email`: email of the friend who provided the review
+     - Metadata fields (createdAt, acceptedAt, etc.)
+
+### Technical Implementation Details
+
+**Review Context Enhancement:**
+- Added `hasChanges` boolean flag to `ReviewContext` class
+- Tracks when user makes modifications to a review (new or editing)
+- Used to prevent accidental data loss
+
+**Change Tracking System:**
+- Monitors changes across all review input screens:
+  - `general_screen.dart`: Text fields, dropdowns, date picker
+  - `ratings_screen.dart`: All rating sliders, Michelin stars
+  - `goodfor_screen.dart`: Tag selections
+  - `comments_screen.dart`: Comments text, photo capture/removal
+  - `details_screen.dart`: Detail items, photos, add/remove
+- Text controllers have listeners attached to set `hasChanges = true`
+- State changes in dropdowns, pickers, and tag selections also set flag
+- Clear buttons reset `hasChanges = false` (intentional action)
+
+**Discard Changes Warnings:**
+- Warning dialog shown in three scenarios:
+  1. Back button on general_screen when `hasChanges = true`
+  2. List button on preview_screen when `reviewKey == null` (unsaved new review) OR `hasChanges = true`
+  3. Any navigation attempt with unsaved changes
+- Uses standard dialog from `AppStr.discardTitle` and `AppStr.discardMessage`
+- User can choose to:
+  - Cancel: stay on current screen
+  - Yes: discard changes and navigate away
+
+**BuildContext Async Safety:**
+- Fixed async gaps in `preview_screen.dart`:
+  - Added `mounted` checks after all `await showDialog()` calls
+  - Prevents using `context`, `Navigator`, or `ScaffoldMessenger` after widget disposal
+  - Pattern: check `mounted` before any context usage following async operations
+
+**UI Overflow Fix:**
+- Fixed 15-pixel overflow in `review_formatter.dart`
+- Wrapped label text in `Flexible` widget in `reviewRow()` function
+- Prevents overflow when displaying older reviews with longer field names
+- Label can now compress if needed while value field takes remaining space
+
+**Save/Update Behavior:**
+- After successful save or update, `hasChanges` is reset to `false`
+- Prevents false warnings after data is safely persisted
+- Applied in both `saveReview()` and `updateReview()` methods
+
+### Files Modified
+
+**Core Changes:**
+1. `lib/sub_preview_screen/review_context.dart` - Added `hasChanges` property
+2. `lib/general_screen.dart` - Change tracking, conditional back warning
+3. `lib/preview_screen.dart` - Change tracking, list button warning, async fixes
+4. `lib/ratings_screen.dart` - Change tracking on ratings
+5. `lib/goodfor_screen.dart` - Change tracking on tag selection
+6. `lib/comments_screen.dart` - Change tracking on text/photos
+7. `lib/details_screen.dart` - Change tracking on detail items
+8. `lib/sub_preview_screen/review_formatter.dart` - Fixed layout overflow
+
+### Benefits
+
+1. **Data Loss Prevention:**
+   - Users warned before accidentally losing unsaved work
+   - Applies to both new reviews and edits to existing reviews
+   - No false warnings when no changes made
+
+2. **Better UX:**
+   - Clear feedback about unsaved changes
+   - Consistent warning dialogs across the app
+   - Users maintain control over their data
+
+3. **Code Quality:**
+   - Proper async/await handling with mounted checks
+   - Follows Flutter best practices for BuildContext usage
+   - Flexible layouts handle edge cases (old data formats)
+
+---
+
+End of Stage 6 documentation (2025-12-19).
+
+---
+
+## Stage 7: Multi-Filter Review Requests (2025-12-20)
+
+### Overview
+Enhanced review request system to support multiple location filters with OR logic, allowing users to request reviews from multiple cities/countries in a single request.
+
+### Database Structure Changes
+
+**Multi-Filter Format:**
+Review requests now use an array of location filters instead of single country/city values:
+```javascript
+{
+  "filters": [
+    {"country": "Argentina", "city": null},
+    {"country": "Brazil", "city": "Bombinhas"},
+    {"country": "Brazil", "city": "SP"},
+    {"country": "United Kingdom", "city": "London"},
+    {"country": "United Kingdom", "city": "Newmarket"}
+  ]
+}
+```
+
+**Mailbox Structure (`users_by_email/<normalized>/requests/<requestId>`):**
+- Added `filters` array field
+- Removed legacy single `country`/`city` fields (kept for backward compatibility reading)
+- Each filter contains optional `country` and/or `city` fields
+
+**Friend Stub Structure (`users/<uid>/friends/<friendUid>`):**
+- Review request stub now includes `filters` array
+- `rvCount` calculated across all filters using OR logic
+- Excluded review keys (`exKeys`) apply across all filters
+
+### Matching Logic (OR Semantics)
+
+Reviews match a request if they match ANY filter in the array:
+- Filter matches if both conditions true:
+  1. Country matches (or filter country is null)
+  2. City matches (or filter city is null)
+- Empty/null filters array treated as "match all"
+
+### Files Modified
+
+**1. Review Counting (`lib/services/review_counter.dart`):**
+- `countMatchingReviews()` signature changed to accept `List<Map<String, String?>> filters`
+- Implements OR logic: review matches if it matches any filter in the list
+- Handles null/empty filters array gracefully
+
+**2. Mailbox Processing (`lib/signin_screen.dart`, lines 605-660):**
+- Parse `filters` array from mailbox review requests
+- Calculate `rvCount` across all filters using updated `countMatchingReviews()`
+- Create friend stub with filters array
+- Backward compatible: reads legacy `country`/`city` if `filters` missing
+
+**3. Friend Management (`lib/friends_screen.dart`):**
+- `_resolveOneRvCount()`: Read filters array from friend stub, recalculate matching count
+- `_handleAccept()`: Use filters array for acceptance logic
+- Removed all cuisine-related filtering logic (deprecated feature)
+- Pass filters to `reviewReviewsScreen` for display
+
+**4. Review Display for Provider (`lib/review_reviews_screen.dart`):**
+- Load filters array from review_request
+- Filter displayed reviews using OR logic across all location filters
+- Show only reviews matching at least one filter
+- Provider excludes unwanted reviews before accepting request
+
+**5. Review Acceptance (`lib/services/accept_provided_reviews.dart`):**
+- Added `duplicatesSkipped` field to `AcceptProvidedReviewsResult`
+- Check for duplicate reviews before copying to `reviews_requested`
+- Skip reviews already present in requester's collection
+- Return count of duplicates for user feedback
+
+**6. Friend Data Models:**
+- `lib/widgets/friend_entry.dart`: Added `filters` field to `ReviewRequestData` class
+- `lib/widgets/friend_row.dart`: Updated to work with filters array
+
+### User Experience Improvements
+
+**Duplicate Detection:**
+- System checks if requester already has any provided review
+- Skips duplicates during acceptance
+- Shows contextual SnackBar messages:
+  - "All N reviews already exist in your collection"
+  - "Accepted N reviews (M duplicates skipped)"
+  - Standard success message when no duplicates
+
+**Review Counting:**
+- Live count updates show total across all requested locations
+- Provider sees only reviews matching their friend's filters
+- Accurate counts prevent confusion about available reviews
+
+### Testing Results
+
+**End-to-End Flow (PK1 ↔ PK2):**
+1. PK2 creates review request with 5 filters (Argentina, Bombinhas, SP, London, Newmarket)
+2. System calculates 21 matching reviews from PK1's collection
+3. PK1 sees review request notification
+4. PK1 views 21 matching reviews, excludes 3 unwanted
+5. PK1 provides 18 reviews to PK2
+6. PK2 accepts 18 reviews into their collection
+7. Duplicate detection working correctly
+
+### City Extraction Debug Tools
+
+**Purpose:**
+Improve accuracy of city name extraction from Google Places formatted addresses.
+
+**Implementation (`lib/services/location_restaurant_helper.dart`):**
+- Added `debugAnalyzeCityExtraction(String uid)` function
+- Loops through all user reviews
+- Prints for each review:
+  - Restaurant name
+  - Country (from user's setting when review created)
+  - Extracted city (from address parsing)
+  - Full formatted address from Google Places
+  - Re-extraction comparison
+
+**UI Integration (`lib/settings_screen.dart`):**
+- Added "Debug City Extraction" button
+- Accessible in Settings screen
+- Shows SnackBar confirmation when analysis starts
+- Output appears in console/debug terminal
+
+**Known Issues:**
+- User's country setting may not match restaurant's actual country
+- City extraction heuristics vary by country/address format
+- TODO: Add country mismatch warning when capturing reviews
+
+### Architecture Notes
+
+**Backward Compatibility:**
+- System reads legacy single country/city fields if filters array missing
+- Allows gradual migration of existing review requests
+- New requests always use filters array format
+
+**Atomic Updates:**
+- Multi-path updates ensure mailbox + friend stub consistency
+- Uses `_updateWithRetry` for transient error handling
+- Rollback on partial failures
+
+**Performance:**
+- OR logic efficiently implemented with early exit on match
+- Review counting optimized with filter validation
+- No N×M explosion for reasonable filter counts
+
+### Future Enhancements
+
+**Planned:**
+1. Country mismatch warning when capturing reviews (user's country setting vs restaurant location)
+2. Improved city extraction based on debug output analysis
+3. Filter UI improvements for easier multi-location selection
+4. Review request templates for common location combinations
+
+**Considerations:**
+- Maximum filter count limit (prevent abuse)
+- UI scaling for many filters
+- Performance monitoring for large review collections
+- Analytics on filter usage patterns
+
+---
+
+End of Stage 7 documentation (2025-12-20).

@@ -56,7 +56,7 @@ class ReviewListItem extends StatelessWidget {
                       restname,
                       overflow: TextOverflow.ellipsis,
                       style: AppFonts.bold.copyWith(
-                        color: Colors.blue,
+                        color: AppColors.blue,
                         fontSize: 16,
                       ),
                     ),

@@ -79,9 +79,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Synchronous validation — safe to use context here
     if (!_termsAccepted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.acceptTandCs)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.acceptTandCs)));
       }
       return false;
     }
@@ -92,18 +92,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (name.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.nameHint)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.nameHint)));
       }
       return false;
     }
 
     if (email.isEmpty || password.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.emailPasswordRequired)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.emailPasswordRequired)));
       }
       return false;
     }
@@ -111,9 +111,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.emailRequired)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
       }
       return false;
     }
@@ -233,7 +233,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       border: const UnderlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _showPassword ? Icons.visibility_off : Icons.visibility,
+                          _showPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           color: Colors.grey,
                         ),
                         onPressed: () {
@@ -256,10 +258,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   DropdownButtonFormField<String>(
                     initialValue: _homeCountry,
                     items: systemCountries
-                        .map((c) => DropdownMenuItem(
-                              value: c['name'],
-                              child: Text(c['name']!, style: AppFonts.standard),
-                            ))
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c['name'],
+                            child: Text(c['name']!, style: AppFonts.standard),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (!mounted || value == null) return;
@@ -272,7 +276,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                   SwitchListTile(
-                    title: Text(AppStr.allowLocationLabel, style: AppFonts.standard),
+                    title: Text(
+                      AppStr.allowLocationLabel,
+                      style: AppFonts.standard,
+                    ),
                     value: _allowLocation,
                     onChanged: (value) {
                       if (!mounted) return;
@@ -282,7 +289,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     activeTrackColor: AppColors.ochre,
                   ),
                   SwitchListTile(
-                    title: Text(AppStr.allowPhotosLabel, style: AppFonts.standard),
+                    title: Text(
+                      AppStr.allowPhotosLabel,
+                      style: AppFonts.standard,
+                    ),
                     value: _allowPhotos,
                     onChanged: (value) {
                       if (!mounted) return;
@@ -293,7 +303,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   // Allow Friends toggle (text moved to strings)
                   SwitchListTile(
-                    title: Text(AppStr.allowFriendsLabel, style: AppFonts.standard),
+                    title: Text(
+                      AppStr.allowFriendsLabel,
+                      style: AppFonts.standard,
+                    ),
                     value: _allowFriends,
                     onChanged: (value) {
                       if (!mounted) return;
@@ -303,7 +316,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     activeTrackColor: AppColors.ochre,
                   ),
                   SwitchListTile(
-                    title: Text(AppStr.acceptTermsLabel, style: AppFonts.standard),
+                    title: Text(
+                      AppStr.acceptTermsLabel,
+                      style: AppFonts.standard,
+                    ),
                     value: _termsAccepted,
                     onChanged: (value) {
                       if (!mounted) return;
@@ -313,7 +329,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     activeTrackColor: AppColors.ochre,
                   ),
                   const SizedBox(height: 24),
-                  if (_loading) const Center(child: CircularProgressIndicator()),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator()),
                 ],
               ),
             ),
@@ -329,24 +346,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       backgroundColor: AppColors.red,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: () {
                       if (!mounted) return;
                       Navigator.pushNamed(context, '/tandc');
                     },
-                    child: Text(AppStr.viewTermsLabel, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    child: Text(
+                      AppStr.viewTermsLabel,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.darkGreen,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.btnRegister,
+                      foregroundColor: AppColors.btnText,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    onPressed: (_loading || !_termsAccepted) ? null : _registerUser,
-                    child: Text(AppStr.registerButton, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    onPressed: (_loading || !_termsAccepted)
+                        ? null
+                        : _registerUser,
+                    child: Text(
+                      AppStr.registerButton,
+                      style: AppFonts.standard.copyWith(
+                        color: AppColors.btnText,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
@@ -354,10 +385,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       backgroundColor: AppColors.ochre,
                       foregroundColor: Colors.black,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _loading ? null : _goBack,
-                    child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
+                    child: Text(
+                      AppStr.back,
+                      style: AppFonts.standard.copyWith(color: Colors.black),
+                    ),
                   ),
                 ],
               ),

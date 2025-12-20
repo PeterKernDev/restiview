@@ -45,7 +45,10 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
   }
 
   void _returnFilters() {
-    final selected = _filterOptions.entries.where((e) => e.value).map((e) => e.key).toList();
+    final selected = _filterOptions.entries
+        .where((e) => e.value)
+        .map((e) => e.key)
+        .toList();
     if (!mounted) return;
     Navigator.pop(context, selected);
   }
@@ -112,60 +115,84 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
 
                   // Grid with same tile style as GoodForScreen (2 columns)
                   Expanded(
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      final double spacing = 12;
-                      final double availableWidth = constraints.maxWidth - spacing;
-                      final double itemWidth = (availableWidth / 2);
-                      final double childAspectRatio = itemWidth / tileHeight;
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double spacing = 12;
+                        final double availableWidth =
+                            constraints.maxWidth - spacing;
+                        final double itemWidth = (availableWidth / 2);
+                        final double childAspectRatio = itemWidth / tileHeight;
 
-                      return GridView.count(
-                        crossAxisCount: 2,
-                        childAspectRatio: childAspectRatio,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        children: options.map((entry) {
-                          final label = entry.key;
-                          final checked = entry.value;
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () {
-                              if (!mounted) return;
-                              setState(() {
-                                _filterOptions[label] = !checked;
-                              });
-                            },
-                            child: Container(
-                              height: tileHeight,
-                              decoration: BoxDecoration(
-                                color: checked ? Colors.yellow.shade100 : Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: checked ? Colors.black54 : Colors.grey.shade300),
-                                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      label,
-                                      style: const TextStyle(fontFamily: 'Gelica', fontSize: 14),
-                                      overflow: TextOverflow.ellipsis,
+                        return GridView.count(
+                          crossAxisCount: 2,
+                          childAspectRatio: childAspectRatio,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          children: options.map((entry) {
+                            final label = entry.key;
+                            final checked = entry.value;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _filterOptions[label] = !checked;
+                                });
+                              },
+                              child: Container(
+                                height: tileHeight,
+                                decoration: BoxDecoration(
+                                  color: checked
+                                      ? Colors.yellow.shade100
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: checked
+                                        ? Colors.black54
+                                        : Colors.grey.shade300,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 2,
+                                      offset: Offset(0, 1),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    checked ? Icons.check_box : Icons.check_box_outline_blank,
-                                    size: 18,
-                                    color: checked ? Colors.black87 : Colors.grey,
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        label,
+                                        style: const TextStyle(
+                                          fontFamily: 'Gelica',
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      checked
+                                          ? Icons.check_box
+                                          : Icons.check_box_outline_blank,
+                                      size: 18,
+                                      color: checked
+                                          ? Colors.black87
+                                          : Colors.grey,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    }),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -184,10 +211,17 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                       child: ElevatedButton(
                         onPressed: _returnFilters,
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(AppColors.ochre),
-                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                          backgroundColor: WidgetStateProperty.all(
+                            AppColors.ochre,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            Colors.black,
+                          ),
                         ),
-                        child: Text(_hasChanged ? AppStr.apply : AppStr.back, overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          _hasChanged ? AppStr.apply : AppStr.back,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -199,10 +233,17 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                           _clearFilters();
                         },
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(Colors.grey),
-                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                          backgroundColor: WidgetStateProperty.all(
+                            AppColors.btnClear,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            AppColors.btnText,
+                          ),
                         ),
-                        child: const Text(AppStr.clear, overflow: TextOverflow.ellipsis),
+                        child: const Text(
+                          AppStr.clear,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),

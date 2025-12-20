@@ -12,11 +12,13 @@ import 'db_utils.dart';
 class AcceptProvidedReviewsResult {
   final bool success;
   final int reviewsAccepted;
+  final int duplicatesSkipped;
   final String? errorMessage;
 
   AcceptProvidedReviewsResult({
     required this.success,
     this.reviewsAccepted = 0,
+    this.duplicatesSkipped = 0,
     this.errorMessage,
   });
 }
@@ -156,6 +158,7 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
     
     final Map<String, dynamic> updates = <String, dynamic>{};
     int reviewsAccepted = 0;
+    int duplicatesSkipped = 0;
 
     for (final MapEntry<dynamic, dynamic> entry in reviews.entries) {
       final String reviewKey = entry.key.toString();
@@ -177,9 +180,14 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
         if (providerEmail.isNotEmpty && !reviewMap.containsKey('owner_email')) {
           reviewMap['owner_email'] = providerEmail;
         }
+        // Remove financial information: set cost to empty/blank
+        reviewMap['cost'] = '';
         // Add to updates map
         updates['$destBasePath/$reviewKey'] = reviewMap;
         reviewsAccepted++;
+      } else {
+        // Review already exists - count as duplicate
+        duplicatesSkipped++;
       }
     }
 
@@ -211,6 +219,7 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
     return AcceptProvidedReviewsResult(
       success: true,
       reviewsAccepted: reviewsAccepted,
+      duplicatesSkipped: duplicatesSkipped,
     );
   } catch (e) {
     return AcceptProvidedReviewsResult(

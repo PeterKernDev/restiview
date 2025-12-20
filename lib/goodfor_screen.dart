@@ -29,11 +29,11 @@ class _GoodForScreenState extends State<GoodForScreen> {
   void initState() {
     super.initState();
 
-    _goodForOptions = {
-      for (var tag in goodForTags) tag: false,
-    };
+    _goodForOptions = {for (var tag in goodForTags) tag: false};
 
-    final selectedTags = List<String>.from(widget.context.reviewMap['goodForTags'] ?? []);
+    final selectedTags = List<String>.from(
+      widget.context.reviewMap['goodForTags'] ?? [],
+    );
     for (var tag in selectedTags) {
       if (_goodForOptions.containsKey(tag)) {
         _goodForOptions[tag] = true;
@@ -54,9 +54,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
     _saveToContext();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => RatingsScreen(context: widget.context),
-      ),
+      MaterialPageRoute(builder: (_) => RatingsScreen(context: widget.context)),
     );
   }
 
@@ -155,61 +153,86 @@ class _GoodForScreenState extends State<GoodForScreen> {
 
                   // Grid with 2 columns, uniform tiles
                   Expanded(
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      // Calculate item width to keep two columns with spacing
-                      final double spacing = 12;
-                      final double availableWidth = constraints.maxWidth - spacing;
-                      final double itemWidth = (availableWidth / 2);
-                      final double childAspectRatio = itemWidth / tileHeight;
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Calculate item width to keep two columns with spacing
+                        final double spacing = 12;
+                        final double availableWidth =
+                            constraints.maxWidth - spacing;
+                        final double itemWidth = (availableWidth / 2);
+                        final double childAspectRatio = itemWidth / tileHeight;
 
-                      return GridView.count(
-                        crossAxisCount: 2,
-                        childAspectRatio: childAspectRatio,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        children: options.map((entry) {
-                          final label = entry.key;
-                          final checked = entry.value;
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () {
-                              if (!mounted) return;
-                              setState(() {
-                                _goodForOptions[label] = !checked;
-                              });
-                            },
-                            child: Container(
-                              height: tileHeight,
-                              decoration: BoxDecoration(
-                                color: checked ? Colors.yellow.shade100 : Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: checked ? Colors.black54 : Colors.grey.shade300),
-                                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))],
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      label,
-                                      style: const TextStyle(fontFamily: 'Gelica', fontSize: 14),
-                                      overflow: TextOverflow.ellipsis,
+                        return GridView.count(
+                          crossAxisCount: 2,
+                          childAspectRatio: childAspectRatio,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          children: options.map((entry) {
+                            final label = entry.key;
+                            final checked = entry.value;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _goodForOptions[label] = !checked;
+                                  widget.context.hasChanges = true;
+                                });
+                              },
+                              child: Container(
+                                height: tileHeight,
+                                decoration: BoxDecoration(
+                                  color: checked
+                                      ? Colors.yellow.shade100
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: checked
+                                        ? Colors.black54
+                                        : Colors.grey.shade300,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 2,
+                                      offset: Offset(0, 1),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    checked ? Icons.check_box : Icons.check_box_outline_blank,
-                                    size: 18,
-                                    color: checked ? Colors.black87 : Colors.grey,
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        label,
+                                        style: const TextStyle(
+                                          fontFamily: 'Gelica',
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      checked
+                                          ? Icons.check_box
+                                          : Icons.check_box_outline_blank,
+                                      size: 18,
+                                      color: checked
+                                          ? Colors.black87
+                                          : Colors.grey,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    }),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -230,10 +253,17 @@ class _GoodForScreenState extends State<GoodForScreen> {
                       child: ElevatedButton(
                         onPressed: _goBack,
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(AppColors.ochre),
-                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                          backgroundColor: WidgetStateProperty.all(
+                            AppColors.ochre,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            Colors.black,
+                          ),
                         ),
-                        child: const Text(AppStr.back, overflow: TextOverflow.ellipsis),
+                        child: const Text(
+                          AppStr.back,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -243,10 +273,17 @@ class _GoodForScreenState extends State<GoodForScreen> {
                       child: ElevatedButton(
                         onPressed: _clearSelections,
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(Colors.grey),
-                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                          backgroundColor: WidgetStateProperty.all(
+                            AppColors.btnClear,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            AppColors.btnText,
+                          ),
                         ),
-                        child: const Text(AppStr.clear, overflow: TextOverflow.ellipsis),
+                        child: const Text(
+                          AppStr.clear,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -256,10 +293,17 @@ class _GoodForScreenState extends State<GoodForScreen> {
                       child: ElevatedButton(
                         onPressed: _goToPreviewScreen,
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(Colors.green),
-                          foregroundColor: WidgetStateProperty.all(Colors.white),
+                          backgroundColor: WidgetStateProperty.all(
+                            AppColors.btnPreview,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            AppColors.btnText,
+                          ),
                         ),
-                        child: const Text(AppStr.preview, overflow: TextOverflow.ellipsis),
+                        child: const Text(
+                          AppStr.preview,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -269,10 +313,17 @@ class _GoodForScreenState extends State<GoodForScreen> {
                       child: ElevatedButton(
                         onPressed: _goToNext,
                         style: actionBtnBase.copyWith(
-                          backgroundColor: WidgetStateProperty.all(Colors.yellow),
-                          foregroundColor: WidgetStateProperty.all(Colors.black),
+                          backgroundColor: WidgetStateProperty.all(
+                            Colors.yellow,
+                          ),
+                          foregroundColor: WidgetStateProperty.all(
+                            Colors.black,
+                          ),
                         ),
-                        child: const Text(AppStr.next, overflow: TextOverflow.ellipsis),
+                        child: const Text(
+                          AppStr.next,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),

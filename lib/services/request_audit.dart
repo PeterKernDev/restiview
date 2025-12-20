@@ -41,11 +41,9 @@ Future<String?> writeRequestAudit({
   String? auditId, // optional: if provided, use this id instead of push()
 }) async {
   if (typeCode <= 0) {
-    debugPrint('writeRequestAudit: invalid typeCode=$typeCode, aborting');
     return null;
   }
   if ((fromUid.isEmpty) && (toUid.isEmpty)) {
-    debugPrint('writeRequestAudit: both fromUid and toUid empty, aborting');
     return null;
   }
 

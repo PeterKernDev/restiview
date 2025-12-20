@@ -28,7 +28,8 @@ const int statusRequested = 2; // FR-WANTED (recipient)
 const int statusRvWants = 3; // RV-WANTED (recipient)
 const int statusRvAsked = 4; // RV-ASKED (requester)
 const int statusProvided = 5; // provider has shared reviews (local marker)
-const int statusRvDeclined = 6; // provider declined review request (recipient marker)
+const int statusRvDeclined =
+    6; // provider declined review request (recipient marker)
 const int statusDeclined = 8;
 const int statusUnknown = 9;
 const int statusPendingDelete = 99;
@@ -80,249 +81,320 @@ class _FriendsScreenState extends State<FriendsScreen> {
       return;
     }
 
-    final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends');
-    _sub = ref.onValue.listen((DatabaseEvent event) async {
-      debugPrint('[_subscribeToFriends] onValue callback fired for myUid=$myUid');
-      final DataSnapshot snap = event.snapshot;
-      final Map<String, FriendEntry> nextMap = <String, FriendEntry>{};
-      final Map<String, Map<dynamic, dynamic>> rawFriendVmaps = <String, Map<dynamic, dynamic>>{};
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(
+      'users/$myUid/friends',
+    );
+    _sub = ref.onValue.listen(
+      (DatabaseEvent event) async {
+        final DataSnapshot snap = event.snapshot;
+        final Map<String, FriendEntry> nextMap = <String, FriendEntry>{};
+        final Map<String, Map<dynamic, dynamic>> rawFriendVmaps =
+            <String, Map<dynamic, dynamic>>{};
 
-      if (snap.exists && snap.value != null && snap.value is Map) {
-        final Map<dynamic, dynamic> rawMap = Map<dynamic, dynamic>.from(snap.value as Map);
-        rawMap.forEach((dynamic key, dynamic val) {
-          final String friendUid = key?.toString() ?? '';
-          if (friendUid.isEmpty) {
-            return;
-          }
-
-          int fsc = statusUnknown;
-          String email = friendUid;
-          String username = friendUid;
-          int sharedCount = 0;
-          String? comment;
-          String? reqId;
-          String? normalized;
-          bool? acceptedFlag;
-          int? rvCount;
-          String? rvCountLastCheckedAt;
-          ReviewData? reviewData;
-          ReviewRequestData? reviewRequestData;
-          String? providedRequestId;
-          int? providedRqCount;
-          String? providedAt;
-
-          try {
-            if (val is int) {
-              fsc = val;
-            } else if (val is String) {
-              fsc = FriendEntry.mapStringStatusToFsc(val);
-            } else if (val is Map) {
-              final Map<dynamic, dynamic> vmap = Map<dynamic, dynamic>.from(val);
-              rawFriendVmaps[friendUid] = vmap;
-              final dynamic statusField = vmap['status'] ?? vmap['statusCode'] ?? vmap['state'];
-              if (statusField is int) {
-                fsc = statusField;
-              } else if (statusField is String) {
-                fsc = FriendEntry.mapStringStatusToFsc(statusField);
-              }
-
-              if (vmap['email'] is String && (vmap['email'] as String).isNotEmpty) {
-                email = vmap['email'] as String;
-              }
-              if (vmap['username'] is String && (vmap['username'] as String).isNotEmpty) {
-                username = vmap['username'] as String;
-              }
-              if (vmap['sharedReviewsCount'] is int) {
-                sharedCount = vmap['sharedReviewsCount'] as int;
-              }
-              if (vmap['comment'] is String && (vmap['comment'] as String).isNotEmpty) {
-                comment = vmap['comment'] as String;
-              }
-              if (vmap['mailboxReqId'] is String && (vmap['mailboxReqId'] as String).isNotEmpty) {
-                reqId = vmap['mailboxReqId'] as String;
-              }
-              if (vmap['mailboxNormalized'] is String && (vmap['mailboxNormalized'] as String).isNotEmpty) {
-                normalized = vmap['mailboxNormalized'] as String;
-              }
-              if (vmap['accepted'] is bool) {
-                acceptedFlag = vmap['accepted'] as bool;
-              } else if (vmap['accepted'] is int) {
-                acceptedFlag = (vmap['accepted'] as int) == 1;
-              }
-              // Read rvCount - prioritize review_request subnode over top-level field
-              if (vmap['review_request'] is Map) {
-                final Map<dynamic, dynamic> rrMapTemp = Map<dynamic, dynamic>.from(vmap['review_request'] as Map);
-                if (rrMapTemp['rvCount'] is int) {
-                  rvCount = rrMapTemp['rvCount'] as int;
-                }
-                if (rrMapTemp['rvCountLastCheckedAt'] is String && (rrMapTemp['rvCountLastCheckedAt'] as String).isNotEmpty) {
-                  rvCountLastCheckedAt = rrMapTemp['rvCountLastCheckedAt'] as String;
-                }
-              }
-              // Fallback to top-level rvCount if not in review_request
-              if (rvCount == null && vmap['rvCount'] is int) {
-                rvCount = vmap['rvCount'] as int;
-              }
-              if (rvCountLastCheckedAt == null && vmap['rvCountLastCheckedAt'] is String && (vmap['rvCountLastCheckedAt'] as String).isNotEmpty) {
-                rvCountLastCheckedAt = vmap['rvCountLastCheckedAt'] as String;
-              }
-              
-              // Parse provider metadata (for RV-PROVIDED status)
-              if (vmap['providedRequestId'] is String && (vmap['providedRequestId'] as String).isNotEmpty) {
-                providedRequestId = vmap['providedRequestId'] as String;
-              }
-              if (vmap['providedRqCount'] is int) {
-                providedRqCount = vmap['providedRqCount'] as int;
-              }
-              if (vmap['providedAt'] is String && (vmap['providedAt'] as String).isNotEmpty) {
-                providedAt = vmap['providedAt'] as String;
-              }
-
-              try {
-                if (vmap['review_request'] is Map) {
-                  final Map<dynamic, dynamic> rrMap = Map<dynamic, dynamic>.from(vmap['review_request'] as Map);
-                  
-                  final List<String> exKeys = <String>[];
-                  if (rrMap['exKeys'] is List) {
-                    for (final dynamic item in rrMap['exKeys'] as List) {
-                      if (item is String) {
-                        exKeys.add(item);
-                      }
-                    }
-                  }
-                  
-                  reviewRequestData = ReviewRequestData(
-                    requestComment: (rrMap['requestComment'] is String) ? rrMap['requestComment'] as String : null,
-                    filterCountry: (rrMap['filterCountry'] is String) ? rrMap['filterCountry'] as String : null,
-                    filterCity: (rrMap['filterCity'] is String) ? rrMap['filterCity'] as String : null,
-                    filterCuisine: (rrMap['filterCuisine'] is String) ? rrMap['filterCuisine'] as String : null,
-                    exCount: (rrMap['exCount'] is int) ? rrMap['exCount'] as int : 0,
-                    fromEmail: (rrMap['fromEmail'] is String) ? rrMap['fromEmail'] as String : null,
-                    fromDisplayName: (rrMap['fromDisplayName'] is String) ? rrMap['fromDisplayName'] as String : null,
-                    exKeys: exKeys.isNotEmpty ? exKeys : null,
-                  );
-                }
-              } catch (_) {
-                // ignore review_request parse errors
-              }
-
-              try {
-                if (vmap['review'] is Map) {
-                  final Map<dynamic, dynamic> rvMap = Map<dynamic, dynamic>.from(vmap['review'] as Map);
-
-                  final Map<String, String> filters = <String, String>{};
-                  final dynamic f = rvMap['filters'];
-                  if (f is Map) {
-                    f.forEach((dynamic k, dynamic v2) {
-                      if (k != null && v2 is String && v2.isNotEmpty) {
-                        filters[k.toString()] = v2;
-                      }
-                    });
-                  } else {
-                    if (rvMap['country'] is String && (rvMap['country'] as String).isNotEmpty) {
-                      filters['country'] = rvMap['country'] as String;
-                    }
-                    if (rvMap['cuisine'] is String && (rvMap['cuisine'] as String).isNotEmpty) {
-                      filters['cuisine'] = rvMap['cuisine'] as String;
-                    }
-                    if (rvMap['city'] is String && (rvMap['city'] as String).isNotEmpty) {
-                      filters['city'] = rvMap['city'] as String;
-                    }
-                  }
-
-                  final Map<String, bool>? exKeys = (rvMap['exKeys'] is Map)
-                      ? Map<String, bool>.from(rvMap['exKeys'] as Map).map((k, v2) => MapEntry(k.toString(), v2 == true))
-                      : null;
-
-                  final int? parsedRvCount =
-                      (rvMap['rvCount'] is int) ? rvMap['rvCount'] as int : (rvMap['rvCount'] is String ? int.tryParse(rvMap['rvCount']) : null);
-                  final int? parsedExCount = (rvMap['exCount'] is int) ? rvMap['exCount'] as int : null;
-
-                  reviewData = ReviewData(
-                    filters: filters,
-                    comment: (rvMap['comment'] is String && (rvMap['comment'] as String).isNotEmpty) ? rvMap['comment'] as String : null,
-                    rvCount: parsedRvCount,
-                    exCount: parsedExCount,
-                    exKeys: exKeys,
-                    createdAt: (rvMap['createdAt'] is String) ? rvMap['createdAt'] as String : null,
-                    updatedAt: (rvMap['updatedAt'] is String) ? rvMap['updatedAt'] as String : null,
-                  );
-                }
-              } catch (_) {
-                // ignore review parse errors
-              }
-            }
-          } catch (_) {
-            // ignore parsing errors
-          }
-
-          nextMap[friendUid] = FriendEntry(
-            uid: friendUid,
-            email: email,
-            username: username,
-            fsc: fsc,
-            sharedReviewsCount: sharedCount,
-            comment: comment,
-            mailboxReqId: reqId,
-            mailboxNormalized: normalized,
-            accepted: acceptedFlag,
-            rvCount: rvCount,
-            rvCountLastCheckedAt: rvCountLastCheckedAt,
-            reviewRequest: reviewRequestData,
-            review: reviewData,
-            providedRequestId: providedRequestId,
-            providedRqCount: providedRqCount,
-            providedAt: providedAt,
+        if (snap.exists && snap.value != null && snap.value is Map) {
+          final Map<dynamic, dynamic> rawMap = Map<dynamic, dynamic>.from(
+            snap.value as Map,
           );
+          rawMap.forEach((dynamic key, dynamic val) {
+            final String friendUid = key?.toString() ?? '';
+            if (friendUid.isEmpty) {
+              return;
+            }
+
+            int fsc = statusUnknown;
+            String email = friendUid;
+            String username = friendUid;
+            int sharedCount = 0;
+            String? comment;
+            String? reqId;
+            String? normalized;
+            bool? acceptedFlag;
+            int? rvCount;
+            String? rvCountLastCheckedAt;
+            ReviewData? reviewData;
+            ReviewRequestData? reviewRequestData;
+            String? providedRequestId;
+            int? providedRqCount;
+            String? providedAt;
+
+            try {
+              if (val is int) {
+                fsc = val;
+              } else if (val is String) {
+                fsc = FriendEntry.mapStringStatusToFsc(val);
+              } else if (val is Map) {
+                final Map<dynamic, dynamic> vmap = Map<dynamic, dynamic>.from(
+                  val,
+                );
+                rawFriendVmaps[friendUid] = vmap;
+                final dynamic statusField =
+                    vmap['status'] ?? vmap['statusCode'] ?? vmap['state'];
+                if (statusField is int) {
+                  fsc = statusField;
+                } else if (statusField is String) {
+                  fsc = FriendEntry.mapStringStatusToFsc(statusField);
+                }
+
+                if (vmap['email'] is String &&
+                    (vmap['email'] as String).isNotEmpty) {
+                  email = vmap['email'] as String;
+                }
+                if (vmap['username'] is String &&
+                    (vmap['username'] as String).isNotEmpty) {
+                  username = vmap['username'] as String;
+                }
+                if (vmap['sharedReviewsCount'] is int) {
+                  sharedCount = vmap['sharedReviewsCount'] as int;
+                }
+                if (vmap['comment'] is String &&
+                    (vmap['comment'] as String).isNotEmpty) {
+                  comment = vmap['comment'] as String;
+                }
+                if (vmap['mailboxReqId'] is String &&
+                    (vmap['mailboxReqId'] as String).isNotEmpty) {
+                  reqId = vmap['mailboxReqId'] as String;
+                }
+                if (vmap['mailboxNormalized'] is String &&
+                    (vmap['mailboxNormalized'] as String).isNotEmpty) {
+                  normalized = vmap['mailboxNormalized'] as String;
+                }
+                if (vmap['accepted'] is bool) {
+                  acceptedFlag = vmap['accepted'] as bool;
+                } else if (vmap['accepted'] is int) {
+                  acceptedFlag = (vmap['accepted'] as int) == 1;
+                }
+                // Read rvCount - prioritize review_request subnode over top-level field
+                if (vmap['review_request'] is Map) {
+                  final Map<dynamic, dynamic> rrMapTemp =
+                      Map<dynamic, dynamic>.from(vmap['review_request'] as Map);
+                  if (rrMapTemp['rvCount'] is int) {
+                    rvCount = rrMapTemp['rvCount'] as int;
+                  }
+                  if (rrMapTemp['rvCountLastCheckedAt'] is String &&
+                      (rrMapTemp['rvCountLastCheckedAt'] as String)
+                          .isNotEmpty) {
+                    rvCountLastCheckedAt =
+                        rrMapTemp['rvCountLastCheckedAt'] as String;
+                  }
+                }
+                // Fallback to top-level rvCount if not in review_request
+                if (rvCount == null && vmap['rvCount'] is int) {
+                  rvCount = vmap['rvCount'] as int;
+                }
+                if (rvCountLastCheckedAt == null &&
+                    vmap['rvCountLastCheckedAt'] is String &&
+                    (vmap['rvCountLastCheckedAt'] as String).isNotEmpty) {
+                  rvCountLastCheckedAt = vmap['rvCountLastCheckedAt'] as String;
+                }
+
+                // Parse provider metadata (for RV-PROVIDED status)
+                if (vmap['providedRequestId'] is String &&
+                    (vmap['providedRequestId'] as String).isNotEmpty) {
+                  providedRequestId = vmap['providedRequestId'] as String;
+                }
+                if (vmap['providedRqCount'] is int) {
+                  providedRqCount = vmap['providedRqCount'] as int;
+                }
+                if (vmap['providedAt'] is String &&
+                    (vmap['providedAt'] as String).isNotEmpty) {
+                  providedAt = vmap['providedAt'] as String;
+                }
+
+                try {
+                  if (vmap['review_request'] is Map) {
+                    final Map<dynamic, dynamic> rrMap =
+                        Map<dynamic, dynamic>.from(
+                          vmap['review_request'] as Map,
+                        );
+
+                    final List<String> exKeys = <String>[];
+                    if (rrMap['exKeys'] is List) {
+                      for (final dynamic item in rrMap['exKeys'] as List) {
+                        if (item is String) {
+                          exKeys.add(item);
+                        }
+                      }
+                    }
+
+                    // Parse filters array
+                    final List<Map<String, String?>> filters = <Map<String, String?>>[];
+                    if (rrMap['filters'] is List) {
+                      for (final dynamic filterItem in rrMap['filters'] as List) {
+                        if (filterItem is Map) {
+                          final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+                          filters.add(<String, String?>{
+                            'country': filterMap['country']?.toString(),
+                            'city': filterMap['city']?.toString(),
+                          });
+                        }
+                      }
+                    }
+
+                    reviewRequestData = ReviewRequestData(
+                      requestComment: (rrMap['requestComment'] is String)
+                          ? rrMap['requestComment'] as String
+                          : null,
+                      filterCountry: (rrMap['filterCountry'] is String)
+                          ? rrMap['filterCountry'] as String
+                          : null,
+                      filterCity: (rrMap['filterCity'] is String)
+                          ? rrMap['filterCity'] as String
+                          : null,
+                      filters: filters.isNotEmpty ? filters : null,
+                      exCount: (rrMap['exCount'] is int)
+                          ? rrMap['exCount'] as int
+                          : 0,
+                      fromEmail: (rrMap['fromEmail'] is String)
+                          ? rrMap['fromEmail'] as String
+                          : null,
+                      fromDisplayName: (rrMap['fromDisplayName'] is String)
+                          ? rrMap['fromDisplayName'] as String
+                          : null,
+                      exKeys: exKeys.isNotEmpty ? exKeys : null,
+                    );
+                  }
+                } catch (_) {
+                  // ignore review_request parse errors
+                }
+
+                try {
+                  if (vmap['review'] is Map) {
+                    final Map<dynamic, dynamic> rvMap =
+                        Map<dynamic, dynamic>.from(vmap['review'] as Map);
+
+                    final Map<String, String> filters = <String, String>{};
+                    final dynamic f = rvMap['filters'];
+                    if (f is Map) {
+                      f.forEach((dynamic k, dynamic v2) {
+                        if (k != null && v2 is String && v2.isNotEmpty) {
+                          filters[k.toString()] = v2;
+                        }
+                      });
+                    } else {
+                      if (rvMap['country'] is String &&
+                          (rvMap['country'] as String).isNotEmpty) {
+                        filters['country'] = rvMap['country'] as String;
+                      }
+                      if (rvMap['cuisine'] is String &&
+                          (rvMap['cuisine'] as String).isNotEmpty) {
+                        filters['cuisine'] = rvMap['cuisine'] as String;
+                      }
+                      if (rvMap['city'] is String &&
+                          (rvMap['city'] as String).isNotEmpty) {
+                        filters['city'] = rvMap['city'] as String;
+                      }
+                    }
+
+                    final Map<String, bool>? exKeys = (rvMap['exKeys'] is Map)
+                        ? Map<String, bool>.from(
+                            rvMap['exKeys'] as Map,
+                          ).map((k, v2) => MapEntry(k.toString(), v2 == true))
+                        : null;
+
+                    final int? parsedRvCount = (rvMap['rvCount'] is int)
+                        ? rvMap['rvCount'] as int
+                        : (rvMap['rvCount'] is String
+                              ? int.tryParse(rvMap['rvCount'])
+                              : null);
+                    final int? parsedExCount = (rvMap['exCount'] is int)
+                        ? rvMap['exCount'] as int
+                        : null;
+
+                    reviewData = ReviewData(
+                      filters: filters,
+                      comment:
+                          (rvMap['comment'] is String &&
+                              (rvMap['comment'] as String).isNotEmpty)
+                          ? rvMap['comment'] as String
+                          : null,
+                      rvCount: parsedRvCount,
+                      exCount: parsedExCount,
+                      exKeys: exKeys,
+                      createdAt: (rvMap['createdAt'] is String)
+                          ? rvMap['createdAt'] as String
+                          : null,
+                      updatedAt: (rvMap['updatedAt'] is String)
+                          ? rvMap['updatedAt'] as String
+                          : null,
+                    );
+                  }
+                } catch (_) {
+                  // ignore review parse errors
+                }
+              }
+            } catch (_) {
+              // ignore parsing errors
+            }
+
+            nextMap[friendUid] = FriendEntry(
+              uid: friendUid,
+              email: email,
+              username: username,
+              fsc: fsc,
+              sharedReviewsCount: sharedCount,
+              comment: comment,
+              mailboxReqId: reqId,
+              mailboxNormalized: normalized,
+              accepted: acceptedFlag,
+              rvCount: rvCount,
+              rvCountLastCheckedAt: rvCountLastCheckedAt,
+              reviewRequest: reviewRequestData,
+              review: reviewData,
+              providedRequestId: providedRequestId,
+              providedRqCount: providedRqCount,
+              providedAt: providedAt,
+            );
+          });
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _friendByUid
+            ..clear()
+            ..addAll(nextMap);
+          _friends
+            ..clear()
+            ..addAll(_friendByUid.values);
+          _loading = false;
+          if (_selectedUid != null && !_friendByUid.containsKey(_selectedUid)) {
+            _selectedUid = null;
+          }
         });
-      }
 
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _friendByUid
-          ..clear()
-          ..addAll(nextMap);
-        _friends
-          ..clear()
-          ..addAll(_friendByUid.values);
-        _loading = false;
-        if (_selectedUid != null && !_friendByUid.containsKey(_selectedUid)) {
-          _selectedUid = null;
+        for (final FriendEntry fe in _friendByUid.values) {
+          if (FriendEntry.looksLikeUid(fe.email) &&
+              FriendEntry.looksLikeUid(fe.username)) {
+            _fetchAndPatchProfile(fe.uid);
+          }
         }
-      });
 
-      for (final FriendEntry fe in _friendByUid.values) {
-        if (FriendEntry.looksLikeUid(fe.email) && FriendEntry.looksLikeUid(fe.username)) {
-          _fetchAndPatchProfile(fe.uid);
+        _resolveMissingRvCounts(myUid, rawFriendVmaps);
+        _loadProvidedReviewsMetadata(myUid);
+      },
+      onError: (Object err, StackTrace? st) {
+        if (!mounted) {
+          return;
         }
-      }
-
-      debugPrint('[_subscribeToFriends] About to call _resolveMissingRvCounts. Total friends loaded: ${_friendByUid.length}');
-      _resolveMissingRvCounts(myUid, rawFriendVmaps);
-      _loadProvidedReviewsMetadata(myUid);
-    }, onError: (Object err, StackTrace? st) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loading = false;
-      });
-    });
+        setState(() {
+          _loading = false;
+        });
+      },
+    );
   }
 
-  void _resolveMissingRvCounts(String myUid, Map<String, Map<dynamic, dynamic>> rawFriendVmaps) {
-    debugPrint('[_resolveMissingRvCounts] Called for myUid=$myUid');
+  void _resolveMissingRvCounts(
+    String myUid,
+    Map<String, Map<dynamic, dynamic>> rawFriendVmaps,
+  ) {
     const int maxConcurrent = 3;
     final List<String> queue = <String>[];
 
     for (final MapEntry<String, FriendEntry> e in _friendByUid.entries) {
       final String friendUid = e.key;
       final FriendEntry fe = e.value;
-      
-      debugPrint('[_resolveMissingRvCounts] Checking friend $friendUid with fsc=${fe.fsc}');
 
       // Only attempt to resolve when the local stub is recipient-side RV-WANTS.
       // Do NOT attempt when the status is requester-side RV-ASKED.
@@ -330,54 +402,39 @@ class _FriendsScreenState extends State<FriendsScreen> {
         continue;
       }
 
-      debugPrint('[_resolveMissingRvCounts] Friend $friendUid has RV-WANTS status');
-      
       final int? cur = fe.review?.rvCount ?? fe.rvCount;
-      final String? lastChecked = fe.rvCountLastCheckedAt ?? fe.review?.updatedAt;
-      
-      debugPrint('[_resolveMissingRvCounts] Current rvCount=$cur, lastChecked=$lastChecked');
-      
+      final String? lastChecked =
+          fe.rvCountLastCheckedAt ?? fe.review?.updatedAt;
+
       bool needs = false;
       if (cur == null) {
         needs = true;
-        debugPrint('[_resolveMissingRvCounts] Needs update: cur is null');
       } else if (cur == -1) {
         needs = true;
-        debugPrint('[_resolveMissingRvCounts] Needs update: cur is -1');
       } else if (lastChecked != null) {
         try {
           final DateTime then = DateTime.parse(lastChecked).toUtc();
           final DateTime now = DateTime.now().toUtc();
           final int ageSec = now.difference(then).inSeconds;
-          debugPrint('[_resolveMissingRvCounts] Age: $ageSec seconds, TTL: $rvCountTtlSeconds seconds');
           if (ageSec >= rvCountTtlSeconds) {
             needs = true;
-            debugPrint('[_resolveMissingRvCounts] Needs update: age exceeds TTL');
           }
         } catch (_) {
           needs = true;
-          debugPrint('[_resolveMissingRvCounts] Needs update: lastChecked parse failed');
         }
       } else {
         needs = true;
-        debugPrint('[_resolveMissingRvCounts] Needs update: lastChecked is null');
       }
 
       if (needs) {
-        debugPrint('[_resolveMissingRvCounts] QUEUED friend $friendUid for count resolution');
         queue.add(friendUid);
-      } else {
-        debugPrint('[_resolveMissingRvCounts] SKIPPED friend $friendUid - does not need update');
       }
     }
 
     if (queue.isEmpty) {
-      debugPrint('[_resolveMissingRvCounts] Queue is empty, nothing to resolve');
       return;
     }
 
-    debugPrint('[_resolveMissingRvCounts] Queue has ${queue.length} friends to resolve');
-    
     int inFlight = 0;
     int idx = 0;
 
@@ -391,7 +448,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final String friendUid = queue[idx];
       idx += 1;
       inFlight += 1;
-      _resolveOneRvCount(myUid, friendUid, rawFriendVmaps[friendUid]).whenComplete(() {
+      _resolveOneRvCount(
+        myUid,
+        friendUid,
+        rawFriendVmaps[friendUid],
+      ).whenComplete(() {
         inFlight -= 1;
         scheduleNext();
       });
@@ -401,11 +462,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
     scheduleNext();
   }
 
-  Future<void> _resolveOneRvCount(String myUid, String friendUid, Map<dynamic, dynamic>? vmap) async {
-    debugPrint('[_resolveOneRvCount] START for friendUid=$friendUid, vmap=${vmap != null ? "present" : "null"}');
-    
+  Future<void> _resolveOneRvCount(
+    String myUid,
+    String friendUid,
+    Map<dynamic, dynamic>? vmap,
+  ) async {
     if (vmap == null) {
-      debugPrint('[_resolveOneRvCount] EXIT: vmap is null');
       return;
     }
 
@@ -415,27 +477,41 @@ class _FriendsScreenState extends State<FriendsScreen> {
         'users/$myUid/friends/$friendUid/review_request',
       );
       final DataSnapshot reviewRequestSnap = await reviewRequestRef.get();
-      
+
       if (!reviewRequestSnap.exists || reviewRequestSnap.value is! Map) {
-        debugPrint('[_resolveOneRvCount] EXIT: review_request not found or not a Map');
         return;
       }
 
-      final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(reviewRequestSnap.value as Map);
-      
-      // Read filter criteria from review_request structure
-      String? country = (requestData['filterCountry'] is String) ? requestData['filterCountry'] as String : null;
-      String? cuisine = (requestData['filterCuisine'] is String) ? requestData['filterCuisine'] as String : null;
-      String? city = (requestData['filterCity'] is String) ? requestData['filterCity'] as String : null;
+      final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(
+        reviewRequestSnap.value as Map,
+      );
 
-      if (country == null || country.trim().isEmpty) {
-        debugPrint('[_resolveOneRvCount] EXIT: country filter is null or empty');
+      // Read filters array from review_request structure
+      final List<Map<String, String?>> filters = <Map<String, String?>>[];
+      try {
+        if (requestData['filters'] is List) {
+          final List<dynamic> filtersList = requestData['filters'] as List;
+          for (final dynamic filterItem in filtersList) {
+            if (filterItem is Map) {
+              final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+              final String? country = filterMap['country']?.toString();
+              final String? city = filterMap['city']?.toString();
+              if (country != null && country.isNotEmpty) {
+                filters.add(<String, String?>{
+                  'country': country,
+                  'city': (city == null || city.isEmpty || city == 'none') ? null : city,
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Error parsing filters
+      }
+
+      if (filters.isEmpty) {
         return;
       }
-      
-      // Convert 'none' to null for filtering
-      if (cuisine == 'none') cuisine = null;
-      if (city == 'none') city = null;
 
       // Read exKeys BEFORE counting so we can exclude already-provided reviews
       final Set<String> exKeysSet = <String>{};
@@ -446,29 +522,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
           }
         }
       }
-      
+
       final String myUidNow = FirebaseAuth.instance.currentUser?.uid ?? '';
-      
-      debugPrint('[_resolveOneRvCount] Calculating count for friendUid=$friendUid');
-      debugPrint('[_resolveOneRvCount] Filters: country="$country", cuisine="$cuisine", city="$city"');
-      debugPrint('[_resolveOneRvCount] exKeysSet size: ${exKeysSet.length}');
-      
+
       final int found = await countMatchingReviews(
-        ownerUid: myUidNow, 
-        country: country, 
-        cuisine: cuisine, 
-        city: city,
+        ownerUid: myUidNow,
+        filters: filters,
         excludeKeys: exKeysSet.isNotEmpty ? exKeysSet : null,
       );
-
-      debugPrint('[_resolveOneRvCount] Result: found=$found reviews');
 
       if (found < 0) {
         return;
       }
 
       // exKeys already read above, just get exCount
-      final int exCount = (requestData['exCount'] is int) ? requestData['exCount'] as int : 0;
+      final int exCount = (requestData['exCount'] is int)
+          ? requestData['exCount'] as int
+          : 0;
 
       final String nowIso = DateTime.now().toUtc().toIso8601String();
 
@@ -495,7 +565,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // Update local state with count for display
       local.rvCount = found;
       local.rvCountLastCheckedAt = nowIso;
-      
+
       // Update reviewRequest if present
       if (local.reviewRequest != null) {
         // Create new ReviewRequestData with updated values (immutable pattern)
@@ -503,7 +573,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           requestComment: local.reviewRequest!.requestComment,
           filterCountry: local.reviewRequest!.filterCountry,
           filterCity: local.reviewRequest!.filterCity,
-          filterCuisine: local.reviewRequest!.filterCuisine,
+          filters: local.reviewRequest!.filters,
           exCount: exCount,
           fromEmail: local.reviewRequest!.fromEmail,
           fromDisplayName: local.reviewRequest!.fromDisplayName,
@@ -530,10 +600,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return;
       }
 
-      final Map<String, Map<String, dynamic>> metadata = await loadProvidedReviewsMetadata(
-        myUid: myUid,
-        myEmail: myEmail,
-      );
+      final Map<String, Map<String, dynamic>> metadata =
+          await loadProvidedReviewsMetadata(myUid: myUid, myEmail: myEmail);
 
       if (!mounted) {
         return;
@@ -541,7 +609,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
       // Update friend entries with metadata
       bool updated = false;
-      for (final MapEntry<String, Map<String, dynamic>> entry in metadata.entries) {
+      for (final MapEntry<String, Map<String, dynamic>> entry
+          in metadata.entries) {
         final String providerUid = entry.key;
         final Map<String, dynamic> data = entry.value;
 
@@ -569,7 +638,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
   int _acceptedCount() {
     int n = 0;
     for (final FriendEntry f in _friends) {
-      if ((f.accepted ?? false) || f.fsc == statusAccepted || f.status == FriendStatus.accepted) {
+      if ((f.accepted ?? false) ||
+          f.fsc == statusAccepted ||
+          f.status == FriendStatus.accepted) {
         n += 1;
       }
     }
@@ -593,15 +664,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (f == null) {
       return false;
     }
-    
+
     // Check if status code is actionable
-    final bool isActionableStatus = f.fsc == statusRequested || f.fsc == statusRequesterSent || f.fsc == statusRvAsked || f.fsc == statusRvWants || f.fsc == statusProvided || f.fsc == statusRvDeclined;
-    
+    final bool isActionableStatus =
+        f.fsc == statusRequested ||
+        f.fsc == statusRequesterSent ||
+        f.fsc == statusRvAsked ||
+        f.fsc == statusRvWants ||
+        f.fsc == statusProvided ||
+        f.fsc == statusRvDeclined;
+
     // If status code is 1 (accepted with no pending request), not actionable
     if (f.fsc == statusAccepted) {
       return false;
     }
-    
+
     return isActionableStatus;
   }
 
@@ -616,18 +693,31 @@ class _FriendsScreenState extends State<FriendsScreen> {
     _loadingProfileFor[friendUid] = true;
 
     try {
-      final DataSnapshot pubSnap = await FirebaseDatabase.instance.ref('public_profiles/$friendUid').get();
+      final DataSnapshot pubSnap = await FirebaseDatabase.instance
+          .ref('public_profiles/$friendUid')
+          .get();
       if (!pubSnap.exists || pubSnap.value == null) {
         return;
       }
       if (pubSnap.value is! Map) {
         return;
       }
-      final Map<dynamic, dynamic> vmap = Map<dynamic, dynamic>.from(pubSnap.value as Map);
+      final Map<dynamic, dynamic> vmap = Map<dynamic, dynamic>.from(
+        pubSnap.value as Map,
+      );
 
-      final String? email = (vmap['email'] is String && (vmap['email'] as String).isNotEmpty) ? vmap['email'] as String : null;
-      final String? username = (vmap['displayName'] is String && (vmap['displayName'] as String).isNotEmpty) ? vmap['displayName'] as String : null;
-      final int? shared = (vmap['sharedReviewsCount'] is int) ? vmap['sharedReviewsCount'] as int : null;
+      final String? email =
+          (vmap['email'] is String && (vmap['email'] as String).isNotEmpty)
+          ? vmap['email'] as String
+          : null;
+      final String? username =
+          (vmap['displayName'] is String &&
+              (vmap['displayName'] as String).isNotEmpty)
+          ? vmap['displayName'] as String
+          : null;
+      final int? shared = (vmap['sharedReviewsCount'] is int)
+          ? vmap['sharedReviewsCount'] as int
+          : null;
 
       if (!mounted) {
         return;
@@ -638,7 +728,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
 
       bool localChanged = false;
-      if (username != null && username.isNotEmpty && username != current.username) {
+      if (username != null &&
+          username.isNotEmpty &&
+          username != current.username) {
         current.username = username;
         localChanged = true;
       }
@@ -669,7 +761,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
         }
         changed = true;
       }
-      if (username != null && username.isNotEmpty && username != current.username) {
+      if (username != null &&
+          username.isNotEmpty &&
+          username != current.username) {
         if (myUid.isNotEmpty) {
           patch['users/$myUid/friends/$friendUid/username'] = username;
         }
@@ -717,7 +811,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     setState(() {
       _accepting = true;
     });
-    
+
     // If this is accepting a declined review request notification (statusCode=6), reset to FRIEND
     if (selected.fsc == statusRvDeclined) {
       try {
@@ -727,11 +821,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
           'users/$me/friends/${selected.uid}/comment': null,
           'users/$me/friends/${selected.uid}/updatedAt': nowIso,
         };
-        
+
         await FirebaseDatabase.instance.ref().update(updates);
-        
+
         if (!mounted) return;
-        
+
         setState(() {
           selected.fsc = statusAccepted;
           selected.accepted = true;
@@ -739,10 +833,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           _selectedUid = null;
           _accepting = false;
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Decline acknowledged')),
-        );
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.declineAcknowledged)));
       } catch (e) {
         if (mounted) {
           setState(() {
@@ -755,7 +849,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
       return;
     }
-    
+
     // If this is accepting provided reviews (statusCode=5), relocate reviews and reset status
     if (selected.fsc == statusProvided) {
       try {
@@ -763,21 +857,21 @@ class _FriendsScreenState extends State<FriendsScreen> {
         if (myEmail.isEmpty) {
           throw Exception('User email not available');
         }
-        
+
         final String? requestId = selected.providedRequestId;
         if (requestId == null || requestId.isEmpty) {
           throw Exception('Request ID not found');
         }
-        
+
         final AcceptProvidedReviewsResult result = await acceptProvidedReviews(
           myUid: me,
           myEmail: myEmail,
           providerUid: selected.uid,
           requestId: requestId,
         );
-        
+
         if (!mounted) return;
-        
+
         if (result.success) {
           setState(() {
             selected.fsc = statusAccepted;
@@ -789,19 +883,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
             _selectedUid = null;
             _accepting = false;
           });
-          
-          final String message = result.reviewsAccepted > 0
-              ? '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s)'
-              : '${AppStr.accept} — reviews already received';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message)),
-          );
+
+          String message;
+          if (result.reviewsAccepted > 0 && result.duplicatesSkipped > 0) {
+            message = '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s), ${result.duplicatesSkipped} duplicate(s) skipped';
+          } else if (result.reviewsAccepted > 0) {
+            message = '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s)';
+          } else if (result.duplicatesSkipped > 0) {
+            message = '${AppStr.accept} — all ${result.duplicatesSkipped} review(s) already received';
+          } else {
+            message = '${AppStr.accept} — no reviews to accept';
+          }
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
         } else {
           setState(() {
             _accepting = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppStr.requestSendFailed}: ${result.errorMessage ?? "Unknown error"}')),
+            SnackBar(
+              content: Text(
+                '${AppStr.requestSendFailed}: ${result.errorMessage ?? "Unknown error"}',
+              ),
+            ),
           );
         }
       } catch (e) {
@@ -816,7 +921,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
       return;
     }
-    
+
     // If this is a review request (recipient wants reviews), run the provider flow
     if (selected.fsc == statusRvWants) {
       // Gather matching reviews first, enforce 0/50 limits and then collect provider comment.
@@ -825,29 +930,46 @@ class _FriendsScreenState extends State<FriendsScreen> {
       int totalMatches = 0;
       try {
         // Read review criteria from friend stub's review_request subnode
-        final String reviewRequestPath = 'users/$myUid/friends/${selected.uid}/review_request';
-        final DataSnapshot reviewRequestSnap = await FirebaseDatabase.instance.ref(reviewRequestPath).get();
-        
+        final String reviewRequestPath =
+            'users/$myUid/friends/${selected.uid}/review_request';
+        final DataSnapshot reviewRequestSnap = await FirebaseDatabase.instance
+            .ref(reviewRequestPath)
+            .get();
+
         if (!reviewRequestSnap.exists || reviewRequestSnap.value is! Map) {
           throw Exception('Review request data not found');
         }
 
-        final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(reviewRequestSnap.value as Map);
-        
-        // Read filter criteria from review_request structure
-        String? country = (requestData['filterCountry'] is String && (requestData['filterCountry'] as String).trim().isNotEmpty)
-            ? (requestData['filterCountry'] as String).trim()
-            : null;
-        String? cuisine = (requestData['filterCuisine'] is String && (requestData['filterCuisine'] as String).trim().isNotEmpty)
-            ? (requestData['filterCuisine'] as String).trim()
-            : null;
-        String? city = (requestData['filterCity'] is String && (requestData['filterCity'] as String).trim().isNotEmpty)
-            ? (requestData['filterCity'] as String).trim()
-            : null;
-        
-        // Convert 'none' to null for filtering
-        if (cuisine == 'none') cuisine = null;
-        if (city == 'none') city = null;
+        final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(
+          reviewRequestSnap.value as Map,
+        );
+
+        // Read filters array from review_request structure
+        final List<Map<String, String?>> filters = <Map<String, String?>>[];
+        try {
+          if (requestData['filters'] is List) {
+            final List<dynamic> filtersList = requestData['filters'] as List;
+            for (final dynamic filterItem in filtersList) {
+              if (filterItem is Map) {
+                final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+                final String? country = filterMap['country']?.toString();
+                final String? city = filterMap['city']?.toString();
+                if (country != null && country.isNotEmpty) {
+                  filters.add(<String, String?>{
+                    'country': country.trim(),
+                    'city': (city == null || city.isEmpty || city == 'none') ? null : city.trim(),
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Error parsing filters
+        }
+
+        if (filters.isEmpty) {
+          throw Exception('No valid filters found in review request');
+        }
 
         final Set<String> excludedKeys = <String>{};
         // Parse exclusions if present (can be Map or List)
@@ -864,40 +986,40 @@ class _FriendsScreenState extends State<FriendsScreen> {
           }
         } catch (_) {}
 
-        // Normalize for comparison
-        final String nc = (country ?? '').trim().toLowerCase();
-        final String nu = (cuisine ?? '').trim().toLowerCase();
-        final String ny = (city ?? '').trim().toLowerCase();
-
-        // Read my reviews and filter client-side
-        final DatabaseReference myReviewsRef = FirebaseDatabase.instance.ref('users/$myUid/reviews');
+        // Read my reviews and filter client-side against all filters (OR logic)
+        final DatabaseReference myReviewsRef = FirebaseDatabase.instance.ref(
+          'users/$myUid/reviews',
+        );
         final DataSnapshot myRvSnap = await myReviewsRef.get();
-        if (myRvSnap.exists && myRvSnap.value != null && myRvSnap.value is Map) {
-          final Map<dynamic, dynamic> all = Map<dynamic, dynamic>.from(myRvSnap.value as Map);
+        if (myRvSnap.exists &&
+            myRvSnap.value != null &&
+            myRvSnap.value is Map) {
+          final Map<dynamic, dynamic> all = Map<dynamic, dynamic>.from(
+            myRvSnap.value as Map,
+          );
           for (final dynamic k in all.keys) {
             final dynamic v = all[k];
             if (v is! Map) continue;
             final Map<dynamic, dynamic> rv = Map<dynamic, dynamic>.from(v);
 
             String rvCountry = '';
-            String rvCuisine = '';
             String rvCity = '';
             try {
-              if (rv['country'] is String) rvCountry = (rv['country'] as String).trim().toLowerCase();
-              if (rv['restcountry'] is String && rvCountry.isEmpty) rvCountry = (rv['restcountry'] as String).trim().toLowerCase();
+              if (rv['country'] is String) {
+                rvCountry = (rv['country'] as String).trim().toLowerCase();
+              }
+              if (rv['restcountry'] is String && rvCountry.isEmpty) {
+                rvCountry = (rv['restcountry'] as String).trim().toLowerCase();
+              }
             } catch (_) {}
             try {
-              if (rv['cuisine'] is String) rvCuisine = (rv['cuisine'] as String).trim().toLowerCase();
-              if (rv['restcuisine'] is String && rvCuisine.isEmpty) rvCuisine = (rv['restcuisine'] as String).trim().toLowerCase();
+              if (rv['city'] is String) {
+                rvCity = (rv['city'] as String).trim().toLowerCase();
+              }
+              if (rv['restcity'] is String && rvCity.isEmpty) {
+                rvCity = (rv['restcity'] as String).trim().toLowerCase();
+              }
             } catch (_) {}
-            try {
-              if (rv['city'] is String) rvCity = (rv['city'] as String).trim().toLowerCase();
-              if (rv['restcity'] is String && rvCity.isEmpty) rvCity = (rv['restcity'] as String).trim().toLowerCase();
-            } catch (_) {}
-
-            if (nc.isNotEmpty && rvCountry != nc) continue;
-            if (nu.isNotEmpty && rvCuisine != nu) continue;
-            if (ny.isNotEmpty && rvCity != ny) continue;
 
             final String keyStr = k.toString();
             // Skip excluded keys configured in ReviewReviewsScreen
@@ -905,11 +1027,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
               continue;
             }
 
-            totalMatches += 1;
-            if (toProvide.length < 50) {
-              final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(rv);
-              item['key'] = keyStr;
-              toProvide.add(item);
+            // Check if review matches ANY filter (OR logic)
+            bool matchesAnyFilter = false;
+            for (final Map<String, String?> filter in filters) {
+              final String fCountry = (filter['country'] ?? '').trim().toLowerCase();
+              final String fCity = (filter['city'] ?? '').trim().toLowerCase();
+
+              // Country must match if specified
+              if (fCountry.isNotEmpty && rvCountry != fCountry) {
+                continue;
+              }
+              // City must match if specified
+              if (fCity.isNotEmpty && rvCity != fCity) {
+                continue;
+              }
+              // If we get here, this filter matches
+              matchesAnyFilter = true;
+              break;
+            }
+
+            if (matchesAnyFilter) {
+              totalMatches += 1;
+              if (toProvide.length < 50) {
+                final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(rv);
+                item['key'] = keyStr;
+                toProvide.add(item);
+              }
             }
           }
         }
@@ -928,9 +1071,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
             builder: (BuildContext ctx) {
               return AlertDialog(
                 title: const Text(AppStr.reviewReviewsTitle),
-                content: const Text('No matching reviews found; cannot accept this request.'),
+                content: const Text(
+                  'No matching reviews found; cannot accept this request.',
+                ),
                 actions: <Widget>[
-                  TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text(AppStr.ok)),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text(AppStr.ok),
+                  ),
                 ],
               );
             },
@@ -946,9 +1094,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // If found, prefer that value and skip prompting the user again.
       String? dialogResult;
       try {
-        final String pcPath = 'users/$myUid/friends/${selected.uid}/review_request/providerComment';
-        final DataSnapshot pcSnap = await FirebaseDatabase.instance.ref(pcPath).get();
-        if (pcSnap.exists && pcSnap.value is String && (pcSnap.value as String).trim().isNotEmpty) {
+        final String pcPath =
+            'users/$myUid/friends/${selected.uid}/review_request/providerComment';
+        final DataSnapshot pcSnap = await FirebaseDatabase.instance
+            .ref(pcPath)
+            .get();
+        if (pcSnap.exists &&
+            pcSnap.value is String &&
+            (pcSnap.value as String).trim().isNotEmpty) {
           dialogResult = (pcSnap.value as String).trim();
           // Enforce 40 char limit (trim if necessary)
           if (dialogResult.length > 40) {
@@ -988,10 +1141,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
             }
           }
           if (metaKeyPath != null) {
-            final DataSnapshot metaSnap = await rootRef.child(metaKeyPath).get();
+            final DataSnapshot metaSnap = await rootRef
+                .child(metaKeyPath)
+                .get();
             if (metaSnap.exists && metaSnap.value != null) {
               try {
-                final Map<dynamic, dynamic> metaMap = Map<dynamic, dynamic>.from(metaSnap.value as Map);
+                final Map<dynamic, dynamic> metaMap =
+                    Map<dynamic, dynamic>.from(metaSnap.value as Map);
                 // prefer 'rqCount' then legacy 'count'
                 providedCount = (metaMap['rqCount'] is int)
                     ? metaMap['rqCount'] as int
@@ -1027,8 +1183,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
           // Note: The provider cannot delete the requester's mailbox entry due to permission rules.
           // The requester will handle their own mailbox cleanup when they accept the provided reviews.
           if (!mounted) return;
-          final String infoMsg = '${AppStr.accept} — provided $providedCount review(s) (reqId=${requestId ?? 'unknown'})';
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(infoMsg)));
+          final String infoMsg =
+              '${AppStr.accept} — provided $providedCount review(s) (reqId=${requestId ?? 'unknown'})';
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(infoMsg)));
         }
         return;
       } catch (e) {
@@ -1036,7 +1195,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
           setState(() {
             _accepting = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.requestSendFailed)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(AppStr.requestSendFailed)));
         }
         return;
       }
@@ -1137,7 +1298,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         context: context,
         builder: (BuildContext ctx) {
           return AlertDialog(
-            title: const Text('Decline Provided Reviews'),
+            title: Text(AppStr.declineProvidedReviewsTitle),
             content: const Text(
               'This will permanently delete the provided reviews. This action cannot be undone.\n\nDo you want to decline these reviews?',
             ),
@@ -1152,7 +1313,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 onPressed: () {
                   Navigator.of(ctx).pop(true);
                 },
-                child: const Text('Decline', style: TextStyle(color: Colors.red)),
+                child: const Text(
+                  'Decline',
+                  style: TextStyle(color: AppColors.red),
+                ),
               ),
             ],
           );
@@ -1170,44 +1334,45 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // User confirmed decline - proceed with deletion
       bool success = false;
       String snackbarMsg = AppStr.requestSendFailed;
-      
+
       try {
         final String myEmail = currentUser?.email ?? '';
         if (myEmail.isEmpty) {
           throw Exception('User email not available');
         }
-        
+
         // Get the mailbox request ID
         final String? requestId = selected.providedRequestId;
         if (requestId == null || requestId.isEmpty) {
           throw Exception('Request ID not available');
         }
-        
+
         // Normalize my email for mailbox path
         final String normalizedMailbox = normalizeEmailForPath(myEmail);
-        
+
         final String nowIso = DateTime.now().toUtc().toIso8601String();
         final Map<String, dynamic> updates = <String, dynamic>{};
-        
+
         // Delete the request record in my mailbox (includes meta and reviews subnodes)
-        final String mailboxRequestPath = 'users_by_email/$normalizedMailbox/requests/$requestId';
+        final String mailboxRequestPath =
+            'users_by_email/$normalizedMailbox/requests/$requestId';
         updates[mailboxRequestPath] = null;
-        
+
         // Reset my friend stub to status code 1 (FRIEND)
         updates['users/$me/friends/${selected.uid}/statusCode'] = 1;
         updates['users/$me/friends/${selected.uid}/updatedAt'] = nowIso;
-        
+
         await FirebaseDatabase.instance.ref().update(updates);
         success = true;
         snackbarMsg = 'Provided reviews declined';
       } catch (e) {
         snackbarMsg = '${AppStr.requestSendFailed}: $e';
       }
-      
+
       if (!mounted) {
         return;
       }
-      
+
       if (success) {
         final FriendEntry? reloaded = _friendByUid[_selectedUid];
         if (reloaded != null) {
@@ -1222,9 +1387,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
           });
         }
       }
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snackbarMsg)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(snackbarMsg)));
         setState(() {
           _declining = false;
         });
@@ -1236,38 +1403,45 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (selected.fsc == statusRvWants) {
       bool success = false;
       String snackbarMsg = AppStr.requestSendFailed;
-      
+
       try {
         // Get requester's email for the mailbox
         String requesterEmail = selected.email;
         if (requesterEmail.isEmpty) {
           throw Exception('Requester email not available');
         }
-        
+
         // Normalize the requester's email for mailbox path
         final String normalizedMailbox = normalizeEmailForPath(requesterEmail);
-        
+
         // Generate a request ID
-        final String requestId = DateTime.now().millisecondsSinceEpoch.toString();
+        final String requestId = DateTime.now().millisecondsSinceEpoch
+            .toString();
         final String nowIso = DateTime.now().toUtc().toIso8601String();
-        
+
         // Read provider comment from friend stub (set on review_request_details_screen)
         String providerMessage = '';
         try {
-          final String pcPath = 'users/$me/friends/${selected.uid}/review_request/providerComment';
-          final DataSnapshot pcSnap = await FirebaseDatabase.instance.ref(pcPath).get();
-          if (pcSnap.exists && pcSnap.value is String && (pcSnap.value as String).trim().isNotEmpty) {
+          final String pcPath =
+              'users/$me/friends/${selected.uid}/review_request/providerComment';
+          final DataSnapshot pcSnap = await FirebaseDatabase.instance
+              .ref(pcPath)
+              .get();
+          if (pcSnap.exists &&
+              pcSnap.value is String &&
+              (pcSnap.value as String).trim().isNotEmpty) {
             providerMessage = (pcSnap.value as String).trim();
           }
         } catch (_) {
           // If can't read, use empty string
         }
-        
+
         // Build atomic update
         final Map<String, dynamic> updates = <String, dynamic>{};
-        
+
         // Create request record in requester's users_by_email mailbox with status code 6
-        final String requestBasePath = 'users_by_email/$normalizedMailbox/requests/$requestId';
+        final String requestBasePath =
+            'users_by_email/$normalizedMailbox/requests/$requestId';
         updates['$requestBasePath/fromUid'] = me;
         updates['$requestBasePath/statusCode'] = 6;
         updates['$requestBasePath/createdAt'] = nowIso;
@@ -1278,24 +1452,24 @@ class _FriendsScreenState extends State<FriendsScreen> {
           'providerUid': me,
           'declinedAt': nowIso,
         };
-        
+
         // Reset provider's (my) friend stub to status code 1 (FRIEND)
         updates['users/$me/friends/${selected.uid}/statusCode'] = 1;
         updates['users/$me/friends/${selected.uid}/review_request'] = null;
         updates['users/$me/friends/${selected.uid}/comment'] = null;
         updates['users/$me/friends/${selected.uid}/updatedAt'] = nowIso;
-        
+
         await FirebaseDatabase.instance.ref().update(updates);
         success = true;
         snackbarMsg = 'Review request declined';
       } catch (e) {
         snackbarMsg = '${AppStr.requestSendFailed}: $e';
       }
-      
+
       if (!mounted) {
         return;
       }
-      
+
       if (success) {
         final FriendEntry? reloaded = _friendByUid[_selectedUid];
         if (reloaded != null) {
@@ -1306,9 +1480,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
           });
         }
       }
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snackbarMsg)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(snackbarMsg)));
         setState(() {
           _declining = false;
         });
@@ -1343,8 +1519,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
       updates['users/$me/friends/${selected.uid}/review'] = null;
 
-      if (selected.mailboxNormalized != null && selected.mailboxNormalized!.isNotEmpty && selected.mailboxReqId != null && selected.mailboxReqId!.isNotEmpty) {
-        final String mailboxPath = 'users_by_email/${selected.mailboxNormalized}/requests/${selected.mailboxReqId}';
+      if (selected.mailboxNormalized != null &&
+          selected.mailboxNormalized!.isNotEmpty &&
+          selected.mailboxReqId != null &&
+          selected.mailboxReqId!.isNotEmpty) {
+        final String mailboxPath =
+            'users_by_email/${selected.mailboxNormalized}/requests/${selected.mailboxReqId}';
         updates[mailboxPath] = null;
       }
 
@@ -1362,7 +1542,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final FriendEntry? reloaded = _friendByUid[_selectedUid];
       if (reloaded != null) {
         setState(() {
-          reloaded.fsc = statusUnknown; // 9 - actor declines, sets to unknown/not interested
+          reloaded.fsc =
+              statusUnknown; // 9 - actor declines, sets to unknown/not interested
           reloaded.review = null;
           _selectedUid = null;
         });
@@ -1391,7 +1572,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Delete Friend', style: AppFonts.bold),
+          title: Text(AppStr.deleteFriendTitle, style: AppFonts.bold),
           content: Text(
             'Are you sure you want to delete this friend relationship?',
             style: AppFonts.standard,
@@ -1436,13 +1617,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     try {
       try {
-        final DataSnapshot aSnap = await rootRef.child('users/$me/friends/$friendUid').get();
+        final DataSnapshot aSnap = await rootRef
+            .child('users/$me/friends/$friendUid')
+            .get();
         if (aSnap.exists) {
           parentAExists = true;
         }
       } catch (_) {}
       try {
-        final DataSnapshot bSnap = await rootRef.child('users/$friendUid/friends/$me').get();
+        final DataSnapshot bSnap = await rootRef
+            .child('users/$friendUid/friends/$me')
+            .get();
         if (bSnap.exists) {
           parentBExists = true;
         }
@@ -1468,14 +1653,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
         }
       }
 
-      Future<void> scanMailboxForFromUid(String normalized, String fromUid) async {
+      Future<void> scanMailboxForFromUid(
+        String normalized,
+        String fromUid,
+      ) async {
         try {
           final String mailboxRoot = 'users_by_email/$normalized/requests';
-          final DataSnapshot mailboxSnap = await rootRef.child(mailboxRoot).get();
-          if (!mailboxSnap.exists || mailboxSnap.value == null || mailboxSnap.value is! Map) {
+          final DataSnapshot mailboxSnap = await rootRef
+              .child(mailboxRoot)
+              .get();
+          if (!mailboxSnap.exists ||
+              mailboxSnap.value == null ||
+              mailboxSnap.value is! Map) {
             return;
           }
-          final Map<dynamic, dynamic> mailboxMap = Map<dynamic, dynamic>.from(mailboxSnap.value as Map);
+          final Map<dynamic, dynamic> mailboxMap = Map<dynamic, dynamic>.from(
+            mailboxSnap.value as Map,
+          );
           for (final dynamic key in mailboxMap.keys) {
             final dynamic val = mailboxMap[key];
             if (val is Map) {
@@ -1490,10 +1684,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
         } catch (_) {}
       }
 
-      if (friendNormalized != null && friendNormalized.isNotEmpty && me.isNotEmpty) {
+      if (friendNormalized != null &&
+          friendNormalized.isNotEmpty &&
+          me.isNotEmpty) {
         await scanMailboxForFromUid(friendNormalized, me);
       }
-      if (myNormalized != null && myNormalized.isNotEmpty && friendUid.isNotEmpty) {
+      if (myNormalized != null &&
+          myNormalized.isNotEmpty &&
+          friendUid.isNotEmpty) {
         await scanMailboxForFromUid(myNormalized, friendUid);
       }
 
@@ -1562,16 +1760,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
       int deletedParents = 0;
       if (parentDeleteSucceeded) {
-        deletedParents = (parentAExists || parentBExists) ? (parentAExists && parentBExists ? 2 : 1) : 0;
+        deletedParents = (parentAExists || parentBExists)
+            ? (parentAExists && parentBExists ? 2 : 1)
+            : 0;
       } else {
         try {
-          final DataSnapshot a = await rootRef.child('users/$me/friends/$friendUid').get();
+          final DataSnapshot a = await rootRef
+              .child('users/$me/friends/$friendUid')
+              .get();
           if (!a.exists) {
             deletedParents += 1;
           }
         } catch (_) {}
         try {
-          final DataSnapshot b = await rootRef.child('users/$friendUid/friends/$me').get();
+          final DataSnapshot b = await rootRef
+              .child('users/$friendUid/friends/$me')
+              .get();
           if (!b.exists) {
             deletedParents += 1;
           }
@@ -1596,7 +1800,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
         } else {
           msg = '${AppStr.deleteSuccessPending} $deletedCount of $foundCount';
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
       } else {
         _deleting = false;
       }
@@ -1606,7 +1812,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
         setState(() {
           _deleting = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.deleteFailed)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.deleteFailed)));
       } else {
         _deleting = false;
       }
@@ -1637,9 +1845,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       Navigator.pushNamed(
         context,
         '/review-request-details',
-        arguments: <String, dynamic>{
-          'friendEntry': selected,
-        },
+        arguments: <String, dynamic>{'friendEntry': selected},
       );
       return;
     }
@@ -1671,18 +1877,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   Widget build(BuildContext context) {
     final int accepted = _acceptedCount();
-    final bool acceptEnabled = _selectedIsActionableByStatus() && !_accepting && !_declining && !_deleting;
-    
+    final bool acceptEnabled =
+        _selectedIsActionableByStatus() &&
+        !_accepting &&
+        !_declining &&
+        !_deleting;
+
     // Decline button should not be active for RV-DECLINED status (no concept of declining a decline)
-    bool declineEnabled = _selectedIsActionableByStatus() && !_accepting && !_declining && !_deleting;
+    bool declineEnabled =
+        _selectedIsActionableByStatus() &&
+        !_accepting &&
+        !_declining &&
+        !_deleting;
     if (_selectedUid != null) {
       final FriendEntry? selected = _friendByUid[_selectedUid];
       if (selected != null && selected.fsc == statusRvDeclined) {
         declineEnabled = false;
       }
     }
-    
-    final bool deleteEnabled = _selectedIsDeletable && !_deleting && !_accepting && !_declining;
+
+    final bool deleteEnabled =
+        _selectedIsDeletable && !_deleting && !_accepting && !_declining;
 
     String addButtonLabel;
     if (_selectedUid == null) {
@@ -1701,7 +1916,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
         automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: AppColors.darkGreen,
-        title: Text('${AppStr.friendsTitle}: ($accepted)', style: AppFonts.title.copyWith(color: Colors.white)),
+        title: Text(
+          '${AppStr.friendsTitle}: ($accepted)',
+          style: AppFonts.title.copyWith(color: Colors.white),
+        ),
       ),
       body: Column(
         children: <Widget>[
@@ -1709,25 +1927,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _friends.isEmpty
-                    ? Center(child: Text(AppStr.noFriends, style: AppFonts.standard.copyWith(color: AppColors.mutedText)))
-                    : ListView.builder(
-                        itemCount: _friends.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final FriendEntry f = _friends[index];
-                          return GestureDetector(
-                            onTap: () {
-                              _toggleSelect(f.uid);
-                            },
-                            child: FriendRow(
-                              entry: f,
-                              selected: _selectedUid == f.uid,
-                              onTap: () {
-                                _toggleSelect(f.uid);
-                              },
-                            ),
-                          );
-                        },
+                ? Center(
+                    child: Text(
+                      AppStr.noFriends,
+                      style: AppFonts.standard.copyWith(
+                        color: AppColors.mutedText,
                       ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _friends.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final FriendEntry f = _friends[index];
+                      return GestureDetector(
+                        onTap: () {
+                          _toggleSelect(f.uid);
+                        },
+                        child: FriendRow(
+                          entry: f,
+                          selected: _selectedUid == f.uid,
+                          onTap: () {
+                            _toggleSelect(f.uid);
+                          },
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           FriendActions(
@@ -1741,7 +1966,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
             onDecline: _handleDecline,
             onDelete: _handleDelete,
             onBack: () {
-              Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const TopScreen()), (route) => false);
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const TopScreen()),
+                (route) => false,
+              );
             },
             onAddFriend: _onAddFriendPressed,
             addFriendLabel: addButtonLabel,

@@ -29,15 +29,6 @@ class Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool fileExists = false;
-    if (path != null && path!.isNotEmpty) {
-      try {
-        fileExists = File(path!).existsSync();
-      } catch (_) {
-        fileExists = false;
-      }
-    }
-
     return SizedBox(
       width: size,
       height: size,
@@ -56,20 +47,25 @@ class Thumbnail extends StatelessWidget {
                 height: 28,
                 child: Material(
                   color: Colors.black38,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                   child: InkWell(
                     onTap: onRemove,
-                    child: const Icon(Icons.close, size: 18, color: Colors.white),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
-          // Only enable onTap when file exists and onTap was provided. If file is missing
-          // the overlay InkWell will be non-interactive (onTap: null) so taps do nothing.
+          // Enable onTap when provided: either to view existing image or to capture new one
           Positioned.fill(
             child: Material(
               color: Colors.transparent,
-              child: InkWell(onTap: (onTap != null && fileExists) ? onTap : null),
+              child: InkWell(onTap: onTap),
             ),
           ),
         ],
@@ -82,7 +78,8 @@ class Thumbnail extends StatelessWidget {
       return Container(
         color: AppColors.lightGrey,
         child: Center(
-          child: placeholder ??
+          child:
+              placeholder ??
               Icon(
                 Icons.camera_alt,
                 size: size * 0.38,
@@ -98,7 +95,7 @@ class Thumbnail extends StatelessWidget {
       if (!exists) {
         // Missing file: show grey box with a small cross and do not present camera icon
         return Container(
-          color: Colors.grey.shade300,
+          color: AppColors.greyShade300,
           width: size,
           height: size,
           child: const Center(child: Icon(Icons.close, color: Colors.white70)),
@@ -112,13 +109,25 @@ class Thumbnail extends StatelessWidget {
         height: size,
         errorBuilder: (_, __, ___) => Container(
           color: AppColors.lightGrey,
-          child: Center(child: Icon(Icons.broken_image, size: size * 0.32, color: AppColors.mutedText)),
+          child: Center(
+            child: Icon(
+              Icons.broken_image,
+              size: size * 0.32,
+              color: AppColors.mutedText,
+            ),
+          ),
         ),
       );
     } catch (_) {
       return Container(
         color: AppColors.lightGrey,
-        child: Center(child: Icon(Icons.broken_image, size: size * 0.32, color: AppColors.mutedText)),
+        child: Center(
+          child: Icon(
+            Icons.broken_image,
+            size: size * 0.32,
+            color: AppColors.mutedText,
+          ),
+        ),
       );
     }
   }

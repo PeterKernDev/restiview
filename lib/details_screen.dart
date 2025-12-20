@@ -31,18 +31,20 @@ class DetailItem {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'photoPath': photoPath,
-        'timestamp': timestamp.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'photoPath': photoPath,
+    'timestamp': timestamp.toIso8601String(),
+  };
 
   static DetailItem fromMap(Map<dynamic, dynamic> m) => DetailItem(
-        id: m['id']?.toString() ?? UniqueKey().toString(),
-        name: (m['name'] as String?) ?? '',
-        photoPath: (m['photoPath'] as String?),
-        timestamp: m['timestamp'] != null ? DateTime.tryParse(m['timestamp']) ?? DateTime.now() : DateTime.now(),
-      );
+    id: m['id']?.toString() ?? UniqueKey().toString(),
+    name: (m['name'] as String?) ?? '',
+    photoPath: (m['photoPath'] as String?),
+    timestamp: m['timestamp'] != null
+        ? DateTime.tryParse(m['timestamp']) ?? DateTime.now()
+        : DateTime.now(),
+  );
 
   void disposeController() {
     controller.dispose();
@@ -84,7 +86,10 @@ class _DetailsScreenState extends State<DetailsScreen> {
     for (final entry in _controllerListeners.entries) {
       final id = entry.key;
       final listener = entry.value;
-      final existing = _items.firstWhere((it) => it.id == id, orElse: () => DetailItem(id: UniqueKey().toString()));
+      final existing = _items.firstWhere(
+        (it) => it.id == id,
+        orElse: () => DetailItem(id: UniqueKey().toString()),
+      );
       try {
         existing.controller.removeListener(listener);
       } catch (_) {}
@@ -101,7 +106,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
       return;
     }
     void listener() {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          widget.context.hasChanges = true;
+        });
+      }
     }
 
     item.controller.addListener(listener);
@@ -119,7 +128,10 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
   void _showFullImage(String path) {
     if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: path)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => FullScreenImage(path: path)),
+    );
   }
 
   void _loadExisting() {
@@ -145,16 +157,22 @@ class _DetailsScreenState extends State<DetailsScreen> {
     if (_isBusy || !mounted) return;
     try {
       setState(() => _isBusy = true);
-      final picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 75);
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 75,
+      );
       if (picked == null) return;
       if (!mounted) return;
       setState(() {
         _items[index].photoPath = picked.path;
         _items[index].timestamp = DateTime.now();
+        widget.context.hasChanges = true;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -183,6 +201,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
       final item = DetailItem(id: UniqueKey().toString());
       _items.add(item);
       _attachListener(item);
+      widget.context.hasChanges = true;
     });
   }
 
@@ -197,6 +216,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         _items.add(newItem);
         _attachListener(newItem);
       }
+      widget.context.hasChanges = true;
     });
   }
 
@@ -216,18 +236,26 @@ class _DetailsScreenState extends State<DetailsScreen> {
         _items[i].name = _items[i].controller.text.trim();
       }
       final mapped = _items
-          .where((it) => it.name.isNotEmpty || (it.photoPath != null && it.photoPath!.isNotEmpty))
+          .where(
+            (it) =>
+                it.name.isNotEmpty ||
+                (it.photoPath != null && it.photoPath!.isNotEmpty),
+          )
           .map((it) => it.toMap())
           .toList();
       final key = 'details_${widget.categoryKey}';
       widget.context.reviewMap[key] = mapped;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.detailsSaved)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppStr.detailsSaved)));
       if (!mounted) return;
       Navigator.pop(context, widget.context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -249,17 +277,24 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     _pickPhoto(index);
                   }
                 },
-          onRemove: (photoPath != null && photoPath.isNotEmpty) ? () => _deletePhoto(index) : null,
+          onRemove: (photoPath != null && photoPath.isNotEmpty)
+              ? () => _deletePhoto(index)
+              : null,
         ),
         const SizedBox(height: 6),
         SizedBox(
           width: 84,
           height: 28,
           child: TextButton.icon(
-            onPressed: (photoPath == null || _isBusy) ? null : () => _deletePhoto(index),
+            onPressed: (photoPath == null || _isBusy)
+                ? null
+                : () => _deletePhoto(index),
             icon: const Icon(Icons.delete_outline, color: Colors.grey),
             label: const SizedBox.shrink(),
-            style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              alignment: Alignment.centerLeft,
+            ),
           ),
         ),
       ],
@@ -274,47 +309,70 @@ class _DetailsScreenState extends State<DetailsScreen> {
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          Row(children: <Widget>[
-            _photoColumn(index, item),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                key: ValueKey('textfield-${item.id}'),
-                controller: item.controller,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                minLines: 3,
-                maxLines: 3,
-                decoration: InputDecoration(labelText: AppStr.itemNameHint, alignLabelWithHint: true),
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                _photoColumn(index, item),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: ValueKey('textfield-${item.id}'),
+                    controller: item.controller,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 3,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: AppStr.itemNameHint,
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: AppStr.remove,
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: _isBusy
+                      ? null
+                      : () {
+                          final hasText = item.controller.text
+                              .trim()
+                              .isNotEmpty;
+                          final hasPhoto =
+                              item.photoPath != null &&
+                              item.photoPath!.isNotEmpty;
+                          if (!hasText && !hasPhoto && index > 0) {
+                            _removeItem(index);
+                          } else {
+                            setState(() {
+                              item.controller.clear();
+                              item.name = '';
+                            });
+                          }
+                        },
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: AppStr.remove,
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: _isBusy
-                  ? null
-                  : () {
-                      final hasText = item.controller.text.trim().isNotEmpty;
-                      final hasPhoto = item.photoPath != null && item.photoPath!.isNotEmpty;
-                      if (!hasText && !hasPhoto && index > 0) {
-                        _removeItem(index);
-                      } else {
-                        setState(() {
-                          item.controller.clear();
-                          item.name = '';
-                        });
-                      }
-                    },
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(
+                  item.photoPath == null
+                      ? AppStr.noPhoto
+                      : AppStr.photoAttached,
+                  style: AppFonts.smallHint,
+                ),
+                Text(
+                  '${_formatDate(item.timestamp)} ${_formatTime(item.timestamp)}',
+                  style: AppFonts.smallHint,
+                ),
+              ],
             ),
-          ]),
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: <Widget>[
-            Text(item.photoPath == null ? AppStr.noPhoto : AppStr.photoAttached, style: AppFonts.smallHint),
-            Text('${_formatDate(item.timestamp)} ${_formatTime(item.timestamp)}', style: AppFonts.smallHint),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -340,81 +398,129 @@ class _DetailsScreenState extends State<DetailsScreen> {
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
-        title: Text(widget.title, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(
+          widget.title,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: _isBusy ? null : _saveAndReturn,
-            child: Text(AppStr.save, style: AppFonts.standard.copyWith(color: Colors.white)),
+            child: Text(
+              AppStr.save,
+              style: AppFonts.standard.copyWith(color: Colors.white),
+            ),
           ),
         ],
       ),
       body: SafeArea(
-        child: Stack(children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: <Widget>[
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _items.length,
-                  itemBuilder: (ctx, i) => _itemCard(i),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Fixed-height action row to prevent expansion
-              SizedBox(
-                height: 64,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              if (!mounted) return;
-                              Navigator.pop(context, widget.context);
-                            },
-                            style: buttonStyle(AppColors.red, Colors.white),
-                            child: Text(AppStr.cancel, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.white)),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                          child: ElevatedButton(
-                            onPressed: canAddMore ? _addMore : null,
-                            style: buttonStyle(AppColors.ochre, Colors.black),
-                            child: Text(AppStr.addMore, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: canAddMore ? Colors.black : Colors.black45)),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                          child: ElevatedButton(
-                            onPressed: _isBusy ? null : _saveAndReturn,
-                            style: buttonStyle(AppColors.darkGreen, Colors.white),
-                            child: Text(AppStr.save, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.white)),
-                          ),
-                        ),
-                      ),
-                    ],
+        child: Stack(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: <Widget>[
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _items.length,
+                      itemBuilder: (ctx, i) => _itemCard(i),
+                    ),
                   ),
-                ),
-              ),
+                  const SizedBox(height: 12),
 
-              const SizedBox(height: 8),
-            ]),
-          ),
-          if (_isBusy)
-            Container(
-              color: Colors.black.withAlpha(80),
-              child: const Center(child: CircularProgressIndicator()),
+                  // Fixed-height action row to prevent expansion
+                  SizedBox(
+                    height: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 8.0,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6.0,
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  if (!mounted) return;
+                                  Navigator.pop(context, widget.context);
+                                },
+                                style: buttonStyle(
+                                  AppColors.btnDelete,
+                                  AppColors.btnText,
+                                ),
+                                child: Text(
+                                  AppStr.cancel,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppFonts.bold.copyWith(
+                                    color: AppColors.btnText,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6.0,
+                              ),
+                              child: ElevatedButton(
+                                onPressed: canAddMore ? _addMore : null,
+                                style: buttonStyle(
+                                  Colors.orange,
+                                  AppColors.btnText,
+                                ),
+                                child: Text(
+                                  AppStr.addMore,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppFonts.bold.copyWith(
+                                    color: canAddMore
+                                        ? AppColors.btnText
+                                        : Colors.black45,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6.0,
+                              ),
+                              child: ElevatedButton(
+                                onPressed: _isBusy ? null : _saveAndReturn,
+                                style: buttonStyle(
+                                  AppColors.btnSave,
+                                  AppColors.btnText,
+                                ),
+                                child: Text(
+                                  AppStr.save,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppFonts.bold.copyWith(
+                                    color: AppColors.btnText,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
-        ]),
+            if (_isBusy)
+              Container(
+                color: Colors.black.withAlpha(80),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
       ),
     );
   }

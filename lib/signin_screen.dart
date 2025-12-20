@@ -127,14 +127,18 @@ class _SignInScreenState extends State<SignInScreen> {
 
     if (requireName && name.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.nameHint)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.nameHint)));
       }
       return false;
     }
 
     if (email.isEmpty || password.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.emailPasswordRequired)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.emailPasswordRequired)));
       }
       return false;
     }
@@ -142,7 +146,9 @@ class _SignInScreenState extends State<SignInScreen> {
     final RegExp emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
       }
       return false;
     }
@@ -166,7 +172,8 @@ class _SignInScreenState extends State<SignInScreen> {
         await _onSignedIn(userCredential, email, password);
         return;
       } on FirebaseAuthException catch (e) {
-        final bool isRecaptchaOrNetwork = e.message?.toLowerCase().contains('recaptcha') == true ||
+        final bool isRecaptchaOrNetwork =
+            e.message?.toLowerCase().contains('recaptcha') == true ||
             e.message?.toLowerCase().contains('network') == true ||
             e.code == 'network-request-failed';
 
@@ -180,7 +187,11 @@ class _SignInScreenState extends State<SignInScreen> {
           } catch (retryErr) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${AppStr.signInFailed}: ${retryErr.toString()}')),
+                SnackBar(
+                  content: Text(
+                    '${AppStr.signInFailed}: ${retryErr.toString()}',
+                  ),
+                ),
               );
             }
           }
@@ -201,7 +212,9 @@ class _SignInScreenState extends State<SignInScreen> {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
         if (mounted) {
           setState(() {
             _staySignedIn = false;
@@ -212,13 +225,18 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       } on FirebaseException catch (fe) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: ${fe.message ?? fe.code}')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${AppStr.signInFailed}: ${fe.message ?? fe.code}'),
+            ),
+          );
         }
         return;
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: $e')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: $e')));
         }
         return;
       }
@@ -227,17 +245,25 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<void> _onSignedIn(UserCredential userCredential, String email, String password) async {
+  Future<void> _onSignedIn(
+    UserCredential userCredential,
+    String email,
+    String password,
+  ) async {
     final String? uid = userCredential.user?.uid;
     if (uid == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.signInFailed)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.signInFailed)));
       }
       return;
     }
 
     // Ensure /users/$uid exists (heal orphaned profile)
-    final DataSnapshot snapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
+    final DataSnapshot snapshot = await FirebaseDatabase.instance
+        .ref('users/$uid')
+        .get();
 
     if (!snapshot.exists) {
       final String defaultCountry = getSystemCountryNames().first;
@@ -254,7 +280,9 @@ class _SignInScreenState extends State<SignInScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.healingOrphanedAccount)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.healingOrphanedAccount)));
       }
     }
 
@@ -266,10 +294,15 @@ class _SignInScreenState extends State<SignInScreen> {
     String currentDisplayName = userCredential.user?.displayName ?? '';
     if (currentDisplayName.isEmpty) {
       try {
-        final DataSnapshot ds = await FirebaseDatabase.instance.ref('users/$uid').get();
+        final DataSnapshot ds = await FirebaseDatabase.instance
+            .ref('users/$uid')
+            .get();
         if (ds.exists && ds.value != null && ds.value is Map) {
-          final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(ds.value as Map);
-          final String candidate = (m['userName'] as String?) ?? (m['displayName'] as String?) ?? '';
+          final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(
+            ds.value as Map,
+          );
+          final String candidate =
+              (m['userName'] as String?) ?? (m['displayName'] as String?) ?? '';
           if (candidate.isNotEmpty) {
             currentDisplayName = candidate;
           }
@@ -285,7 +318,9 @@ class _SignInScreenState extends State<SignInScreen> {
     // Determine acceptsFriends flag from users/$uid/userSettings7 when available (default true)
     bool acceptsFriends = true;
     try {
-      final DataSnapshot settings7Snap = await FirebaseDatabase.instance.ref('users/$uid/userSettings7').get();
+      final DataSnapshot settings7Snap = await FirebaseDatabase.instance
+          .ref('users/$uid/userSettings7')
+          .get();
       if (settings7Snap.exists && settings7Snap.value != null) {
         final Object? v = settings7Snap.value;
         if (v is bool) {
@@ -312,13 +347,16 @@ class _SignInScreenState extends State<SignInScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${AppStr.mappingWriteFailed}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${AppStr.mappingWriteFailed}: $e')),
+        );
       }
     }
 
     // Re-read user record to extract display name / homeCountry if needed
-    final DataSnapshot dataSnapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
+    final DataSnapshot dataSnapshot = await FirebaseDatabase.instance
+        .ref('users/$uid')
+        .get();
     final Object? data = dataSnapshot.value;
 
     String userName;
@@ -341,13 +379,17 @@ class _SignInScreenState extends State<SignInScreen> {
     } else {
       final Map<dynamic, dynamic> userMap = Map<dynamic, dynamic>.from(data);
       userName = (userMap['userName'] as String?) ?? 'User';
-      homeCountry = (userMap['userSettings2'] as String?) ?? getSystemCountryNames().first;
+      homeCountry =
+          (userMap['userSettings2'] as String?) ??
+          getSystemCountryNames().first;
 
       // Ensure userSettings7 exists for existing accounts; helper already attempted to set it,
       // but keep this defensive write to cover rare races
       try {
         if (!userMap.containsKey('userSettings7')) {
-          await FirebaseDatabase.instance.ref('users/$uid/userSettings7').set(true);
+          await FirebaseDatabase.instance
+              .ref('users/$uid/userSettings7')
+              .set(true);
         }
       } catch (e) {
         // Silently handle error
@@ -361,7 +403,12 @@ class _SignInScreenState extends State<SignInScreen> {
       await SessionCache.clearCredentials();
     }
 
-    await runStartupTasks(uid: uid, userName: userName, userEmail: email, homeCountry: homeCountry);
+    await runStartupTasks(
+      uid: uid,
+      userName: userName,
+      userEmail: email,
+      homeCountry: homeCountry,
+    );
 
     try {
       await _processPendingFriendRequests(uid, normalizedMailbox);
@@ -376,21 +423,28 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   // Safe canonical resolver: prefer mapping then public_profiles; DO NOT read /users for client enrichment.
-  Future<Map<String, String>> _resolveCanonicalProfile(String uid, Map<dynamic, dynamic>? mapping) async {
+  Future<Map<String, String>> _resolveCanonicalProfile(
+    String uid,
+    Map<dynamic, dynamic>? mapping,
+  ) async {
     String email = '';
     String username = '';
 
     if (mapping != null) {
-      if (mapping['email'] is String && (mapping['email'] as String).isNotEmpty) {
+      if (mapping['email'] is String &&
+          (mapping['email'] as String).isNotEmpty) {
         email = mapping['email'] as String;
       }
-      if (mapping['userEmail'] is String && (mapping['userEmail'] as String).isNotEmpty) {
+      if (mapping['userEmail'] is String &&
+          (mapping['userEmail'] as String).isNotEmpty) {
         email = mapping['userEmail'] as String;
       }
-      if (mapping['displayName'] is String && (mapping['displayName'] as String).isNotEmpty) {
+      if (mapping['displayName'] is String &&
+          (mapping['displayName'] as String).isNotEmpty) {
         username = mapping['displayName'] as String;
       }
-      if (mapping['userName'] is String && (mapping['userName'] as String).isNotEmpty) {
+      if (mapping['userName'] is String &&
+          (mapping['userName'] as String).isNotEmpty) {
         username = mapping['userName'] as String;
       }
     }
@@ -398,10 +452,15 @@ class _SignInScreenState extends State<SignInScreen> {
     // Prefer mapping, then public_profiles; do NOT attempt clients to read private /users
     if (username.isEmpty || email.isEmpty) {
       try {
-        final DataSnapshot pub = await FirebaseDatabase.instance.ref('public_profiles/$uid').get();
+        final DataSnapshot pub = await FirebaseDatabase.instance
+            .ref('public_profiles/$uid')
+            .get();
         if (pub.exists && pub.value != null && pub.value is Map) {
-          final Map<dynamic, dynamic> pm = Map<dynamic, dynamic>.from(pub.value as Map);
-          if ((pm['displayName'] is String) && (pm['displayName'] as String).isNotEmpty) {
+          final Map<dynamic, dynamic> pm = Map<dynamic, dynamic>.from(
+            pub.value as Map,
+          );
+          if ((pm['displayName'] is String) &&
+              (pm['displayName'] as String).isNotEmpty) {
             username = pm['displayName'] as String;
           }
           if ((pm['email'] is String) && (pm['email'] as String).isNotEmpty) {
@@ -418,8 +477,13 @@ class _SignInScreenState extends State<SignInScreen> {
     return {'email': email, 'username': username};
   }
 
-  Future<void> _processPendingFriendRequests(String myUid, String normalizedMailbox) async {
-    final DatabaseReference ref = FirebaseDatabase.instance.ref('users_by_email/$normalizedMailbox/requests');
+  Future<void> _processPendingFriendRequests(
+    String myUid,
+    String normalizedMailbox,
+  ) async {
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(
+      'users_by_email/$normalizedMailbox/requests',
+    );
 
     DataSnapshot snap;
     try {
@@ -458,7 +522,9 @@ class _SignInScreenState extends State<SignInScreen> {
         final String s = (m['status'] as String).toUpperCase();
         if (s.contains('FR-ASKED') || s.contains('FR_ASKED')) {
           statusCode = 0;
-        } else if (s.contains('FR-WANTED') || s.contains('FR_WANTS') || s.contains('FR-WANTS')) {
+        } else if (s.contains('FR-WANTED') ||
+            s.contains('FR_WANTS') ||
+            s.contains('FR-WANTS')) {
           statusCode = 2;
         } else {
           statusCode = -1;
@@ -481,17 +547,26 @@ class _SignInScreenState extends State<SignInScreen> {
         if (m.isNotEmpty) {
           mapping = Map<dynamic, dynamic>.from(m);
         }
-        final Map<String, String> canonical = await _resolveCanonicalProfile(fromUid, mapping);
+        final Map<String, String> canonical = await _resolveCanonicalProfile(
+          fromUid,
+          mapping,
+        );
         final String fromEmail = canonical['email']!;
         final String fromDisplayName = canonical['username']!;
 
         // Idempotency check: skip if friend stub already has same clientRequestId
-        final DatabaseReference friendRef = FirebaseDatabase.instance.ref('users/$myUid/friends/$fromUid');
+        final DatabaseReference friendRef = FirebaseDatabase.instance.ref(
+          'users/$myUid/friends/$fromUid',
+        );
         final DataSnapshot friendSnap = await friendRef.get();
 
         bool shouldWriteFriend = true;
-        if (friendSnap.exists && friendSnap.value != null && friendSnap.value is Map) {
-          final Map<dynamic, dynamic> f = Map<dynamic, dynamic>.from(friendSnap.value as Map);
+        if (friendSnap.exists &&
+            friendSnap.value != null &&
+            friendSnap.value is Map) {
+          final Map<dynamic, dynamic> f = Map<dynamic, dynamic>.from(
+            friendSnap.value as Map,
+          );
           if (clientRequestId.isNotEmpty &&
               f['clientRequestId'] != null &&
               f['clientRequestId'].toString() == clientRequestId) {
@@ -504,14 +579,15 @@ class _SignInScreenState extends State<SignInScreen> {
           // - statusCode=0: incoming friend/review request
           // - statusCode=1: friend acceptance notification
           // - statusCode=8: friend decline notification
-          
+
           if (statusCode == 1) {
             // This is a friend acceptance notification
             // Update my existing friend stub to accepted status
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 1,
               'users/$myUid/friends/$fromUid/accepted': true,
-              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
+                  .toIso8601String(),
               'users_by_email/$normalizedMailbox/requests/$reqId': null,
             };
             await FirebaseDatabase.instance.ref().update(atomic);
@@ -521,45 +597,58 @@ class _SignInScreenState extends State<SignInScreen> {
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 8,
               'users/$myUid/friends/$fromUid/accepted': false,
-              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
+                  .toIso8601String(),
               'users_by_email/$normalizedMailbox/requests/$reqId': null,
             };
             await FirebaseDatabase.instance.ref().update(atomic);
           } else if (statusCode == 3) {
             // This is a review request notification
             // Update the friend stub to add review_request structure
-            final String filterCountry = m['country']?.toString() ?? '';
-            final String filterCuisine = m['cuisine']?.toString() ?? '';
-            final String filterCity = m['city']?.toString() ?? '';
             
-            // Calculate review count for this request
+            // Parse filters array from mailbox request
+            final List<Map<String, String?>> filters = <Map<String, String?>>[];
+            try {
+              if (m['filters'] is List) {
+                final List<dynamic> filtersList = m['filters'] as List;
+                for (final dynamic filterItem in filtersList) {
+                  if (filterItem is Map) {
+                    final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+                    final String? country = filterMap['country']?.toString();
+                    final String? city = filterMap['city']?.toString();
+                    if (country != null && country.isNotEmpty) {
+                      filters.add(<String, String?>{
+                        'country': country,
+                        'city': (city == null || city.isEmpty || city == 'none') ? null : city,
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              // Error parsing filters
+            }
+
+            // Calculate review count for this request (sum across all filters)
             int rvCount = 0;
-            if (filterCountry.isNotEmpty) {
-              // Convert 'none' to null for filtering
-              String? cuisineFilter = (filterCuisine.isEmpty || filterCuisine == 'none') ? null : filterCuisine;
-              String? cityFilter = (filterCity.isEmpty || filterCity == 'none') ? null : filterCity;
-              
+            if (filters.isNotEmpty) {
               try {
                 rvCount = await countMatchingReviews(
                   ownerUid: myUid,
-                  country: filterCountry,
-                  cuisine: cuisineFilter,
-                  city: cityFilter,
+                  filters: filters,
                   excludeKeys: null, // No exclusions for initial request
                 );
               } catch (e) {
                 rvCount = -1; // -1 indicates calculation failed
               }
             }
-            
+
             final String nowIso = DateTime.now().toUtc().toIso8601String();
-            
-            // Create review_request structure with calculated count
+
+            // Create review_request structure with filters array
             final Map<String, dynamic> reviewRequestData = <String, dynamic>{
               'requestComment': comment,
-              'filterCountry': filterCountry,
-              'filterCity': filterCity.isEmpty ? 'none' : filterCity,
-              'filterCuisine': filterCuisine.isEmpty ? 'none' : filterCuisine,
+              'filters': filters,
               'rvCount': rvCount,
               'rvCountLastCheckedAt': nowIso,
               'exCount': 0,
@@ -567,12 +656,13 @@ class _SignInScreenState extends State<SignInScreen> {
               'fromDisplayName': fromDisplayName,
               'exKeys': <String>[],
             };
-            
+
             // Atomic multi-path update: update statusCode, add review_request, and delete mailbox entry
             // This preserves existing friend data while adding the review request
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 3,
-              'users/$myUid/friends/$fromUid/comment': comment, // Store request message at top level for display
+              'users/$myUid/friends/$fromUid/comment':
+                  comment, // Store request message at top level for display
               'users/$myUid/friends/$fromUid/review_request': reviewRequestData,
               'users/$myUid/friends/$fromUid/rvCount': rvCount,
               'users/$myUid/friends/$fromUid/rvCountLastCheckedAt': nowIso,
@@ -586,24 +676,30 @@ class _SignInScreenState extends State<SignInScreen> {
             int rqCount = 0;
             String providerMessage = '';
             String providedAt = '';
-            
+
             try {
               if (m['meta'] is Map) {
-                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(m['meta'] as Map);
-                rqCount = (meta['rqCount'] is int) ? meta['rqCount'] as int : int.tryParse(meta['rqCount']?.toString() ?? '') ?? 0;
+                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(
+                  m['meta'] as Map,
+                );
+                rqCount = (meta['rqCount'] is int)
+                    ? meta['rqCount'] as int
+                    : int.tryParse(meta['rqCount']?.toString() ?? '') ?? 0;
                 providerMessage = meta['provider-message']?.toString() ?? '';
                 providedAt = meta['providedAt']?.toString() ?? '';
               }
             } catch (_) {
               // Use defaults if parsing fails
             }
-            
+
             // Update friend stub to statusCode=5 with metadata from mailbox
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 5,
-              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
+                  .toIso8601String(),
               'users/$myUid/friends/$fromUid/mailboxReqId': reqId,
-              'users/$myUid/friends/$fromUid/mailboxNormalized': normalizedMailbox,
+              'users/$myUid/friends/$fromUid/mailboxNormalized':
+                  normalizedMailbox,
               'users/$myUid/friends/$fromUid/providedRequestId': reqId,
               'users/$myUid/friends/$fromUid/providedRqCount': rqCount,
               'users/$myUid/friends/$fromUid/comment': providerMessage,
@@ -614,21 +710,24 @@ class _SignInScreenState extends State<SignInScreen> {
             // This is a declined review request notification (RV-DECLINED)
             // Extract metadata from mailbox record and store on friend stub
             String providerMessage = '';
-            
+
             try {
               if (m['meta'] is Map) {
-                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(m['meta'] as Map);
+                final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(
+                  m['meta'] as Map,
+                );
                 providerMessage = meta['provider-message']?.toString() ?? '';
               }
             } catch (_) {
               // Use defaults if parsing fails
             }
-            
+
             // Update friend stub to statusCode=6 with declined message
             final Map<String, dynamic> atomic = <String, dynamic>{
               'users/$myUid/friends/$fromUid/statusCode': 6,
               'users/$myUid/friends/$fromUid/comment': providerMessage,
-              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now().toIso8601String(),
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
+                  .toIso8601String(),
               'users_by_email/$normalizedMailbox/requests/$reqId': null,
             };
             await FirebaseDatabase.instance.ref().update(atomic);
@@ -684,7 +783,10 @@ class _SignInScreenState extends State<SignInScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.darkGreen,
-        title: Text(AppStr.signInTitle, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(
+          AppStr.signInTitle,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
         centerTitle: true,
       ),
       body: Column(
@@ -716,7 +818,12 @@ class _SignInScreenState extends State<SignInScreen> {
                       labelStyle: AppFonts.standard,
                       border: const UnderlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                        icon: Icon(
+                          _showPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: AppColors.grey,
+                        ),
                         onPressed: () {
                           if (!mounted) {
                             return;
@@ -731,7 +838,10 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
-                    title: Text(AppStr.enableResetToggleLabel, style: AppFonts.standard),
+                    title: Text(
+                      AppStr.enableResetToggleLabel,
+                      style: AppFonts.standard,
+                    ),
                     value: _enableReset,
                     onChanged: (bool value) {
                       if (!mounted) {
@@ -748,27 +858,52 @@ class _SignInScreenState extends State<SignInScreen> {
                     onPressed: _enableReset
                         ? () async {
                             final String email = _emailController.text.trim();
-                            final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+                            final ScaffoldMessengerState messenger =
+                                ScaffoldMessenger.of(context);
 
                             if (email.isEmpty) {
-                              messenger.showSnackBar(SnackBar(content: Text(AppStr.emailRequired)));
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(AppStr.emailRequired)),
+                              );
                               return;
                             }
 
                             if (!email.contains('@')) {
-                              messenger.showSnackBar(SnackBar(content: Text(AppStr.emailFormatInvalid)));
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(AppStr.emailFormatInvalid),
+                                ),
+                              );
                               return;
                             }
 
                             try {
-                              await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-                              messenger.showSnackBar(SnackBar(content: Text('${AppStr.resetLinkSent} $email')));
+                              await FirebaseAuth.instance
+                                  .sendPasswordResetEmail(email: email);
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${AppStr.resetLinkSent} $email',
+                                  ),
+                                ),
+                              );
                             } catch (e) {
-                              messenger.showSnackBar(SnackBar(content: Text('${AppStr.resetLinkError}: ${e.toString()}')));
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${AppStr.resetLinkError}: ${e.toString()}',
+                                  ),
+                                ),
+                              );
                             }
                           }
                         : null,
-                    child: Text(AppStr.forgotPasswordLabel, style: AppFonts.standard.copyWith(color: _enableReset ? Colors.blue : Colors.grey)),
+                    child: Text(
+                      AppStr.forgotPasswordLabel,
+                      style: AppFonts.standard.copyWith(
+                        color: _enableReset ? AppColors.blue : AppColors.grey,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
@@ -793,7 +928,8 @@ class _SignInScreenState extends State<SignInScreen> {
                     activeTrackColor: AppColors.ochre,
                   ),
                   const SizedBox(height: 24),
-                  if (_loading) const Center(child: CircularProgressIndicator()),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator()),
                 ],
               ),
             ),
@@ -809,14 +945,19 @@ class _SignInScreenState extends State<SignInScreen> {
                       backgroundColor: AppColors.darkGreen,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _loading
                         ? null
                         : () {
                             _signInUser();
                           },
-                    child: Text(AppStr.signInButton, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    child: Text(
+                      AppStr.signInButton,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
@@ -824,14 +965,19 @@ class _SignInScreenState extends State<SignInScreen> {
                       backgroundColor: AppColors.ochre,
                       foregroundColor: Colors.black,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _loading
                         ? null
                         : () {
                             _goBack();
                           },
-                    child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
+                    child: Text(
+                      AppStr.back,
+                      style: AppFonts.standard.copyWith(color: Colors.black),
+                    ),
                   ),
                 ],
               ),

@@ -25,11 +25,14 @@ class ReviewRequestDetailsScreen extends StatefulWidget {
   final Map<dynamic, dynamic>? friendVmap;
 
   @override
-  State<ReviewRequestDetailsScreen> createState() => _ReviewRequestDetailsScreenState();
+  State<ReviewRequestDetailsScreen> createState() =>
+      _ReviewRequestDetailsScreenState();
 }
 
-class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen> {
-  final TextEditingController _providerCommentController = TextEditingController();
+class _ReviewRequestDetailsScreenState
+    extends State<ReviewRequestDetailsScreen> {
+  final TextEditingController _providerCommentController =
+      TextEditingController();
 
   bool _loading = false;
 
@@ -38,7 +41,6 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
 
   String? _requestComment;
   String? _country;
-  String? _cuisine;
   String? _city;
   int? _rvCount;
   int? _exCount;
@@ -76,8 +78,9 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
     Map<dynamic, dynamic>? reviewMap;
     try {
       // Read from friend stub's review_request subnode
-      final DatabaseReference ref =
-          FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review_request');
+      final DatabaseReference ref = FirebaseDatabase.instance.ref(
+        'users/$myUid/friends/$friendUid/review_request',
+      );
       final DataSnapshot snap = await ref.get();
       if (snap.exists && snap.value is Map) {
         reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
@@ -85,15 +88,19 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
 
       if (reviewMap != null) {
         // Read filter criteria from review_request structure
-        _country = (reviewMap['filterCountry'] is String) ? reviewMap['filterCountry'] as String : null;
-        _cuisine = (reviewMap['filterCuisine'] is String) ? reviewMap['filterCuisine'] as String : null;
-        _city = (reviewMap['filterCity'] is String) ? reviewMap['filterCity'] as String : null;
-        
+        _country = (reviewMap['filterCountry'] is String)
+            ? reviewMap['filterCountry'] as String
+            : null;
+        _city = (reviewMap['filterCity'] is String)
+            ? reviewMap['filterCity'] as String
+            : null;
+
         // Convert 'none' to null for display
-        if (_cuisine == 'none') _cuisine = null;
         if (_city == 'none') _city = null;
 
-        _requestComment = (reviewMap['requestComment'] is String && (reviewMap['requestComment'] as String).isNotEmpty)
+        _requestComment =
+            (reviewMap['requestComment'] is String &&
+                (reviewMap['requestComment'] as String).isNotEmpty)
             ? reviewMap['requestComment'] as String
             : null;
 
@@ -121,7 +128,9 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
             _exKeys = <String>[];
           }
         } else if (reviewMap['exKeys'] is Map) {
-          final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(reviewMap['exKeys'] as Map);
+          final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(
+            reviewMap['exKeys'] as Map,
+          );
           _exKeys = <String>[];
           m.forEach((dynamic k, dynamic v) {
             if (k != null) {
@@ -137,12 +146,13 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
 
         _includePhotos = reviewMap['includePhotos'] == true;
         // populate provider comment if present
-        if (reviewMap['providerComment'] is String && (reviewMap['providerComment'] as String).isNotEmpty) {
-          _providerCommentController.text = reviewMap['providerComment'] as String;
+        if (reviewMap['providerComment'] is String &&
+            (reviewMap['providerComment'] as String).isNotEmpty) {
+          _providerCommentController.text =
+              reviewMap['providerComment'] as String;
         }
       } else {
         _country = null;
-        _cuisine = null;
         _city = null;
         _requestComment = null;
         _rvCount = null;
@@ -170,9 +180,17 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
       try {
         if (trimmed.isEmpty) {
           // remove the field by setting it to null
-          await ref.child('users/$myUid/friends/$friendUid/review_request/providerComment').set(null);
+          await ref
+              .child(
+                'users/$myUid/friends/$friendUid/review_request/providerComment',
+              )
+              .set(null);
         } else {
-          await ref.child('users/$myUid/friends/$friendUid/review_request/providerComment').set(trimmed);
+          await ref
+              .child(
+                'users/$myUid/friends/$friendUid/review_request/providerComment',
+              )
+              .set(trimmed);
         }
       } catch (_) {
         // ignore write failure
@@ -192,7 +210,6 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
   Future<void> _onReview() async {
     final Map<String, String?> filters = <String, String?>{
       'country': _country,
-      'cuisine': _cuisine,
       'city': _city,
     };
 
@@ -203,7 +220,9 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
     // persist provider comment before navigating so it's available to the review screen
     final String trimmed = _providerCommentController.text.trim();
     if (myUid.isNotEmpty) {
-      final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review_request/providerComment');
+      final DatabaseReference ref = FirebaseDatabase.instance.ref(
+        'users/$myUid/friends/$friendUid/review_request/providerComment',
+      );
       try {
         if (trimmed.isEmpty) {
           await ref.set(null);
@@ -282,10 +301,13 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
     final String username = _requesterUsername;
     final String comment = _requestComment ?? '';
     final String country = _displayOrNone(_country);
-    final String cuisine = _displayOrNone(_cuisine);
     final String city = _displayOrNone(_city);
-    final String rvCountText = (_rvCount != null && _rvCount! >= 0) ? _rvCount.toString() : AppStr.unknownCount;
-    final String exCountText = (_exCount != null && _exCount! > 0) ? _exCount.toString() : '0';
+    final String rvCountText = (_rvCount != null && _rvCount! >= 0)
+        ? _rvCount.toString()
+        : AppStr.unknownCount;
+    final String exCountText = (_exCount != null && _exCount! > 0)
+        ? _exCount.toString()
+        : '0';
 
     // Match RatingsScreen shared button style so labels truncate the same way
     final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
@@ -294,11 +316,16 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
       minimumSize: const Size(0, 44),
     );
 
-    final EdgeInsets horizontalBtnPadding = const EdgeInsets.symmetric(horizontal: 6.0);
+    final EdgeInsets horizontalBtnPadding = const EdgeInsets.symmetric(
+      horizontal: 6.0,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStr.reviewRequestDetailsTitle, style: AppFonts.title.copyWith(color: AppColors.white)),
+        title: Text(
+          AppStr.reviewRequestDetailsTitle,
+          style: AppFonts.title.copyWith(color: AppColors.white),
+        ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
@@ -316,13 +343,20 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                     _buildReadOnlyRow(AppStr.requestingUsername, username),
                     _buildReadOnlyRow(AppStr.requestingComment, comment),
                     const SizedBox(height: 12.0),
-                    Text(AppStr.filtersLabel, style: AppFonts.smallHint.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      AppStr.filtersLabel,
+                      style: AppFonts.smallHint.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 6.0),
                     _buildReadOnlyRow(AppStr.countryLabel, country),
-                    _buildReadOnlyRow(AppStr.cuisineLabel, cuisine),
                     _buildReadOnlyRow(AppStr.cityLabel, city),
                     const SizedBox(height: 12.0),
-                    _buildReadOnlyRow(AppStr.reviewMatchingCountLabel, rvCountText),
+                    _buildReadOnlyRow(
+                      AppStr.reviewMatchingCountLabel,
+                      rvCountText,
+                    ),
                     const SizedBox(height: 6.0),
                     _buildReadOnlyRow(AppStr.excludedLabel, exCountText),
                     const SizedBox(height: 12.0),
@@ -332,22 +366,26 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                           flex: 3,
                           child: Text(
                             AppStr.includePhotosLabel,
-                            style: AppFonts.smallHint.copyWith(color: AppColors.mutedText),
+                            style: AppFonts.smallHint.copyWith(
+                              color: AppColors.mutedText,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Expanded(
                           flex: 7,
-                          child: Switch(
-                            value: _includePhotos,
-                            onChanged: null,
-                          ),
+                          child: Switch(value: _includePhotos, onChanged: null),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12.0),
-                    Text(AppStr.providerCommentLabel, style: AppFonts.smallHint.copyWith(color: AppColors.mutedText)),
+                    Text(
+                      AppStr.providerCommentLabel,
+                      style: AppFonts.smallHint.copyWith(
+                        color: AppColors.mutedText,
+                      ),
+                    ),
                     const SizedBox(height: 6.0),
                     TextField(
                       controller: _providerCommentController,
@@ -355,8 +393,13 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                       textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
                         hintText: AppStr.providerCommentHint,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.0)),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6.0),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12.0,
+                          horizontal: 12.0,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24.0),
@@ -371,7 +414,10 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                 top: false,
                 child: Container(
                   color: AppColors.beige,
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                   child: Row(
                     children: <Widget>[
                       Expanded(
@@ -380,10 +426,18 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                           child: ElevatedButton(
                             onPressed: _onBack,
                             style: actionBtnBase.copyWith(
-                              backgroundColor: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre).backgroundColor,
-                              foregroundColor: ElevatedButton.styleFrom(foregroundColor: Colors.black).foregroundColor,
+                              backgroundColor: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.ochre,
+                              ).backgroundColor,
+                              foregroundColor: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.black,
+                              ).foregroundColor,
                             ),
-                            child: Text(AppStr.backButtonLabel, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            child: Text(
+                              AppStr.backButtonLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppFonts.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -394,10 +448,18 @@ class _ReviewRequestDetailsScreenState extends State<ReviewRequestDetailsScreen>
                           child: ElevatedButton(
                             onPressed: _onReview,
                             style: actionBtnBase.copyWith(
-                              backgroundColor: ElevatedButton.styleFrom(backgroundColor: Colors.orange).backgroundColor,
-                              foregroundColor: ElevatedButton.styleFrom(foregroundColor: Colors.white).foregroundColor,
+                              backgroundColor: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                              ).backgroundColor,
+                              foregroundColor: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                              ).foregroundColor,
                             ),
-                            child: Text(AppStr.reviewButtonLabel, overflow: TextOverflow.ellipsis, style: AppFonts.bold),
+                            child: Text(
+                              AppStr.reviewButtonLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppFonts.bold,
+                            ),
                           ),
                         ),
                       ),

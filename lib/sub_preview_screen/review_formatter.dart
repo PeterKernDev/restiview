@@ -13,16 +13,8 @@ Widget reviewRow(String label, String value) {
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
       children: [
-        Text(
-          '$label: ',
-          style: AppFonts.bold,
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: AppFonts.standard,
-          ),
-        ),
+        Flexible(child: Text('$label: ', style: AppFonts.bold)),
+        Expanded(child: Text(value, style: AppFonts.standard)),
       ],
     ),
   );
@@ -30,17 +22,11 @@ Widget reviewRow(String label, String value) {
 
 Widget tagDisplay(List<String> tags) {
   if (tags.isEmpty) {
-    return Text(
-      AppStr.noTags,
-      style: AppFonts.standard,
-    );
+    return Text(AppStr.noTags, style: AppFonts.standard);
   }
 
   final tagText = tags.join(', ');
-  return Text(
-    tagText,
-    style: AppFonts.standard,
-  );
+  return Text(tagText, style: AppFonts.standard);
 }
 
 Widget ratingSummary(int rating, int michelinStars) {
@@ -58,19 +44,28 @@ Widget ratingSummary(int rating, int michelinStars) {
   );
 }
 
-Map<String, dynamic> formatReviewData(Map<String, dynamic> data, String email, String name) {
+Map<String, dynamic> formatReviewData(
+  Map<String, dynamic> data,
+  String email,
+  String name,
+) {
   final date = DateTime.tryParse(data['dateOfReview'] ?? '') ?? DateTime.now();
   final formattedDate = DateFormat('dd/MM/yyyy').format(date);
   final sortDate = DateFormat('yyyy/MM/dd').format(date);
 
-  final sortRating = (data['foodRating'] ?? 0) +
+  final sortRating =
+      (data['foodRating'] ?? 0) +
       (data['serviceRating'] ?? 0) +
       (data['ambianceRating'] ?? 0) +
       (data['drinksRating'] ?? 0) +
       (data['vfmsRating'] ?? 0);
 
-  final List<String> selectedTags = List<String>.from(data['goodForTags'] ?? []);
-  final goodForBinary = goodForTags.map((tag) => selectedTags.contains(tag) ? 'Y' : 'N').join();
+  final List<String> selectedTags = List<String>.from(
+    data['goodForTags'] ?? [],
+  );
+  final goodForBinary = goodForTags
+      .map((tag) => selectedTags.contains(tag) ? 'Y' : 'N')
+      .join();
 
   final Map<String, dynamic> formatted = {
     'restname': data['restaurantName'],

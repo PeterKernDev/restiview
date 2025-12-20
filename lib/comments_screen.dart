@@ -58,6 +58,9 @@ class _CommentsScreenState extends State<CommentsScreen> {
       text: widget.context.reviewMap['comments'] ?? '',
     );
 
+    // Track changes to comments text
+    _commentsController.addListener(() => widget.context.hasChanges = true);
+
     // Do not perform synchronous File.existsSync calls in initState.
     // Accept stored paths if present; Image.file will handle missing files at paint time.
     for (var i = 0; i < 3; i++) {
@@ -101,7 +104,10 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
   void _showFullImage(String path) {
     if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImage(path: path)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => FullScreenImage(path: path)),
+    );
   }
 
   // Runs in background isolate
@@ -119,7 +125,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
     final ratio = w > h ? maxDim / w : maxDim / h;
     final newW = (w * ratio).round();
     final newH = (h * ratio).round();
-    final resized = img.copyResize(image, width: newW, height: newH, interpolation: img.Interpolation.average);
+    final resized = img.copyResize(
+      image,
+      width: newW,
+      height: newH,
+      interpolation: img.Interpolation.average,
+    );
     return Uint8List.fromList(img.encodeJpg(resized, quality: req.quality));
   }
 
@@ -135,7 +146,9 @@ class _CommentsScreenState extends State<CommentsScreen> {
     if (_isBusy) return;
     if (!SessionCache.allowPhotos) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.photoDisabled)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.photoDisabled)));
       return;
     }
 
@@ -162,10 +175,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
         // place into the requested slot (index)
         _photoPaths[index] = path;
         _savePhotoPathsToContext();
+        widget.context.hasChanges = true;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -188,6 +204,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
       }
       _photoPaths[2] = null;
       _savePhotoPathsToContext();
+      widget.context.hasChanges = true;
     });
   }
 
@@ -230,9 +247,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
     _saveToContext();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => GoodForScreen(context: widget.context),
-      ),
+      MaterialPageRoute(builder: (_) => GoodForScreen(context: widget.context)),
     );
   }
 
@@ -256,7 +271,9 @@ class _CommentsScreenState extends State<CommentsScreen> {
     final raw = widget.context.reviewMap['details_$key'];
     final count = (raw is List) ? raw.length : 0;
     // Replaced hard-coded labels with AppStr tokens
-    final countLabel = count == 0 ? '${AppStr.detailsNone}: 0' : '${AppStr.detailsCountPrefix}: $count';
+    final countLabel = count == 0
+        ? '${AppStr.detailsNone}: 0'
+        : '${AppStr.detailsCountPrefix}: $count';
 
     return InkWell(
       onTap: () => _openDetailsCategory(key, title),
@@ -274,11 +291,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
               child: Icon(icon, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(title, style: AppFonts.bold),
-            ),
+            Expanded(child: Text(title, style: AppFonts.bold)),
             const SizedBox(width: 8),
-            Text(countLabel, style: AppFonts.standard.copyWith(color: AppColors.mutedText)),
+            Text(
+              countLabel,
+              style: AppFonts.standard.copyWith(color: AppColors.mutedText),
+            ),
           ],
         ),
       ),
@@ -295,7 +313,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
       child: Thumbnail(
         path: path,
         size: 84,
-        placeholder: Icon(Icons.camera_alt, size: 32, color: enabled ? AppColors.mutedText : AppColors.mutedText.withAlpha(80)),
+        placeholder: Icon(
+          Icons.camera_alt,
+          size: 32,
+          color: enabled
+              ? AppColors.mutedText
+              : AppColors.mutedText.withAlpha(80),
+        ),
         fit: BoxFit.cover,
         onTap: null, // tap handling is managed by the parent _photoSlot
       ),
@@ -330,7 +354,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
             }
           : null,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 72, minHeight: 72, maxWidth: 84, maxHeight: 84),
+        constraints: const BoxConstraints(
+          minWidth: 72,
+          minHeight: 72,
+          maxWidth: 84,
+          maxHeight: 84,
+        ),
         child: Stack(
           children: [
             Container(
@@ -348,10 +377,16 @@ class _CommentsScreenState extends State<CommentsScreen> {
                   height: 28,
                   child: Material(
                     color: Colors.black38,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                     child: InkWell(
                       onTap: () => _removePhotoAt(index),
-                      child: const Icon(Icons.close, size: 18, color: Colors.white),
+                      child: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -367,18 +402,29 @@ class _CommentsScreenState extends State<CommentsScreen> {
     // detail categories
     final detailList = <Map<String, dynamic>>[
       {'key': 'cocktails', 'label': AppStr.cocktails, 'icon': Icons.local_bar},
-      {'key': 'starters', 'label': AppStr.starters, 'icon': Icons.restaurant_menu},
+      {
+        'key': 'starters',
+        'label': AppStr.starters,
+        'icon': Icons.restaurant_menu,
+      },
       {'key': 'wine', 'label': AppStr.wine, 'icon': Icons.wine_bar},
       {'key': 'main', 'label': AppStr.mainCourse, 'icon': Icons.set_meal},
       {'key': 'dessert', 'label': AppStr.dessert, 'icon': Icons.icecream},
-      {'key': 'otherdrinks', 'label': AppStr.otherDrinks, 'icon': Icons.local_drink},
+      {
+        'key': 'otherdrinks',
+        'label': AppStr.otherDrinks,
+        'icon': Icons.local_drink,
+      },
     ];
 
     return Scaffold(
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(AppStr.detailsMenuTitle, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(
+          AppStr.detailsMenuTitle,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
@@ -397,7 +443,9 @@ class _CommentsScreenState extends State<CommentsScreen> {
                           const SizedBox(height: 8),
                           TextField(
                             controller: _commentsController,
-                            decoration: const InputDecoration(labelText: AppStr.commentsLabel),
+                            decoration: const InputDecoration(
+                              labelText: AppStr.commentsLabel,
+                            ),
                             maxLines: 3,
                           ),
                           const SizedBox(height: 16),
@@ -408,12 +456,20 @@ class _CommentsScreenState extends State<CommentsScreen> {
                             child: Wrap(
                               spacing: 12,
                               runSpacing: 12,
-                              children: List<Widget>.generate(3, (i) => _photoSlot(i)),
+                              children: List<Widget>.generate(
+                                3,
+                                (i) => _photoSlot(i),
+                              ),
                             ),
                           ),
 
                           const SizedBox(height: 20),
-                          for (final cat in detailList) _detailTile(cat['key'] as String, cat['label'] as String, cat['icon'] as IconData),
+                          for (final cat in detailList)
+                            _detailTile(
+                              cat['key'] as String,
+                              cat['label'] as String,
+                              cat['icon'] as IconData,
+                            ),
 
                           const SizedBox(height: 24),
                         ],
@@ -421,19 +477,36 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 0,
+                      vertical: 8,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton(
                           onPressed: _goBack,
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.ochre),
-                          child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)), 
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.ochre,
+                          ),
+                          child: Text(
+                            AppStr.back,
+                            style: AppFonts.standard.copyWith(
+                              color: Colors.black,
+                            ),
+                          ),
                         ),
                         ElevatedButton(
                           onPressed: _clearCommentsOnly,
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.lightGrey),
-                          child: Text(AppStr.clear, style: AppFonts.standard.copyWith(color: Colors.black87)), 
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.btnClear,
+                          ),
+                          child: Text(
+                            AppStr.clear,
+                            style: AppFonts.standard.copyWith(
+                              color: AppColors.btnText,
+                            ),
+                          ),
                         ),
                         ElevatedButton(
                           onPressed: _goToPreviewScreen,
@@ -441,7 +514,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
                             backgroundColor: AppColors.yellow,
                             foregroundColor: Colors.black,
                           ),
-                          child: Text(AppStr.next, style: AppFonts.standard.copyWith(color: Colors.black)), 
+                          child: Text(
+                            AppStr.next,
+                            style: AppFonts.standard.copyWith(
+                              color: Colors.black,
+                            ),
+                          ),
                         ),
                       ],
                     ),

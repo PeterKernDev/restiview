@@ -95,34 +95,49 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (edited.isEmpty || edited.length > 24) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
       return;
     }
 
     if (_selectedCuisine.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a cuisine to edit')),
+      );
       return;
     }
 
     if (edited == _selectedCuisine) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Value unchanged')));
       return;
     }
 
-    final mergedList = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
-    final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
+    final mergedList = _mergedAndSorted(
+      systemCuisines,
+      SessionCache.customCuisines,
+    );
+    final isDuplicate = mergedList.any(
+      (c) => c.toLowerCase() == edited.toLowerCase(),
+    );
     if (isDuplicate) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')),
+      );
       return;
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Not signed in')));
       return;
     }
 
@@ -130,7 +145,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final snapshot = await ref.get();
     if (!mounted) return;
     if (!snapshot.exists) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No custom values found to edit')),
+      );
       return;
     }
 
@@ -139,13 +156,17 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final index = cuisineList.indexWhere((pair) => pair[0] == _selectedCuisine);
     if (index == -1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected cuisine not found')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected cuisine not found')),
+      );
       return;
     }
 
     if (cuisineList[index][1] == 1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedCuisine" ${AppStr.usedInReview}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$_selectedCuisine" ${AppStr.usedInReview}')),
+      );
       return;
     }
 
@@ -177,7 +198,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.updatedCuisine}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$edited" ${AppStr.updatedCuisine}')),
+    );
   }
 
   Future<void> _addCustomCuisine() async {
@@ -185,20 +208,28 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (newCuisine.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomCuisine)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomCuisine)));
       return;
     }
     if (newCuisine.length > 24) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineMaxLength)));
       return;
     }
 
-    final exists = _mergedAndSorted(systemCuisines, SessionCache.customCuisines)
-        .any((c) => c.toLowerCase() == newCuisine.toLowerCase());
+    final exists = _mergedAndSorted(
+      systemCuisines,
+      SessionCache.customCuisines,
+    ).any((c) => c.toLowerCase() == newCuisine.toLowerCase());
     if (exists) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.alreadyExists}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newCuisine" ${AppStr.alreadyExists}')),
+      );
       return;
     }
 
@@ -217,7 +248,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       await ref.update({'cuisine': updatedCustoms});
     } else {
       updatedCustoms = [
-        [newCuisine, 0]
+        [newCuisine, 0],
       ];
       await ref.set({'cuisine': updatedCustoms, 'occasion': [], 'country': []});
     }
@@ -245,7 +276,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCuisine" ${AppStr.addedToCuisines}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$newCuisine" ${AppStr.addedToCuisines}')),
+    );
   }
 
   Future<void> _removeCustomCuisine() async {
@@ -253,7 +286,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (systemCuisines.contains(selected)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInCuisineBlock)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppStr.builtInCuisineBlock)));
       return;
     }
 
@@ -274,14 +309,23 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (cuisineList[index][1] == 1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"$selected" is used in a review and cannot be removed',
+          ),
+        ),
+      );
       return;
     }
 
     cuisineList.removeAt(index);
     await ref.update({'cuisine': cuisineList});
     if (!mounted) return;
-    SessionCache.customCuisines = _mergedAndSorted(systemCuisines, cuisineList.map((p) => p[0] as String).toList());
+    SessionCache.customCuisines = _mergedAndSorted(
+      systemCuisines,
+      cuisineList.map((p) => p[0] as String).toList(),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -292,7 +336,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
   }
 
   // ---------------- Occasion handlers (mirror cuisine) ----------------
@@ -301,34 +347,49 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (edited.isEmpty || edited.length > 24) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
       return;
     }
 
     if (_selectedOccasion.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an occasion to edit')),
+      );
       return;
     }
 
     if (edited == _selectedOccasion) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Value unchanged')));
       return;
     }
 
-    final mergedList = _mergedAndSorted(systemOccasions, SessionCache.customOccasions);
-    final isDuplicate = mergedList.any((c) => c.toLowerCase() == edited.toLowerCase());
+    final mergedList = _mergedAndSorted(
+      systemOccasions,
+      SessionCache.customOccasions,
+    );
+    final isDuplicate = mergedList.any(
+      (c) => c.toLowerCase() == edited.toLowerCase(),
+    );
     if (isDuplicate) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$edited" ${AppStr.alreadyExists}')),
+      );
       return;
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Not signed in')));
       return;
     }
 
@@ -336,22 +397,30 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final snapshot = await ref.get();
     if (!mounted) return;
     if (!snapshot.exists) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No custom values found to edit')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No custom values found to edit')),
+      );
       return;
     }
 
     final data = snapshot.value as Map<dynamic, dynamic>;
     final occasionList = _parsePairList(data['occasion']);
-    final index = occasionList.indexWhere((pair) => pair[0] == _selectedOccasion);
+    final index = occasionList.indexWhere(
+      (pair) => pair[0] == _selectedOccasion,
+    );
     if (index == -1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected occasion not found')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected occasion not found')),
+      );
       return;
     }
 
     if (occasionList[index][1] == 1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$_selectedOccasion" ${AppStr.usedInReview}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$_selectedOccasion" ${AppStr.usedInReview}')),
+      );
       return;
     }
 
@@ -383,7 +452,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$edited" ${AppStr.updatedOccasion}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$edited" ${AppStr.updatedOccasion}')),
+    );
   }
 
   Future<void> _addCustomOccasionLocal() async {
@@ -391,20 +462,28 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (newOccasion.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomOccasion)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomOccasion)));
       return;
     }
     if (newOccasion.length > 24) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
       return;
     }
 
-    final exists = _mergedAndSorted(systemOccasions, SessionCache.customOccasions)
-        .any((c) => c.toLowerCase() == newOccasion.toLowerCase());
+    final exists = _mergedAndSorted(
+      systemOccasions,
+      SessionCache.customOccasions,
+    ).any((c) => c.toLowerCase() == newOccasion.toLowerCase());
     if (exists) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')),
+      );
       return;
     }
 
@@ -423,9 +502,13 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       await ref.update({'occasion': updatedOccasions});
     } else {
       updatedOccasions = [
-        [newOccasion, 0]
+        [newOccasion, 0],
       ];
-      await ref.set({'cuisine': [], 'occasion': updatedOccasions, 'country': []});
+      await ref.set({
+        'cuisine': [],
+        'occasion': updatedOccasions,
+        'country': [],
+      });
     }
 
     if (!mounted) return;
@@ -451,7 +534,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')),
+    );
   }
 
   Future<void> _removeCustomOccasionLocal() async {
@@ -459,7 +544,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (systemOccasions.contains(selected)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.builtInValue)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppStr.builtInValue)));
       return;
     }
 
@@ -480,14 +567,23 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     if (occasionList[index][1] == 1) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" is used in a review and cannot be removed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '"$selected" is used in a review and cannot be removed',
+          ),
+        ),
+      );
       return;
     }
 
     occasionList.removeAt(index);
     await ref.update({'occasion': occasionList});
     if (!mounted) return;
-    SessionCache.customOccasions = _mergedAndSorted(systemOccasions, occasionList.map((p) => p[0] as String).toList());
+    SessionCache.customOccasions = _mergedAndSorted(
+      systemOccasions,
+      occasionList.map((p) => p[0] as String).toList(),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -498,7 +594,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     });
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('"$selected" has been removed')));
   }
 
   // ---------------- Country handlers ----------------
@@ -506,9 +604,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     final newCountry = _selectedCountry.trim();
     if (newCountry.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStr.enterCustomCountry)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.enterCustomCountry)));
       return;
     }
 
@@ -519,11 +617,15 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       );
       return;
     }
-    final exists = _mergedAndSorted(getSystemCountryNames(), SessionCache.customCountries)
-        .any((c) => c.toLowerCase() == newCountry.toLowerCase());
+    final exists = _mergedAndSorted(
+      getSystemCountryNames(),
+      SessionCache.customCountries,
+    ).any((c) => c.toLowerCase() == newCountry.toLowerCase());
     if (exists) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.alreadyInList}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newCountry" ${AppStr.alreadyInList}')),
+      );
       return;
     }
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -539,16 +641,25 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       await ref.update({'country': updatedCountries});
     } else {
       updatedCountries = [newCountry];
-      await ref.set({'cuisine': [], 'occasion': [], 'country': updatedCountries});
+      await ref.set({
+        'cuisine': [],
+        'occasion': [],
+        'country': updatedCountries,
+      });
     }
     if (!mounted) return;
-    SessionCache.customCountries = _mergedAndSorted(getSystemCountryNames(), updatedCountries);
+    SessionCache.customCountries = _mergedAndSorted(
+      getSystemCountryNames(),
+      updatedCountries,
+    );
     if (!mounted) return;
     setState(() {
       _selectedCountry = newCountry;
     });
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newCountry" ${AppStr.addedToCountries}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"$newCountry" ${AppStr.addedToCountries}')),
+    );
   }
 
   @override
@@ -570,23 +681,39 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
   void _goBackToSettings() {
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) {
-      return const SettingsScreen();
-    }));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) {
+          return const SettingsScreen();
+        },
+      ),
+    );
   }
 
   void _goToTopScreen() {
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) {
-      return const TopScreen();
-    }));
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) {
+          return const TopScreen();
+        },
+      ),
+    );
   }
 
   // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
-    final extendedCuisines = _mergedAndSorted(systemCuisines, SessionCache.customCuisines);
-    final extendedOccasions = _mergedAndSorted(systemOccasions, SessionCache.customOccasions);
+    final extendedCuisines = _mergedAndSorted(
+      systemCuisines,
+      SessionCache.customCuisines,
+    );
+    final extendedOccasions = _mergedAndSorted(
+      systemOccasions,
+      SessionCache.customOccasions,
+    );
     final countryList = allCountries; // show full country list in dropdown
 
     return Scaffold(
@@ -603,348 +730,486 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const SizedBox(height: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
 
-            // ---------------- Cuisine UI ----------------
-            TextField(
-              controller: _isEditingCuisine ? _cuisineEditController : _cuisineController,
-              decoration: InputDecoration(
-                labelText: _isEditingCuisine ? AppStr.editCuisineLabel : AppStr.newCuisineLabel,
-                labelStyle: AppFonts.standard,
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: extendedCuisines.contains(_selectedCuisine) ? _selectedCuisine : null,
-              hint: Text('Select cuisine', style: AppFonts.standard),
-              items: extendedCuisines.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
-              }).toList(),
-              onChanged: (value) {
-                if (!mounted) return;
-                setState(() {
-                  _selectedCuisine = value ?? '';
-                  if (_isEditingCuisine) {
-                    _cuisineEditController.text = _selectedCuisine;
-                  }
-                });
-              },
-              decoration: InputDecoration(labelText: AppStr.currentCuisinesLabel, labelStyle: AppFonts.standard),
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _addCustomCuisine();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.darkGreen,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.add, style: AppFonts.standard.copyWith(fontSize: 13)),
+              // ---------------- Cuisine UI ----------------
+              TextField(
+                controller: _isEditingCuisine
+                    ? _cuisineEditController
+                    : _cuisineController,
+                decoration: InputDecoration(
+                  labelText: _isEditingCuisine
+                      ? AppStr.editCuisineLabel
+                      : AppStr.newCuisineLabel,
+                  labelStyle: AppFonts.standard,
                 ),
               ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _removeCustomCuisine();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.red,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.removeButton, style: AppFonts.standard.copyWith(fontSize: 13)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: extendedCuisines.contains(_selectedCuisine)
+                    ? _selectedCuisine
+                    : null,
+                hint: Text('Select cuisine', style: AppFonts.standard),
+                items: extendedCuisines.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(c, style: AppFonts.standard),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (!mounted) return;
+                  setState(() {
+                    _selectedCuisine = value ?? '';
+                    if (_isEditingCuisine) {
+                      _cuisineEditController.text = _selectedCuisine;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: AppStr.currentCuisinesLabel,
+                  labelStyle: AppFonts.standard,
                 ),
               ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          if (_selectedCuisine.isEmpty) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a cuisine to edit')));
-                            return;
-                          }
-                          setState(() {
-                            _isEditingCuisine = true;
-                            _cuisineEditController.text = _selectedCuisine;
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.edit, style: AppFonts.standard.copyWith(fontSize: 13)),
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _addCustomCuisine();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.btnAdd,
+                        foregroundColor: AppColors.btnText,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.add,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _removeCustomCuisine();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.red,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.removeButton,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              if (_selectedCuisine.isEmpty) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select a cuisine to edit',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              setState(() {
+                                _isEditingCuisine = true;
+                                _cuisineEditController.text = _selectedCuisine;
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.edit,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 24),
+
+                  SizedBox(
+                    width: 40,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: (!_isEditingCuisine || _isBusy)
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _saveEditedCuisine();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isEditingCuisine
+                            ? Colors.lightGreenAccent
+                            : Colors.grey[300],
+                        disabledBackgroundColor: Colors.grey[300],
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.black,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  SizedBox(
+                    width: 40,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isEditingCuisine = false;
+                          _cuisineEditController.clear();
+                          _cuisineController.clear();
+                          _selectedCuisine = '';
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade100,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.black,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
-              const SizedBox(width: 24),
+              const Divider(height: 32, thickness: 1),
 
-              SizedBox(
-                width: 40,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: (!_isEditingCuisine || _isBusy)
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _saveEditedCuisine();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: _isEditingCuisine ? Colors.lightGreenAccent : Colors.grey[300],
-                      disabledBackgroundColor: Colors.grey[300],
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0),
-                  child: const Icon(Icons.check, color: Colors.black, size: 20),
+              // ---------------- Occasion UI (mirrors Cuisine) ----------------
+              TextField(
+                controller: _isEditingOccasion
+                    ? _occasionEditController
+                    : _occasionController,
+                decoration: InputDecoration(
+                  labelText: _isEditingOccasion
+                      ? AppStr.editOccasionLabel
+                      : AppStr.occasionLabel,
+                  labelStyle: AppFonts.standard,
                 ),
               ),
-              const SizedBox(width: 6),
-
-              SizedBox(
-                width: 40,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _isEditingCuisine = false;
-                      _cuisineEditController.clear();
-                      _cuisineController.clear();
-                      _selectedCuisine = '';
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade100,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0),
-                  child: const Icon(Icons.close, color: Colors.black, size: 20),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: extendedOccasions.contains(_selectedOccasion)
+                    ? _selectedOccasion
+                    : null,
+                hint: Text('Select occasion', style: AppFonts.standard),
+                items: extendedOccasions.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(c, style: AppFonts.standard),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (!mounted) return;
+                  setState(() {
+                    _selectedOccasion = value ?? '';
+                    if (_isEditingOccasion) {
+                      _occasionEditController.text = _selectedOccasion;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: AppStr.currentOccasionsLabel,
+                  labelStyle: AppFonts.standard,
                 ),
               ),
-            ]),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _addCustomOccasionLocal();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.btnAdd,
+                        foregroundColor: AppColors.btnText,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.add,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _removeCustomOccasionLocal();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.red,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.removeButton,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 64,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              if (_selectedOccasion.isEmpty) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select an occasion to edit',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              setState(() {
+                                _isEditingOccasion = true;
+                                _occasionEditController.text =
+                                    _selectedOccasion;
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        AppStr.edit,
+                        style: AppFonts.standard.copyWith(fontSize: 13),
+                      ),
+                    ),
+                  ),
 
-            const Divider(height: 32, thickness: 1),
+                  const SizedBox(width: 24),
 
-            // ---------------- Occasion UI (mirrors Cuisine) ----------------
-            TextField(
-              controller: _isEditingOccasion ? _occasionEditController : _occasionController,
-              decoration: InputDecoration(labelText: _isEditingOccasion ? AppStr.editOccasionLabel : AppStr.occasionLabel, labelStyle: AppFonts.standard),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: extendedOccasions.contains(_selectedOccasion) ? _selectedOccasion : null,
-              hint: Text('Select occasion', style: AppFonts.standard),
-              items: extendedOccasions.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
-              }).toList(),
-              onChanged: (value) {
-                if (!mounted) return;
-                setState(() {
-                  _selectedOccasion = value ?? '';
-                  if (_isEditingOccasion) {
-                    _occasionEditController.text = _selectedOccasion;
-                  }
-                });
-              },
-              decoration: InputDecoration(labelText: AppStr.currentOccasionsLabel, labelStyle: AppFonts.standard),
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _addCustomOccasionLocal();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.darkGreen,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.add, style: AppFonts.standard.copyWith(fontSize: 13)),
+                  SizedBox(
+                    width: 40,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: (!_isEditingOccasion || _isBusy)
+                          ? null
+                          : () {
+                              _withBusy(() async {
+                                await _saveEditedOccasion();
+                              });
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isEditingOccasion
+                            ? Colors.lightGreenAccent
+                            : Colors.grey[300],
+                        disabledBackgroundColor: Colors.grey[300],
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.black,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  SizedBox(
+                    width: 40,
+                    height: 36,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isEditingOccasion = false;
+                          _occasionEditController.clear();
+                          _occasionController.clear();
+                          _selectedOccasion = '';
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade100,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.black,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const Divider(height: 32, thickness: 1),
+
+              // ---------------- Country UI ----------------
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: countryList.contains(_selectedCountry)
+                    ? _selectedCountry
+                    : null,
+                hint: Text('Select country', style: AppFonts.standard),
+                items: countryList.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(c, style: AppFonts.standard),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (!mounted) return;
+                  // only set local selection here; do NOT add to DB until user taps Add Country
+                  setState(() {
+                    _selectedCountry = value ?? '';
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: AppStr.countryLabel,
+                  labelStyle: AppFonts.standard,
                 ),
               ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _removeCustomOccasionLocal();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.red,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.removeButton, style: AppFonts.standard.copyWith(fontSize: 13)),
-                ),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 64,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: _isBusy
-                      ? null
-                      : () {
-                          if (_selectedOccasion.isEmpty) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an occasion to edit')));
-                            return;
-                          }
-                          setState(() {
-                            _isEditingOccasion = true;
-                            _occasionEditController.text = _selectedOccasion;
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: Text(AppStr.edit, style: AppFonts.standard.copyWith(fontSize: 13)),
-                ),
-              ),
-
-              const SizedBox(width: 24),
-
-              SizedBox(
-                width: 40,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: (!_isEditingOccasion || _isBusy)
-                      ? null
-                      : () {
-                          _withBusy(() async {
-                            await _saveEditedOccasion();
-                          });
-                        },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: _isEditingOccasion ? Colors.lightGreenAccent : Colors.grey[300],
-                      disabledBackgroundColor: Colors.grey[300],
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0),
-                  child: const Icon(Icons.check, color: Colors.black, size: 20),
-                ),
-              ),
-              const SizedBox(width: 6),
-
-              SizedBox(
-                width: 40,
-                height: 36,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _isEditingOccasion = false;
-                      _occasionEditController.clear();
-                      _occasionController.clear();
-                      _selectedOccasion = '';
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade100,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0),
-                  child: const Icon(Icons.close, color: Colors.black, size: 20),
-                ),
-              ),
-            ]),
-
-            const Divider(height: 32, thickness: 1),
-
-            // ---------------- Country UI ----------------
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: countryList.contains(_selectedCountry) ? _selectedCountry : null,
-              hint: Text('Select country', style: AppFonts.standard),
-              items: countryList.map((c) {
-                return DropdownMenuItem<String>(value: c, child: Text(c, style: AppFonts.standard));
-              }).toList(),
-              onChanged: (value) {
-                if (!mounted) return;
-                // only set local selection here; do NOT add to DB until user taps Add Country
-                setState(() {
-                  _selectedCountry = value ?? '';
-                });
-              },
-              decoration: InputDecoration(labelText: AppStr.countryLabel, labelStyle: AppFonts.standard),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: _isBusy
-                  ? null
-                  : () {
-                      _withBusy(() async {
-                        await _addCustomCountry();
-                      });
-                    },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.black87,
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _isBusy
+                    ? null
+                    : () {
+                        _withBusy(() async {
+                          await _addCustomCountry();
+                        });
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.btnAdd,
+                  foregroundColor: AppColors.btnText,
                   minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: Text(AppStr.addCountry, style: AppFonts.standard),
-            ),
-
-            const Divider(height: 32, thickness: 1),
-
-            const SizedBox(height: 36),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              ElevatedButton(
-                onPressed: _goBackToSettings,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ochre,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size(100, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: Text(AppStr.back, style: AppFonts.standard),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(AppStr.addCountry, style: AppFonts.standard),
               ),
-              ElevatedButton(
-                onPressed: _goToTopScreen,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.red,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(100, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: Text(AppStr.done, style: AppFonts.standard.copyWith(color: Colors.white)),
+
+              const Divider(height: 32, thickness: 1),
+
+              const SizedBox(height: 36),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: _goBackToSettings,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.ochre,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(100, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(AppStr.back, style: AppFonts.standard),
+                  ),
+                  ElevatedButton(
+                    onPressed: _goToTopScreen,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.red,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(100, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      AppStr.done,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          ]),
+            ],
+          ),
         ),
       ),
     );

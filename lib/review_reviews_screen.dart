@@ -33,7 +33,10 @@ class ReviewReviewsScreen extends StatefulWidget {
 }
 
 class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
-  final List<Map<String, dynamic>> _reviews = <Map<String, dynamic>>[]; // each item contains at least 'key' and review fields
+  final List<Map<String, dynamic>> _reviews =
+      <
+        Map<String, dynamic>
+      >[]; // each item contains at least 'key' and review fields
   final Set<String> _excludedKeys = <String>{};
   String? _selectedKey;
   bool _loading = true;
@@ -84,53 +87,95 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     });
 
     // Determine filters: prefer the friend's review subnode under current user's friends record.
-    String? countryFilter;
-    String? cuisineFilter;
-    String? cityFilter;
+    List<Map<String, String?>> filters = <Map<String, String?>>[];
 
     try {
-      final DatabaseReference friendReviewRef =
-          FirebaseDatabase.instance.ref('users/$myUid/friends/${widget.friendUid}/review_request');
+      final DatabaseReference friendReviewRef = FirebaseDatabase.instance.ref(
+        'users/$myUid/friends/${widget.friendUid}/review_request',
+      );
       final DataSnapshot friendSnap = await friendReviewRef.get();
-      if (friendSnap.exists && friendSnap.value != null && friendSnap.value is Map) {
-        final Map<dynamic, dynamic> friendReview = Map<dynamic, dynamic>.from(friendSnap.value as Map);
-        
-        // Read from review_request structure (filterCountry, filterCity, filterCuisine)
-        countryFilter = (friendReview['filterCountry'] is String && (friendReview['filterCountry'] as String).trim().isNotEmpty)
-            ? (friendReview['filterCountry'] as String).trim()
-            : null;
+      if (friendSnap.exists &&
+          friendSnap.value != null &&
+          friendSnap.value is Map) {
+        final Map<dynamic, dynamic> friendReview = Map<dynamic, dynamic>.from(
+          friendSnap.value as Map,
+        );
 
-        cuisineFilter = (friendReview['filterCuisine'] is String && (friendReview['filterCuisine'] as String).trim().isNotEmpty)
-            ? (friendReview['filterCuisine'] as String).trim()
-            : null;
-
-        cityFilter = (friendReview['filterCity'] is String && (friendReview['filterCity'] as String).trim().isNotEmpty)
-            ? (friendReview['filterCity'] as String).trim()
-            : null;
+        // Read filters array from review_request structure
+        if (friendReview['filters'] is List) {
+          final List<dynamic> filtersList = friendReview['filters'] as List;
+          for (final dynamic filterItem in filtersList) {
+            if (filterItem is Map) {
+              final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+              final String? country = filterMap['country']?.toString();
+              final String? city = filterMap['city']?.toString();
+              if (country != null && country.isNotEmpty) {
+                filters.add(<String, String?>{
+                  'country': country.trim(),
+                  'city': (city == null || city.isEmpty || city == 'none') ? null : city.trim(),
+                });
+              }
+            }
+          }
+        }
         
-        // Convert 'none' to null for filtering
-        if (cuisineFilter == 'none') cuisineFilter = null;
-        if (cityFilter == 'none') cityFilter = null;
-      } else {
-        // fallback to widget.filters (older calling pattern)
-        countryFilter = (widget.filters['country'] ?? '').trim().isEmpty ? null : widget.filters['country']?.trim();
-        cuisineFilter = (widget.filters['cuisine'] ?? '').trim().isEmpty ? null : widget.filters['cuisine']?.trim();
-        cityFilter = (widget.filters['city'] ?? '').trim().isEmpty ? null : widget.filters['city']?.trim();
+        // Fallback to legacy single filter if filters array is empty
+        if (filters.isEmpty) {
+          final String? countryFilter =
+              (friendReview['filterCountry'] is String &&
+                  (friendReview['filterCountry'] as String).trim().isNotEmpty)
+              ? (friendReview['filterCountry'] as String).trim()
+              : null;
+          final String? cityFilter =
+              (friendReview['filterCity'] is String &&
+                  (friendReview['filterCity'] as String).trim().isNotEmpty)
+              ? (friendReview['filterCity'] as String).trim()
+              : null;
+          
+          if (countryFilter != null && countryFilter.isNotEmpty) {
+            filters.add(<String, String?>{
+              'country': countryFilter,
+              'city': (cityFilter == 'none') ? null : cityFilter,
+            });
+          }
+        }
+      }
+      
+      // Fallback to widget.filters if still empty
+      if (filters.isEmpty) {
+        final String? countryFilter = (widget.filters['country'] ?? '').trim().isEmpty
+            ? null
+            : widget.filters['country']?.trim();
+        final String? cityFilter = (widget.filters['city'] ?? '').trim().isEmpty
+            ? null
+            : widget.filters['city']?.trim();
+        if (countryFilter != null && countryFilter.isNotEmpty) {
+          filters.add(<String, String?>{
+            'country': countryFilter,
+            'city': cityFilter,
+          });
+        }
       }
     } catch (e) {
       // On error reading friend review node, fall back to widget.filters
-      countryFilter = (widget.filters['country'] ?? '').trim().isEmpty ? null : widget.filters['country']?.trim();
-      cuisineFilter = (widget.filters['cuisine'] ?? '').trim().isEmpty ? null : widget.filters['cuisine']?.trim();
-      cityFilter = (widget.filters['city'] ?? '').trim().isEmpty ? null : widget.filters['city']?.trim();
+      final String? countryFilter = (widget.filters['country'] ?? '').trim().isEmpty
+          ? null
+          : widget.filters['country']?.trim();
+      final String? cityFilter = (widget.filters['city'] ?? '').trim().isEmpty
+          ? null
+          : widget.filters['city']?.trim();
+      if (countryFilter != null && countryFilter.isNotEmpty) {
+        filters.add(<String, String?>{
+          'country': countryFilter,
+          'city': cityFilter,
+        });
+      }
     }
 
-    // Normalize filters for case-insensitive comparison
-    final String nfCountry = _norm(countryFilter);
-    final String nfCuisine = _norm(cuisineFilter);
-    final String nfCity = _norm(cityFilter);
-
     try {
-      final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$myUid/reviews');
+      final DatabaseReference ref = FirebaseDatabase.instance.ref(
+        'users/$myUid/reviews',
+      );
       final DataSnapshot snap = await ref.get();
       if (!snap.exists || snap.value == null || snap.value is! Map) {
         if (mounted) {
@@ -141,7 +186,9 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
         return;
       }
 
-      final Map<dynamic, dynamic> all = Map<dynamic, dynamic>.from(snap.value as Map);
+      final Map<dynamic, dynamic> all = Map<dynamic, dynamic>.from(
+        snap.value as Map,
+      );
 
       final List<Map<String, dynamic>> found = <Map<String, dynamic>>[];
       all.forEach((dynamic k, dynamic v) {
@@ -155,23 +202,41 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
         final Map<dynamic, dynamic> rv = Map<dynamic, dynamic>.from(v);
 
         // Extract fields using multiple possible keys to be tolerant of schema differences
-        final String? country = _extractField(rv, <String>['country', 'restcountry', 'countryCode']);
-        final String? cuisine = _extractField(rv, <String>['cuisine', 'restcuisine', 'cuisineType']);
-        final String? city = _extractField(rv, <String>['city', 'restcity', 'restaurantCity']);
+        final String? country = _extractField(rv, <String>[
+          'country',
+          'restcountry',
+          'countryCode',
+        ]);
+        final String? city = _extractField(rv, <String>[
+          'city',
+          'restcity',
+          'restaurantCity',
+        ]);
 
         // Normalize review values
         final String rvCountry = _norm(country);
-        final String rvCuisine = _norm(cuisine);
         final String rvCity = _norm(city);
 
-        // Apply filters case-insensitively and tolerant of whitespace
-        if (nfCountry.isNotEmpty && rvCountry != nfCountry) {
-          return;
+        // Check if review matches ANY filter (OR logic)
+        bool matchesAnyFilter = false;
+        for (final Map<String, String?> filter in filters) {
+          final String fCountry = _norm(filter['country']);
+          final String fCity = _norm(filter['city']);
+
+          // Country must match if specified in filter
+          if (fCountry.isNotEmpty && rvCountry != fCountry) {
+            continue;
+          }
+          // City must match if specified in filter
+          if (fCity.isNotEmpty && rvCity != fCity) {
+            continue;
+          }
+          // If we get here, this filter matches
+          matchesAnyFilter = true;
+          break;
         }
-        if (nfCuisine.isNotEmpty && rvCuisine != nfCuisine) {
-          return;
-        }
-        if (nfCity.isNotEmpty && rvCity != nfCity) {
+
+        if (!matchesAnyFilter) {
           return;
         }
 
@@ -249,13 +314,16 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     if (_selectedKey == null) {
       return;
     }
-    final Map<String, dynamic> chosen =
-        _reviews.firstWhere((r) => r['key'] == _selectedKey, orElse: () => <String, dynamic>{});
+    final Map<String, dynamic> chosen = _reviews.firstWhere(
+      (r) => r['key'] == _selectedKey,
+      orElse: () => <String, dynamic>{},
+    );
     if (chosen.isEmpty) {
       return;
     }
-    final Map<dynamic, dynamic> data =
-        (chosen['data'] is Map) ? Map<dynamic, dynamic>.from(chosen['data'] as Map) : <dynamic, dynamic>{};
+    final Map<dynamic, dynamic> data = (chosen['data'] is Map)
+        ? Map<dynamic, dynamic>.from(chosen['data'] as Map)
+        : <dynamic, dynamic>{};
 
     final ReviewContext ctx = ReviewContext(
       reviewMap: data.map((k, v) => MapEntry(k.toString(), v)),
@@ -266,7 +334,11 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     if (!mounted) {
       return;
     }
-    final result = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PreviewScreen(context: ctx, mode: 'exclude')));
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(context: ctx, mode: 'exclude'),
+      ),
+    );
     // If preview returned true, caller signalled to exclude this review — add to exclusions
     // Do NOT pop this screen; remain on the review list so the user can continue and persist changes.
     if (result == true) {
@@ -307,7 +379,8 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
       _saving = true;
     });
 
-    final String reviewPath = 'users/$myUid/friends/${widget.friendUid}/review_request';
+    final String reviewPath =
+        'users/$myUid/friends/${widget.friendUid}/review_request';
     final DatabaseReference rootRef = FirebaseDatabase.instance.ref();
 
     final int exCount = _excludedKeys.length;
@@ -315,7 +388,9 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
 
     // Always persist the correct exCount and exKeys values to review_request. Do not touch rvCount.
     patch['$reviewPath/exCount'] = exCount;
-    patch['$reviewPath/exKeys'] = _excludedKeys.isNotEmpty ? _excludedKeys.toList() : <String>[];
+    patch['$reviewPath/exKeys'] = _excludedKeys.isNotEmpty
+        ? _excludedKeys.toList()
+        : <String>[];
     patch['$reviewPath/updatedAt'] = DateTime.now().toUtc().toIso8601String();
 
     bool updateSucceeded = false;
@@ -324,7 +399,6 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
       updateSucceeded = true;
     } catch (err) {
       updateSucceeded = false;
-      debugPrint('[ReviewReviewsScreen] failed to update exclusions: $err');
     }
 
     // Guard use of mounted/context after async gap
@@ -349,10 +423,13 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     final String key = rv['key'] as String;
     final bool excluded = _excludedKeys.contains(key);
     final bool selected = _selectedKey == key;
-    final Map<dynamic, dynamic> data = (rv['data'] is Map) ? Map<dynamic, dynamic>.from(rv['data'] as Map) : <dynamic, dynamic>{};
+    final Map<dynamic, dynamic> data = (rv['data'] is Map)
+        ? Map<dynamic, dynamic>.from(rv['data'] as Map)
+        : <dynamic, dynamic>{};
 
     // Extract display fields with fallbacks
-    final String restname = (data['restname'] is String && (data['restname'] as String).isNotEmpty)
+    final String restname =
+        (data['restname'] is String && (data['restname'] as String).isNotEmpty)
         ? (data['restname'] as String)
         : (data['name'] is String ? (data['name'] as String) : key);
 
@@ -363,17 +440,24 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     if (restratingRaw is int) {
       rating = restratingRaw;
     } else {
-      rating = int.tryParse(restratingRaw?.toString() ?? '') ??
+      rating =
+          int.tryParse(restratingRaw?.toString() ?? '') ??
           (double.tryParse(restratingRaw?.toString() ?? '')?.round() ?? 0);
     }
 
-    final String restcountry = (data['restcountry'] is String) ? (data['restcountry'] as String) : (data['country']?.toString() ?? '');
-    final String restcity = (data['restcity'] is String) ? (data['restcity'] as String) : (data['city']?.toString() ?? '');
-    final String restcuisine = (data['restcuisine'] is String) ? (data['restcuisine'] as String) : (data['cuisine']?.toString() ?? '');
+    final String restcountry = (data['restcountry'] is String)
+        ? (data['restcountry'] as String)
+        : (data['country']?.toString() ?? '');
+    final String restcity = (data['restcity'] is String)
+        ? (data['restcity'] as String)
+        : (data['city']?.toString() ?? '');
+    final String restcuisine = (data['restcuisine'] is String)
+        ? (data['restcuisine'] as String)
+        : (data['cuisine']?.toString() ?? '');
 
     // Use withValues(alpha: double) to avoid withOpacity; selected background uses AppColors.ochre
     final Color selectedBg = AppColors.ochre.withValues(alpha: 0.15);
-    final Color excludedCircleBg = Colors.red.withValues(alpha: 0.15);
+    final Color excludedCircleBg = AppColors.red.withValues(alpha: 0.15);
 
     return Material(
       color: selected ? selectedBg : Colors.transparent,
@@ -394,7 +478,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                       restname,
                       overflow: TextOverflow.ellipsis,
                       style: AppFonts.bold.copyWith(
-                        color: Colors.blue,
+                        color: AppColors.blue,
                         fontSize: 16,
                       ),
                     ),
@@ -413,7 +497,9 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                   Expanded(
                     flex: 3,
                     child: Text(
-                      (restcountry.isNotEmpty && restcity.isNotEmpty) ? '$restcountry, $restcity' : (restcountry + restcity),
+                      (restcountry.isNotEmpty && restcity.isNotEmpty)
+                          ? '$restcountry, $restcity'
+                          : (restcountry + restcity),
                       overflow: TextOverflow.ellipsis,
                       style: AppFonts.standard,
                     ),
@@ -454,7 +540,9 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                         shape: BoxShape.circle,
                         color: excludedCircleBg,
                       ),
-                      child: const Center(child: Icon(Icons.close, color: Colors.red, size: 18)),
+                      child: const Center(
+                        child: Icon(Icons.close, color: AppColors.red, size: 18),
+                      ),
                     ),
                 ],
               ),
@@ -473,9 +561,12 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     final int excluded = _excludedKeys.length;
     final int included = total - excluded;
 
-    final bool canExclude = _selectedKey != null && !_excludedKeys.contains(_selectedKey);
-    final bool canInclude = _selectedKey != null && _excludedKeys.contains(_selectedKey);
-    final bool canPreview = _selectedKey != null && !_excludedKeys.contains(_selectedKey);
+    final bool canExclude =
+        _selectedKey != null && !_excludedKeys.contains(_selectedKey);
+    final bool canInclude =
+        _selectedKey != null && _excludedKeys.contains(_selectedKey);
+    final bool canPreview =
+        _selectedKey != null && !_excludedKeys.contains(_selectedKey);
 
     // Base button style created with styleFrom to avoid deprecated MaterialStateProperty usage
     final ButtonStyle baseBtn = ElevatedButton.styleFrom(
@@ -486,7 +577,10 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStr.reviewReviewsTitle, style: AppFonts.title.copyWith(color: Colors.white)),
+        title: Text(
+          AppStr.reviewReviewsTitle,
+          style: AppFonts.title.copyWith(color: Colors.white),
+        ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
@@ -496,13 +590,31 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
             Column(
               children: <Widget>[
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12.0,
+                    horizontal: 16.0,
+                  ),
                   child: Row(
                     children: <Widget>[
-                      Expanded(child: Text('${AppStr.matchingReviews} ($total)', style: AppFonts.standard)),
-                      Text('${AppStr.includedLabel}: $included', style: AppFonts.smallHint.copyWith(color: AppColors.mutedText)),
+                      Expanded(
+                        child: Text(
+                          '${AppStr.matchingReviews} ($total)',
+                          style: AppFonts.standard,
+                        ),
+                      ),
+                      Text(
+                        '${AppStr.includedLabel}: $included',
+                        style: AppFonts.smallHint.copyWith(
+                          color: AppColors.mutedText,
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Text('${AppStr.excludedLabel}: $excluded', style: AppFonts.smallHint.copyWith(color: AppColors.mutedText)),
+                      Text(
+                        '${AppStr.excludedLabel}: $excluded',
+                        style: AppFonts.smallHint.copyWith(
+                          color: AppColors.mutedText,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -511,24 +623,36 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _reviews.isEmpty
-                          ? Center(child: Text(AppStr.noMatchingReviews, style: AppFonts.standard.copyWith(color: AppColors.mutedText)))
-                          : ListView.separated(
-                              itemCount: _reviews.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (BuildContext ctx, int idx) {
-                                final Map<String, dynamic> rv = _reviews[idx];
-                                return Opacity(
-                                  opacity: _excludedKeys.contains(rv['key']) ? 0.45 : 1.0,
-                                  child: _buildRow(rv),
-                                );
-                              },
+                      ? Center(
+                          child: Text(
+                            AppStr.noMatchingReviews,
+                            style: AppFonts.standard.copyWith(
+                              color: AppColors.mutedText,
                             ),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _reviews.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (BuildContext ctx, int idx) {
+                            final Map<String, dynamic> rv = _reviews[idx];
+                            return Opacity(
+                              opacity: _excludedKeys.contains(rv['key'])
+                                  ? 0.45
+                                  : 1.0,
+                              child: _buildRow(rv),
+                            );
+                          },
+                        ),
                 ),
 
                 // Two rows of buttons at bottom
                 Container(
                   color: AppColors.beige,
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 8.0,
+                  ),
                   child: Column(
                     children: <Widget>[
                       // Row 1: Back (LJ) and Clear (RJ)
@@ -539,7 +663,12 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                               alignment: Alignment.centerLeft,
                               child: ElevatedButton(
                                 onPressed: _saveStateAndPop,
-                                style: baseBtn.merge(ElevatedButton.styleFrom(backgroundColor: AppColors.lightGrey)),
+                                style: baseBtn.merge(
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.btnBack,
+                                    foregroundColor: AppColors.btnText,
+                                  ),
+                                ),
                                 child: Text(AppStr.backButtonLabel),
                               ),
                             ),
@@ -549,7 +678,12 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                               alignment: Alignment.centerRight,
                               child: ElevatedButton(
                                 onPressed: _clearExclusions,
-                                style: baseBtn.merge(ElevatedButton.styleFrom(backgroundColor: Colors.grey)),
+                                style: baseBtn.merge(
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.btnClear,
+                                    foregroundColor: AppColors.btnText,
+                                  ),
+                                ),
                                 child: Text(AppStr.clear),
                               ),
                             ),
@@ -565,7 +699,11 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                               alignment: Alignment.centerLeft,
                               child: ElevatedButton(
                                 onPressed: canExclude ? onExclude : null,
-                                style: baseBtn.merge(ElevatedButton.styleFrom(backgroundColor: Colors.red)),
+                                style: baseBtn.merge(
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.red,
+                                  ),
+                                ),
                                 child: Text(AppStr.exclude),
                               ),
                             ),
@@ -575,7 +713,11 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                               alignment: Alignment.center,
                               child: ElevatedButton(
                                 onPressed: canInclude ? onInclude : null,
-                                style: baseBtn.merge(ElevatedButton.styleFrom(backgroundColor: AppColors.green)),
+                                style: baseBtn.merge(
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.green,
+                                  ),
+                                ),
                                 child: Text(AppStr.include),
                               ),
                             ),
@@ -584,8 +726,15 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                             child: Align(
                               alignment: Alignment.centerRight,
                               child: ElevatedButton(
-                                onPressed: canPreview ? () => onPreview() : null,
-                                style: baseBtn.merge(ElevatedButton.styleFrom(backgroundColor: Colors.blue)),
+                                onPressed: canPreview
+                                    ? () => onPreview()
+                                    : null,
+                                style: baseBtn.merge(
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.btnPreview,
+                                    foregroundColor: AppColors.btnText,
+                                  ),
+                                ),
                                 child: Text(AppStr.preview),
                               ),
                             ),

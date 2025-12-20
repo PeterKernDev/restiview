@@ -225,7 +225,7 @@ class _TopScreenState extends State<TopScreen> {
     // friendsLabel no longer includes a count
     final String friendsLabel = AppStr.friendsUpper;
 
-    final Color friendsBg = _acceptsFriends ? AppColors.ochre : Colors.grey.shade400;
+    final Color friendsBg = _acceptsFriends ? AppColors.ochre : AppColors.greyShade400;
     final Color friendsFg = _acceptsFriends ? Colors.black87 : Colors.black38;
 
     return Scaffold(
@@ -291,7 +291,7 @@ class _TopScreenState extends State<TopScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: _handleViewRequestedReviews,
-                      child: Text('FRIEND REVIEWS', style: AppFonts.standard),
+                      child: Text(AppStr.friendReviewsButton, style: AppFonts.standard),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -323,7 +323,7 @@ class _TopScreenState extends State<TopScreen> {
                     icon: const Icon(Icons.settings, color: Colors.white),
                     label: Text(AppStr.settings, style: AppFonts.standard.copyWith(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
+                      backgroundColor: AppColors.grey,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

@@ -14,7 +14,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'services/session_cache.dart';
 import 'services/db_utils.dart'; // normalizeEmailForPath helper
-import 'services/request_audit.dart'; // audit helper
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
@@ -168,7 +167,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
 
     _checkedNormalized = normalized;
     _checkValid = true;
-    messenger.showSnackBar(const SnackBar(content: Text('Valid email address')));
+    messenger.showSnackBar(SnackBar(content: Text(AppStr.validEmailAddress)));
     if (mounted) {
       setState(() {});
     }
@@ -332,7 +331,6 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
 
     // Debug sanity checks in debug builds
     if (kDebugMode) {
-      debugPrint('[FriendRequestScreen] finalSenderUid=$finalSenderUid finalRecipientUid=$finalRecipientUid normalized=$normalized clientRequestId=$clientRequestId');
       assert(finalSenderUid.isNotEmpty && finalRecipientUid.isNotEmpty && finalSenderUid != finalRecipientUid,
           'sender and recipient UIDs must be non-empty and different');
     }
@@ -372,27 +370,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
     }
 
     try {
-      if (kDebugMode) {
-        debugPrint('[FriendRequestScreen] about to update DB. mailbox=$mailboxPath');
-        debugPrint('[FriendRequestScreen] senderStubPath=users/$finalSenderUid/friends/$finalRecipientUid senderStub=$senderStub');
-        debugPrint('[FriendRequestScreen] Recipient stub will be created when recipient signs in and processes mailbox');
-      }
       await _updateWithRetry(updates, maxAttempts: 3);
-
-      try {
-        await writeRequestAudit(
-          typeCode: 1,
-          fromUid: finalSenderUid,
-          toUid: finalRecipientUid,
-          fromEmail: fromEmail,
-          toEmail: recipientEmail,
-          clientReqId: clientRequestId,
-          statusCode: 0,
-          auditId: null,
-        );
-      } catch (auditErr, auditSt) {
-        debugPrint('FriendRequestScreen: writeRequestAudit failed: $auditErr\n$auditSt');
-      }
 
       if (!mounted) {
         return;
@@ -408,17 +386,6 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
         if (existing.exists && existing.value != null && existing.value is Map) {
           final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(existing.value as Map);
           if (m['clientRequestId'] != null && m['clientRequestId'].toString() == clientRequestId) {
-            try {
-              await writeRequestAudit(
-                typeCode: 1,
-                fromUid: finalSenderUid,
-                toUid: finalRecipientUid,
-                fromEmail: fromEmail,
-                toEmail: recipientEmail,
-                clientReqId: clientRequestId,
-                statusCode: 0,
-              );
-            } catch (_) {}
             if (!mounted) {
               return;
             }
@@ -453,15 +420,9 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
     while (true) {
       attempt++;
       try {
-        if (kDebugMode) {
-          debugPrint('[FriendRequestScreen] _updateWithRetry attempt $attempt');
-        }
         await FirebaseDatabase.instance.ref().update(updates);
         return;
       } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[FriendRequestScreen] _updateWithRetry attempt $attempt failed: $e');
-        }
         if (attempt >= maxAttempts) {
           rethrow;
         }
@@ -570,7 +531,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
                           await _sendFriendRequest(emailCtl.text.trim());
                         } : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: sendEnabled ? AppColors.darkGreen : Colors.grey,
+                          backgroundColor: sendEnabled ? AppColors.darkGreen : AppColors.grey,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           minimumSize: const Size(0, 44),

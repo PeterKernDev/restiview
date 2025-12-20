@@ -3,7 +3,8 @@
 // Keep keys stable for localization. Add new keys here as screens/features are added.
 class AppStr {
   static const String releaseNumber = 'RestiView Release Number : ';
-  static const String aboutDescription = 'RestiView is a simple app which allows you to create and save your own personal restaurant reviews. Build up your own library and history of reviews and then search through to find your favourite restaurant next time you visit 🍽️ or scroll through to find the best place suited for a particular event.';
+  static const String aboutDescription =
+      'RestiView is a simple app which allows you to create and save your own personal restaurant reviews. Build up your own library and history of reviews and then search through to find your favourite restaurant next time you visit 🍽️ or scroll through to find the best place suited for a particular event.';
   static const String aboutTitle = 'About RestiView';
   static const String acceptTandCs = 'You must accept the Terms & Conditions';
   static const String acceptTermsLabel = 'Accept Terms & Conditions';
@@ -14,10 +15,12 @@ class AppStr {
   static const String allFieldsRequired = 'All fields are required';
   static const String ambianceLabel = 'Ambiance';
   static const String amountLabel = 'Amount';
-  static const String appendedCustomValues = 'Appended custom values from Firebase';
+  static const String appendedCustomValues =
+      'Appended custom values from Firebase';
   static const String appTitle = 'RestiView';
   static const String autoFillFailed = 'Search failed – please enter manually.';
-  static const String autoFillNone = 'No restaurants found. Try searching again.';
+  static const String autoFillNone =
+      'No restaurants found. Try searching again.';
   static const String autoFillSuccess = 'Auto-filled with nearby restaurant:';
   static const String back = 'BACK';
   static const String bypassLogin = 'Bypass Login';
@@ -36,18 +39,22 @@ class AppStr {
   static const String dateLabel = 'Date:';
   static const String defaultOccasion = 'Nothing Special';
   static const String delete = 'DELETE';
-  static const String deletePendingMessage = 'Discard your pending review and return to home?';
-  static const String deletePermanentMessage = 'This will permanently delete your review. Continue?';
+  static const String deletePendingMessage =
+      'Discard your pending review and return to home?';
+  static const String deletePermanentMessage =
+      'This will permanently delete your review. Continue?';
   static const String deleteAccountSignedOut = 'Account deleted and signed out';
   static const String deleteTitle = 'Delete Review?';
   static const String dinersLabel = 'Number of Diners';
-  static const String discardMessage = 'Going back will discard all unsaved changes. Continue?';
+  static const String discardMessage =
+      'Going back will discard all unsaved changes. Continue?';
   static const String discardTitle = 'Discard Changes?';
   static const String done = 'Done';
   static const String drinksLabel = 'Drinks';
   static const String duplicateMessageMiddle = 'on';
   static const String duplicateMessagePrefix = 'A review for';
-  static const String duplicateMessageSuffix = 'already exists.\nDo you still want to create a new one?';
+  static const String duplicateMessageSuffix =
+      'already exists.\nDo you still want to create a new one?';
   static const String duplicateTitle = 'Duplicate Review Detected';
   static const String emailLabel = 'Email Address';
   static const String emailNotFound = 'No account found for that email.';
@@ -60,7 +67,8 @@ class AppStr {
   static const String goodForFilterPrompt = 'Select one or more filters:';
   static const String goodForFilterTitle = 'Filter by Good For';
   static const String goodForHeader = '============= Good For =============';
-  static const String goodForPrompt = 'Select what this restaurant is good for:';
+  static const String goodForPrompt =
+      'Select what this restaurant is good for:';
   static const String goodForTitle = 'Good For';
   static const String help = 'HELP';
   static const String healingOrphanedAccount = 'Healing orphaned account';
@@ -73,7 +81,8 @@ class AppStr {
   static const String nameHint = 'Name required for Registration';
   static const String nameLabel = 'Name';
   static const String next = 'NEXT';
-  static const String noReviewsMessage = 'You haven’t submitted any reviews yet.';
+  static const String noReviewsMessage =
+      'You haven’t submitted any reviews yet.';
   static const String noReviewsTitle = 'No Reviews Found';
   static const String noLabel = 'No';
   static const String noTags = 'No tags selected';
@@ -81,7 +90,8 @@ class AppStr {
   static const String occasionLabel = 'Occasion';
   static const String ok = 'OK';
   static const String pageNotFound = 'Page not found';
-  static const String patchedBaseCountry = 'Patched baseCountry for legacy user';
+  static const String patchedBaseCountry =
+      'Patched baseCountry for legacy user';
   static const String passwordLabel = 'Password';
   static const String phoneLabel = 'Telephone';
   static const String photoDisabled = 'Photo access is disabled in settings.';
@@ -115,7 +125,8 @@ class AppStr {
   static const String signInTitle = 'Sign In';
   static const String signOut = 'SIGN OUT';
   static const String staySignedIn = 'Stay Signed In';
-  static const String subtitle = 'Record your most memorable dining experiences.';
+  static const String subtitle =
+      'Record your most memorable dining experiences.';
   static const String totalRatingLabel = 'Restaurant Rating:';
   static const String unknown = 'Unknown';
   static const String userNotAuthenticated = 'User not authenticated';
@@ -124,11 +135,13 @@ class AppStr {
   static const String viewReviews = 'VIEW REVIEWS';
   static const String viewTermsLabel = 'View Terms & Conditions';
   static const String websiteUrl = 'www.restiview.com';
-  static const String welcomeMessage = 'Welcome to RestiView\nPlease sign in or register.';
+  static const String welcomeMessage =
+      'Welcome to RestiView\nPlease sign in or register.';
   static const String yes = 'Yes';
   static const String sortByLabel = 'Sort By';
   static const String apply = 'Apply';
-  static const String noReviewsMatch = 'No reviews match the search/filter settings';
+  static const String noReviewsMatch =
+      'No reviews match the search/filter settings';
   static const String sortOptionDate = 'Date';
   static const String sortOptionRating = 'Rating';
   static const String sortOptionName = 'Name';
@@ -142,7 +155,8 @@ class AppStr {
   static const String searchRadiusLabel = 'Search Radius (meters)';
   static const String allowPhotosLabel = 'Allow Access to Photos';
   static const String allowAutoCaptureLabel = 'Allow Auto Capture';
-  static const String allowAutoCaptureSubtitle = 'Automatically detect restaurants';
+  static const String allowAutoCaptureSubtitle =
+      'Automatically detect restaurants';
   static const String customValuesButton = 'CUSTOM VALUES';
   static const String saveChangesButton = 'SAVE';
   static const String resetButton = 'RESET';
@@ -155,10 +169,13 @@ class AppStr {
   static const String addedToCuisines = 'added to custom cuisines';
   static const String addedToOccasions = 'added to custom occasions';
   static const String addedToCountries = 'added to your countries';
-  static const String notApprovedCountry = 'is not in the approved country list';
+  static const String notApprovedCountry =
+      'is not in the approved country list';
   static const String alreadyInList = 'is already in your list';
-  static const String builtInValue = 'is a built-in value and cannot be removed';
-  static const String usedInReview = 'is used in a review and cannot be removed';
+  static const String builtInValue =
+      'is a built-in value and cannot be removed';
+  static const String usedInReview =
+      'is used in a review and cannot be removed';
   static const String hasBeenRemoved = 'has been removed';
   static const String backToSettings = 'BACK TO SETTINGS';
   static const String goToTop = 'GO TO TOP';
@@ -172,7 +189,8 @@ class AppStr {
   static const String deleteAccountButton = '* DELETE ACT *';
   static const String settingsSaved = 'Settings saved';
   static const String deleteAccountTitle = 'Delete Account';
-  static const String deleteAccountConfirm = 'Are you sure? This cannot be undone.';
+  static const String deleteAccountConfirm =
+      'Are you sure? This cannot be undone.';
   static const String deleteAccountSuccess = 'Account deleted';
   static const String deleteAccountError = 'Error deleting account';
   static const String resetLinkSent = 'Reset link sent to';
@@ -185,10 +203,13 @@ class AppStr {
   static const String cuisineAdded = 'Cuisine added successfully';
   static const String cuisineExists = 'This cuisine already exists';
   static const String cuisineInvalid = 'Cuisine must be 1–24 characters';
-  static const String builtInBlock = 'This is a built-in value and cannot be removed.';
-  static const String usedBlock = 'This cuisine is used in a review and cannot be removed.';
+  static const String builtInBlock =
+      'This is a built-in value and cannot be removed.';
+  static const String usedBlock =
+      'This cuisine is used in a review and cannot be removed.';
   static const String cuisineRemoved = 'Cuisine has been removed.';
-  static const String builtInCuisineBlock = 'This is a built-in cuisine and cannot be removed.';
+  static const String builtInCuisineBlock =
+      'This is a built-in cuisine and cannot be removed.';
   static const String cuisineRequired = 'Please enter a cuisine name';
   static const String saveError = 'Save failed';
   static const String signUpFailed = 'Sign up failed';
@@ -197,7 +218,8 @@ class AppStr {
   static const String anonUser = 'Guest';
   static const String loadReviewsError = 'Failed to load reviews';
   static const String signOutFailed = 'Sign out failed';
-  static const String newOccasionHint = 'Enter a new occasion (max 24 characters)';
+  static const String newOccasionHint =
+      'Enter a new occasion (max 24 characters)';
   static const String newCuisineLabel = 'New Cuisine';
   static const String editCuisineLabel = 'Edit Cuisine';
   static const String edit = 'EDIT';
@@ -231,20 +253,26 @@ class AppStr {
   static const String logoSemanticLabel = 'RestiView logo';
   static const String invalidUrl = 'Unable to open link on this device';
   static const String openUrlFailed = 'Failed to open link, please try again';
-  static const String enterCustomCountry = 'Please select a country before adding';
+  static const String enterCustomCountry =
+      'Please select a country before adding';
   static const String sortFilter = 'Sort/Filter';
   static const String loadFailed = 'Failed to load reviews';
-  static const String autoFillSkipped = 'Location search skipped — allowLocation is false.';
-  static const String locationDisabled = 'Location services are disabled. Please enable them in Settings.';
-  static const String permissionDeniedForever = 'Location permission permanently denied. Enable it in app settings.';
-  static const String permissionDenied = 'Location permission denied. Cannot auto-fill.';
+  static const String autoFillSkipped =
+      'Location search skipped — allowLocation is false.';
+  static const String locationDisabled =
+      'Location services are disabled. Please enable them in Settings.';
+  static const String permissionDeniedForever =
+      'Location permission permanently denied. Enable it in app settings.';
+  static const String permissionDenied =
+      'Location permission denied. Cannot auto-fill.';
   static const String searchFailed = 'Search failed';
   static const String locationSearchLabel = 'Location search : ';
 
   static const String friendsTitle = 'Friends';
   static const String noFriends = 'No friends found';
   static const String addFriend = '+FRIEND';
-  static const String friendRequestsDisabled = 'User does not accept friend requests';
+  static const String friendRequestsDisabled =
+      'User does not accept friend requests';
   static const String sendFriendRequest = 'SEND FRIEND REQUEST';
   static const String friendTap = 'Open request details';
 
@@ -276,8 +304,10 @@ class AppStr {
   static const String friendAccepted = 'Friend request accepted';
   static const String acceptFailed = 'Failed to accept request';
   static const String friendRejected = 'Friend request processed';
-  static const String friendRejectedInform = 'Friend request rejected and user informed';
-  static const String friendDeclinedInform = 'Friend request declined and user informed';
+  static const String friendRejectedInform =
+      'Friend request rejected and user informed';
+  static const String friendDeclinedInform =
+      'Friend request declined and user informed';
   static const String rejectFailed = 'Failed to reject request';
   static const String informOnRejectLabel = 'Inform user of rejection';
   static const String invalidEmail = 'Enter a valid email address';
@@ -286,7 +316,8 @@ class AppStr {
   static const String emailValid = "Email is valid";
   static const String checkFailed = "Email check failed";
   static const String emailNotChecked = "Please check the email before sending";
-  static const String friendRequestNoticesProcessed = "Friend request notices processed";
+  static const String friendRequestNoticesProcessed =
+      "Friend request notices processed";
   static const String mappingWriteFailed = "Failed to ensure email mapping";
   static const String signInRequired = 'Please sign in to continue';
   static const String cannotAddSelf = 'You cannot add yourself as a friend';
@@ -347,8 +378,16 @@ class AppStr {
   static const String excludedLabel = 'Excluded';
   static const String noMatchingReviews = 'No matching reviews';
   static const String foundMatchesFmt = 'Found %d matching reviews.';
-  static const String foundMatchesLimitedFmt = 'Found %d matching reviews. Only the first 50 will be shared.';
-  static const String noMatchingReviewsCannotAccept = 'No matching reviews found; cannot accept this request.';
+  static const String foundMatchesLimitedFmt =
+      'Found %d matching reviews. Only the first 50 will be shared.';
+  static const String reviewsSelected = 'Reviews Selected:';
+  static const String selectAll = 'Select All';
+  static const String noReviewsAvailable =
+      'No reviews available from this user';
+  static const String requestReviewsTitle = 'Request Reviews';
+  static const String toLabel = 'To:';
+  static const String noMatchingReviewsCannotAccept =
+      'No matching reviews found; cannot accept this request.';
 
   static const String exclude = 'Exclude';
   static const String include = 'Include';
@@ -363,20 +402,12 @@ class AppStr {
   static const String rvAskedLabel = 'RV-ASKED';
   static const String declinedLabel = 'DECLINED';
   static const String unknownLabel = 'UNKNOWN';
-
-
-
-
+  
+  // Additional friend/review request strings
+  static const String validEmailAddress = 'Valid email address';
+  static const String declineAcknowledged = 'Decline acknowledged';
+  static const String declineProvidedReviewsTitle = 'Decline Provided Reviews';
+  static const String deleteFriendTitle = 'Delete Friend';
+  static const String friendReviewsButton = 'FRIEND REVIEWS';
+  static const String selectLocationRequired = 'Please select at least one country or city';
 }
-
-
-
-
-
-
-
-
-
-
-
-

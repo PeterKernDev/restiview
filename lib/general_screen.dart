@@ -75,22 +75,36 @@ class _GeneralScreenState extends State<GeneralScreen> {
       });
     }
 
-    _restaurantController = TextEditingController(text: reviewMap['restaurantName'] ?? '');
+    _restaurantController = TextEditingController(
+      text: reviewMap['restaurantName'] ?? '',
+    );
     _cityController = TextEditingController(text: reviewMap['city'] ?? '');
-    _dinersController = TextEditingController(text: reviewMap['numberOfDiners']?.toString() ?? '');
+    _dinersController = TextEditingController(
+      text: reviewMap['numberOfDiners']?.toString() ?? '',
+    );
     final costValue = reviewMap['cost'];
     _costController = TextEditingController(
       text: (costValue == null || costValue == '0') ? '' : costValue.toString(),
     );
 
+    // Add listeners to track changes
+    _restaurantController.addListener(() => widget.context.hasChanges = true);
+    _cityController.addListener(() => widget.context.hasChanges = true);
+    _dinersController.addListener(() => widget.context.hasChanges = true);
+    _costController.addListener(() => widget.context.hasChanges = true);
+
     final cuisine = reviewMap['cuisine'] as String?;
-    _selectedCuisine = (cuisine != null && SessionCache.customCuisines.contains(cuisine)) ? cuisine : '';
+    _selectedCuisine =
+        (cuisine != null && SessionCache.customCuisines.contains(cuisine))
+        ? cuisine
+        : '';
 
     final occasion = reviewMap['occasion'] as String?;
     _selectedOccasion = occasion ?? AppStr.defaultOccasion;
 
     if (reviewMap['dateOfReview'] != null) {
-      _selectedDate = DateTime.tryParse(reviewMap['dateOfReview']) ?? DateTime.now();
+      _selectedDate =
+          DateTime.tryParse(reviewMap['dateOfReview']) ?? DateTime.now();
     }
   }
 
@@ -136,16 +150,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineRequired)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineRequired)));
       return;
     }
 
-    final bool existsLocally = SessionCache.customCuisines.any((c) => c.toLowerCase() == newCuisine.toLowerCase());
+    final bool existsLocally = SessionCache.customCuisines.any(
+      (c) => c.toLowerCase() == newCuisine.toLowerCase(),
+    );
     if (existsLocally) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineExists)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineExists)));
       return;
     }
 
@@ -154,7 +174,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       return;
     }
 
-    final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(
+      'users/$uid/customvals',
+    );
     try {
       final DataSnapshot snapshot = await ref.get();
       if (!mounted) {
@@ -164,7 +186,8 @@ class _GeneralScreenState extends State<GeneralScreen> {
       final List<List<dynamic>> updatedCustoms = <List<dynamic>>[];
 
       if (snapshot.exists) {
-        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final Map<dynamic, dynamic> data =
+            snapshot.value as Map<dynamic, dynamic>;
         final dynamic raw = data['cuisine'];
         if (raw is List) {
           for (final dynamic item in raw) {
@@ -178,12 +201,20 @@ class _GeneralScreenState extends State<GeneralScreen> {
         updatedCustoms.add([newCuisine, 0]);
       }
 
-      updatedCustoms.sort((a, b) => (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
+      updatedCustoms.sort(
+        (a, b) => (a[0] as String).toLowerCase().compareTo(
+          (b[0] as String).toLowerCase(),
+        ),
+      );
 
       if (snapshot.exists) {
         await ref.update({'cuisine': updatedCustoms});
       } else {
-        await ref.set({'cuisine': updatedCustoms, 'occasion': [], 'country': []});
+        await ref.set({
+          'cuisine': updatedCustoms,
+          'occasion': [],
+          'country': [],
+        });
       }
 
       final List<String> merged = <String>[];
@@ -207,17 +238,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
         _selectedCuisine = newCuisine;
         _newCuisineController.clear();
         _showAddCuisineField = false;
+        widget.context.hasChanges = true;
       });
 
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.cuisineAdded)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineAdded)));
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     }
   }
 
@@ -227,16 +263,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.occasionMaxLength)));
       return;
     }
 
-    final bool existsLocally = SessionCache.customOccasions.any((o) => o.toLowerCase() == newOccasion.toLowerCase());
+    final bool existsLocally = SessionCache.customOccasions.any(
+      (o) => o.toLowerCase() == newOccasion.toLowerCase(),
+    );
     if (existsLocally) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newOccasion" ${AppStr.alreadyExists}')),
+      );
       return;
     }
 
@@ -245,7 +287,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       return;
     }
 
-    final DatabaseReference ref = FirebaseDatabase.instance.ref('users/$uid/customvals');
+    final DatabaseReference ref = FirebaseDatabase.instance.ref(
+      'users/$uid/customvals',
+    );
     try {
       final DataSnapshot snapshot = await ref.get();
       if (!mounted) {
@@ -255,7 +299,8 @@ class _GeneralScreenState extends State<GeneralScreen> {
       final List<List<dynamic>> updatedOccasions = <List<dynamic>>[];
 
       if (snapshot.exists) {
-        final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+        final Map<dynamic, dynamic> data =
+            snapshot.value as Map<dynamic, dynamic>;
         final dynamic raw = data['occasion'];
         if (raw is List) {
           for (final dynamic item in raw) {
@@ -269,12 +314,20 @@ class _GeneralScreenState extends State<GeneralScreen> {
         updatedOccasions.add([newOccasion, 0]);
       }
 
-      updatedOccasions.sort((a, b) => (a[0] as String).toLowerCase().compareTo((b[0] as String).toLowerCase()));
+      updatedOccasions.sort(
+        (a, b) => (a[0] as String).toLowerCase().compareTo(
+          (b[0] as String).toLowerCase(),
+        ),
+      );
 
       if (snapshot.exists) {
         await ref.update({'occasion': updatedOccasions});
       } else {
-        await ref.set({'cuisine': [], 'occasion': updatedOccasions, 'country': []});
+        await ref.set({
+          'cuisine': [],
+          'occasion': updatedOccasions,
+          'country': [],
+        });
       }
 
       final List<String> merged = <String>[];
@@ -299,17 +352,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
         _selectedOccasion = newOccasion;
         _newOccasionController.clear();
         _showAddOccasionField = false;
+        widget.context.hasChanges = true;
       });
 
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')),
+      );
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
     }
   }
 
@@ -337,6 +395,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       reviewMap['cuisine'] = '';
       reviewMap['occasion'] = '';
       reviewMap['numberOfDiners'] = '';
+
+      // Reset hasChanges after clearing form
+      widget.context.hasChanges = false;
       reviewMap['cost'] = '';
       reviewMap['dateOfReview'] = _selectedDate.toIso8601String();
       reviewMap['restaddress'] = '';
@@ -363,14 +424,18 @@ class _GeneralScreenState extends State<GeneralScreen> {
     );
 
     if (selected != null && mounted) {
-      final bool isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
+      final bool isValidCuisine = SessionCache.customCuisines.contains(
+        selected.cuisine,
+      );
 
       setState(() {
         widget.context.reviewMap['restaurantName'] = selected.name;
         widget.context.reviewMap['restaddress'] = selected.address;
         widget.context.reviewMap['restphone'] = selected.phone ?? '';
         widget.context.reviewMap['city'] = selected.city;
-        widget.context.reviewMap['cuisine'] = isValidCuisine ? selected.cuisine : '';
+        widget.context.reviewMap['cuisine'] = isValidCuisine
+            ? selected.cuisine
+            : '';
 
         _restaurantController.text = selected.name;
         _cityController.text = selected.city;
@@ -392,7 +457,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.autoFillSkipped)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(AppStr.autoFillSkipped)));
         return;
       }
 
@@ -407,17 +474,22 @@ class _GeneralScreenState extends State<GeneralScreen> {
           if (!mounted) {
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.locationDisabled)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStr.locationDisabled)),
+          );
           await Geolocator.openLocationSettings();
           return;
         }
 
-        final LocationPermission permission = await Geolocator.checkPermission();
+        final LocationPermission permission =
+            await Geolocator.checkPermission();
         if (permission == LocationPermission.deniedForever) {
           if (!mounted) {
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.permissionDeniedForever)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStr.permissionDeniedForever)),
+          );
           return;
         }
 
@@ -425,14 +497,17 @@ class _GeneralScreenState extends State<GeneralScreen> {
           if (!mounted) {
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStr.permissionDenied)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStr.permissionDenied)),
+          );
           return;
         }
 
         return;
       }
 
-      final List<NearbyRestaurant> results = await findNearbyRestaurants().timeout(const Duration(seconds: 12));
+      final List<NearbyRestaurant> results = await findNearbyRestaurants()
+          .timeout(const Duration(seconds: 12));
       if (!mounted) {
         return;
       }
@@ -440,7 +515,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       if (results.isNotEmpty) {
         _restaurantOptions = results;
         final NearbyRestaurant selected = results.first;
-        final bool isValidCuisine = SessionCache.customCuisines.contains(selected.cuisine);
+        final bool isValidCuisine = SessionCache.customCuisines.contains(
+          selected.cuisine,
+        );
 
         if (!mounted) {
           return;
@@ -450,7 +527,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
           widget.context.reviewMap['restaddress'] = selected.address;
           widget.context.reviewMap['restphone'] = selected.phone ?? '';
           widget.context.reviewMap['city'] = selected.city;
-          widget.context.reviewMap['cuisine'] = isValidCuisine ? selected.cuisine : '';
+          widget.context.reviewMap['cuisine'] = isValidCuisine
+              ? selected.cuisine
+              : '';
 
           _restaurantController.text = selected.name;
           _cityController.text = selected.city;
@@ -460,26 +539,38 @@ class _GeneralScreenState extends State<GeneralScreen> {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${AppStr.autoFillSuccess} ${selected.name}')),
+        );
       } else {
         if (!mounted) {
           return;
         }
         _clearForm();
-        final String message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : AppStr.autoFillNone;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        final String message = _restaurantSearchAttempts >= 2
+            ? AppStr.autoFillFailed
+            : AppStr.autoFillNone;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } on TimeoutException {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStr.autoFillFailed)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppStr.autoFillFailed)));
     } catch (e) {
       if (!mounted) {
         return;
       }
-      final String message = _restaurantSearchAttempts >= 2 ? AppStr.autoFillFailed : '${AppStr.searchFailed}: $e';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      final String message = _restaurantSearchAttempts >= 2
+          ? AppStr.autoFillFailed
+          : '${AppStr.searchFailed}: $e';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() {
@@ -495,10 +586,15 @@ class _GeneralScreenState extends State<GeneralScreen> {
     reviewMap['restaurantName'] = _restaurantController.text;
     reviewMap['country'] = SessionCache.defaultCountry;
     reviewMap['city'] = _cityController.text;
-    reviewMap['cuisine'] = SessionCache.customCuisines.contains(_selectedCuisine) ? _selectedCuisine : '';
+    reviewMap['cuisine'] =
+        SessionCache.customCuisines.contains(_selectedCuisine)
+        ? _selectedCuisine
+        : '';
     reviewMap['occasion'] = _selectedOccasion;
     final String dinersText = _dinersController.text.trim();
-    reviewMap['numberOfDiners'] = dinersText.isEmpty ? '' : int.tryParse(dinersText);
+    reviewMap['numberOfDiners'] = dinersText.isEmpty
+        ? ''
+        : int.tryParse(dinersText);
     final String costText = _costController.text.trim();
     reviewMap['cost'] = costText.isEmpty ? '' : costText;
     reviewMap['currency'] = SessionCache.currency;
@@ -521,49 +617,63 @@ class _GeneralScreenState extends State<GeneralScreen> {
   }
 
   void _goBackToTop() async {
-    final bool? shouldLeave = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(AppStr.discardTitle),
-          content: const Text(AppStr.discardMessage),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
-              child: const Text(AppStr.cancel),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
-              child: const Text(AppStr.yes),
-            ),
-          ],
-        );
-      },
-    );
+    // Only show warning if changes have been made
+    bool shouldLeave = true;
 
-    if (shouldLeave ?? false) {
+    if (widget.context.hasChanges) {
+      final bool? result = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text(AppStr.discardTitle),
+            content: const Text(AppStr.discardMessage),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, false);
+                },
+                child: const Text(AppStr.cancel),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, true);
+                },
+                child: const Text(AppStr.yes),
+              ),
+            ],
+          );
+        },
+      );
+      shouldLeave = result ?? false;
+    }
+
+    if (shouldLeave) {
       if (!mounted) {
         return;
       }
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => TopScreen()), (Route<dynamic> route) => false);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => TopScreen()),
+        (Route<dynamic> route) => false,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<String> topCities = systemCitiesByCountry[SessionCache.defaultCountry] ?? <String>[];
+    final List<String> topCities =
+        systemCitiesByCountry[SessionCache.defaultCountry] ?? <String>[];
     final Set<String> cuisineItemsOrdered = <String>{}
       ..addAll(systemCuisines)
       ..addAll(SessionCache.customCuisines);
-    final List<String> cuisineList = cuisineItemsOrdered.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final List<String> cuisineList = cuisineItemsOrdered.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     final List<String> occasionItemsOrdered = <String>[
       ...systemOccasions,
-      ...SessionCache.customOccasions.where((String o) => !systemOccasions.contains(o)),
+      ...SessionCache.customOccasions.where(
+        (String o) => !systemOccasions.contains(o),
+      ),
     ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     // Helper to produce a style with colors using styleFrom (no MaterialStateProperty)
@@ -581,240 +691,387 @@ class _GeneralScreenState extends State<GeneralScreen> {
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text(AppStr.generalInfo, style: AppFonts.bold.copyWith(color: Colors.white)),
+        title: Text(
+          AppStr.generalInfo,
+          style: AppFonts.bold.copyWith(color: Colors.white),
+        ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
-      body: LayoutBuilder(builder: (BuildContext ctx, BoxConstraints constraints) {
-        return Stack(children: <Widget>[
-          SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-                    TextFormField(
-                      controller: _restaurantController,
-                      decoration: const InputDecoration(labelText: AppStr.restaurantLabel),
-                      validator: (String? value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return AppStr.restaurantRequired;
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text == '' || topCities.isEmpty) {
-                          return const Iterable<String>.empty();
-                        }
-                        return topCities.where((String city) => city.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                      },
-                      onSelected: (String selection) {
-                        _cityController.text = selection;
-                      },
-                      fieldViewBuilder: (BuildContext fieldCtx, TextEditingController controller, FocusNode focusNode, VoidCallback onEditingComplete) {
-                        return TextField(
-                          controller: _cityController,
-                          focusNode: focusNode,
-                          decoration: InputDecoration(labelText: AppStr.cityLabel, hintText: topCities.isEmpty ? AppStr.cityHint : null),
-                          onEditingComplete: onEditingComplete,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-                      Row(children: <Widget>[
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: cuisineList.contains(_selectedCuisine) ? _selectedCuisine : null,
-                            items: cuisineList.map((String cuisine) {
-                              return DropdownMenuItem(value: cuisine, child: Text(cuisine));
-                            }).toList(),
-                            onChanged: (String? value) {
-                              if (!mounted) {
-                                return;
+      body: LayoutBuilder(
+        builder: (BuildContext ctx, BoxConstraints constraints) {
+          return Stack(
+            children: <Widget>[
+              SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          TextFormField(
+                            controller: _restaurantController,
+                            decoration: const InputDecoration(
+                              labelText: AppStr.restaurantLabel,
+                            ),
+                            validator: (String? value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return AppStr.restaurantRequired;
                               }
-                              setState(() {
-                                _selectedCuisine = value ?? '';
-                              });
+                              return null;
                             },
-                            decoration: const InputDecoration(labelText: AppStr.cuisineLabel),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            if (!mounted) {
-                              return;
-                            }
-                            setState(() {
-                              _showAddCuisineField = !_showAddCuisineField;
-                            });
-                          },
-                          child: Text(AppStr.add, style: AppFonts.standard),
-                        ),
-                      ]),
-                      if (_showAddCuisineField)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Row(children: <Widget>[
-                            Expanded(
-                              child: TextField(controller: _newCuisineController, decoration: const InputDecoration(hintText: AppStr.newCuisineHint)),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              tooltip: AppStr.confirm,
-                              color: Colors.green,
-                              icon: const Icon(Icons.check),
-                              onPressed: () async {
-                                await _addInlineCustomCuisine();
-                              },
-                            ),
-                            IconButton(
-                              tooltip: AppStr.cancel,
-                              color: Colors.grey,
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                if (!mounted) {
-                                  return;
-                                }
-                                setState(() {
-                                  _newCuisineController.clear();
-                                  _showAddCuisineField = false;
-                                });
-                              },
-                            ),
-                          ]),
-                        ),
-                    ]),
-                    const SizedBox(height: 16),
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-                      Row(children: <Widget>[
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: occasionItemsOrdered.contains(_selectedOccasion) ? _selectedOccasion : occasionItemsOrdered.first,
-                            items: occasionItemsOrdered.map((String occasion) {
-                              return DropdownMenuItem(value: occasion, child: Text(occasion));
-                            }).toList(),
-                            onChanged: (String? value) {
-                              if (!mounted) {
-                                return;
-                              }
-                              setState(() {
-                                _selectedOccasion = value ?? AppStr.defaultOccasion;
-                              });
+                          const SizedBox(height: 16),
+                          Autocomplete<String>(
+                            optionsBuilder:
+                                (TextEditingValue textEditingValue) {
+                                  if (textEditingValue.text == '' ||
+                                      topCities.isEmpty) {
+                                    return const Iterable<String>.empty();
+                                  }
+                                  return topCities.where(
+                                    (String city) =>
+                                        city.toLowerCase().contains(
+                                          textEditingValue.text.toLowerCase(),
+                                        ),
+                                  );
+                                },
+                            onSelected: (String selection) {
+                              _cityController.text = selection;
                             },
-                            decoration: const InputDecoration(labelText: AppStr.occasionLabel),
+                            fieldViewBuilder:
+                                (
+                                  BuildContext fieldCtx,
+                                  TextEditingController controller,
+                                  FocusNode focusNode,
+                                  VoidCallback onEditingComplete,
+                                ) {
+                                  return TextField(
+                                    controller: _cityController,
+                                    focusNode: focusNode,
+                                    decoration: InputDecoration(
+                                      labelText: AppStr.cityLabel,
+                                      hintText: topCities.isEmpty
+                                          ? AppStr.cityHint
+                                          : null,
+                                    ),
+                                    onEditingComplete: onEditingComplete,
+                                  );
+                                },
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            if (!mounted) {
-                              return;
-                            }
-                            setState(() {
-                              _showAddOccasionField = !_showAddOccasionField;
-                            });
-                          },
-                          child: Text(AppStr.add, style: AppFonts.standard),
-                        ),
-                      ]),
-                      if (_showAddOccasionField)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Row(children: <Widget>[
-                            Expanded(
-                              child: TextField(controller: _newOccasionController, decoration: const InputDecoration(hintText: AppStr.newOccasionHint)),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              tooltip: AppStr.confirm,
-                              color: Colors.green,
-                              icon: const Icon(Icons.check),
-                              onPressed: () async {
-                                await _addInlineCustomOccasion();
-                              },
-                            ),
-                            IconButton(
-                              tooltip: AppStr.cancel,
-                              color: Colors.grey,
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                if (!mounted) {
-                                  return;
-                                }
-                                setState(() {
-                                  _newOccasionController.clear();
-                                  _showAddOccasionField = false;
-                                });
-                              },
-                            ),
-                          ]),
-                        ),
-                    ]),
-                    const SizedBox(height: 16),
-                    TextField(controller: _dinersController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: AppStr.dinersLabel)),
-                    const SizedBox(height: 16),
-                    Row(children: <Widget>[
-                      Text(AppStr.costLabel, style: AppFonts.standard),
-                      const SizedBox(width: 12),
-                      Text(SessionCache.currency, style: AppFonts.standard),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(controller: _costController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: AppStr.amountLabel)),
-                      ),
-                    ]),
-                    const SizedBox(height: 16),
-                    Row(children: <Widget>[
-                      Text('${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}', style: AppFonts.standard),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () async {
-                          DateTime? picked = await showDatePicker(context: ctx, initialDate: _selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                          if (picked != null && mounted) {
-                            setState(() {
-                              _selectedDate = picked;
-                            });
-                          }
-                        },
-                        child: Text(AppStr.pickDate, style: AppFonts.standard),
-                      ),
-                    ]),
-                    const SizedBox(height: 16),
-                    Row(children: <Widget>[
-                      Text(AppStr.locationSearchLabel, style: AppFonts.standard),
-                      SessionCache.allowLocation
-                          ? Expanded(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: _restaurantOptions.length > 1
-                                    ? ElevatedButton(
-                                        onPressed: _showRestaurantSelector,
-                                        style: buttonStyle(Colors.amber, Colors.black),
-                                        child: Text(AppStr.multi, style: AppFonts.standard),
-                                      )
-                                    : ElevatedButton(
-                                        onPressed: _autoFillRestaurantFromLocation,
-                                        style: buttonStyle(Colors.blue, Colors.white),
-                                        child: Text(AppStr.search, style: AppFonts.standard.copyWith(color: Colors.white)),
+                          const SizedBox(height: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      initialValue:
+                                          cuisineList.contains(_selectedCuisine)
+                                          ? _selectedCuisine
+                                          : null,
+                                      items: cuisineList.map((String cuisine) {
+                                        return DropdownMenuItem(
+                                          value: cuisine,
+                                          child: Text(cuisine),
+                                        );
+                                      }).toList(),
+                                      onChanged: (String? value) {
+                                        if (!mounted) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          _selectedCuisine = value ?? '';
+                                          widget.context.hasChanges = true;
+                                        });
+                                      },
+                                      decoration: const InputDecoration(
+                                        labelText: AppStr.cuisineLabel,
                                       ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _showAddCuisineField =
+                                            !_showAddCuisineField;
+                                      });
+                                    },
+                                    child: Text(
+                                      AppStr.add,
+                                      style: AppFonts.standard,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            )
-                          : Text('(OFF)', style: AppFonts.standard.copyWith(color: AppColors.mutedText, fontStyle: FontStyle.italic)),
-                    ]),
-                    const SizedBox(height: 36),
-                  ]),
+                              if (_showAddCuisineField)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _newCuisineController,
+                                          decoration: const InputDecoration(
+                                            hintText: AppStr.newCuisineHint,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        tooltip: AppStr.confirm,
+                                        color: Colors.green,
+                                        icon: const Icon(Icons.check),
+                                        onPressed: () async {
+                                          await _addInlineCustomCuisine();
+                                        },
+                                      ),
+                                      IconButton(
+                                        tooltip: AppStr.cancel,
+                                        color: Colors.grey,
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () {
+                                          if (!mounted) {
+                                            return;
+                                          }
+                                          setState(() {
+                                            _newCuisineController.clear();
+                                            _showAddCuisineField = false;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      initialValue:
+                                          occasionItemsOrdered.contains(
+                                            _selectedOccasion,
+                                          )
+                                          ? _selectedOccasion
+                                          : occasionItemsOrdered.first,
+                                      items: occasionItemsOrdered.map((
+                                        String occasion,
+                                      ) {
+                                        return DropdownMenuItem(
+                                          value: occasion,
+                                          child: Text(occasion),
+                                        );
+                                      }).toList(),
+                                      onChanged: (String? value) {
+                                        if (!mounted) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          _selectedOccasion =
+                                              value ?? AppStr.defaultOccasion;
+                                          widget.context.hasChanges = true;
+                                        });
+                                      },
+                                      decoration: const InputDecoration(
+                                        labelText: AppStr.occasionLabel,
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _showAddOccasionField =
+                                            !_showAddOccasionField;
+                                      });
+                                    },
+                                    child: Text(
+                                      AppStr.add,
+                                      style: AppFonts.standard,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_showAddOccasionField)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _newOccasionController,
+                                          decoration: const InputDecoration(
+                                            hintText: AppStr.newOccasionHint,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        tooltip: AppStr.confirm,
+                                        color: Colors.green,
+                                        icon: const Icon(Icons.check),
+                                        onPressed: () async {
+                                          await _addInlineCustomOccasion();
+                                        },
+                                      ),
+                                      IconButton(
+                                        tooltip: AppStr.cancel,
+                                        color: Colors.grey,
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () {
+                                          if (!mounted) {
+                                            return;
+                                          }
+                                          setState(() {
+                                            _newOccasionController.clear();
+                                            _showAddOccasionField = false;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _dinersController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: AppStr.dinersLabel,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: <Widget>[
+                              Text(AppStr.costLabel, style: AppFonts.standard),
+                              const SizedBox(width: 12),
+                              Text(
+                                SessionCache.currency,
+                                style: AppFonts.standard,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _costController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: AppStr.amountLabel,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                '${AppStr.dateLabel} ${_selectedDate.toLocal().toString().split(' ')[0]}',
+                                style: AppFonts.standard,
+                              ),
+                              const SizedBox(width: 12),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  DateTime? picked = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: _selectedDate,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked != null && mounted) {
+                                    setState(() {
+                                      _selectedDate = picked;
+                                      widget.context.hasChanges = true;
+                                    });
+                                  }
+                                },
+                                child: Text(
+                                  AppStr.pickDate,
+                                  style: AppFonts.standard,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: <Widget>[
+                              Text(
+                                AppStr.locationSearchLabel,
+                                style: AppFonts.standard,
+                              ),
+                              SessionCache.allowLocation
+                                  ? Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: _restaurantOptions.length > 1
+                                            ? ElevatedButton(
+                                                onPressed:
+                                                    _showRestaurantSelector,
+                                                style: buttonStyle(
+                                                  Colors.amber,
+                                                  Colors.black,
+                                                ),
+                                                child: Text(
+                                                  AppStr.multi,
+                                                  style: AppFonts.standard,
+                                                ),
+                                              )
+                                            : ElevatedButton(
+                                                onPressed:
+                                                    _autoFillRestaurantFromLocation,
+                                                style: buttonStyle(
+                                                  Colors.blue,
+                                                  Colors.white,
+                                                ),
+                                                child: Text(
+                                                  AppStr.search,
+                                                  style: AppFonts.standard
+                                                      .copyWith(
+                                                        color: Colors.white,
+                                                      ),
+                                                ),
+                                              ),
+                                      ),
+                                    )
+                                  : Text(
+                                      '(OFF)',
+                                      style: AppFonts.standard.copyWith(
+                                        color: AppColors.mutedText,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                            ],
+                          ),
+                          const SizedBox(height: 36),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          if (_isSearching)
-            Container(color: Colors.black.withAlpha(77), child: const Center(child: CircularProgressIndicator())),
-        ]);
-      }),
+              if (_isSearching)
+                Container(
+                  color: Colors.black.withAlpha(77),
+                  child: const Center(child: CircularProgressIndicator()),
+                ),
+            ],
+          );
+        },
+      ),
       bottomNavigationBar: SafeArea(
         child: SizedBox(
           height: 64,
@@ -828,7 +1085,11 @@ class _GeneralScreenState extends State<GeneralScreen> {
                     child: ElevatedButton(
                       onPressed: _goBackToTop,
                       style: buttonStyle(AppColors.ochre, Colors.black),
-                      child: Text(AppStr.back, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black)),
+                      child: Text(
+                        AppStr.back,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.bold.copyWith(color: Colors.black),
+                      ),
                     ),
                   ),
                 ),
@@ -837,8 +1098,12 @@ class _GeneralScreenState extends State<GeneralScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 6.0),
                     child: ElevatedButton(
                       onPressed: _clearForm,
-                      style: buttonStyle(AppColors.lightGrey, Colors.black87),
-                      child: Text(AppStr.clear, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black87)),
+                      style: buttonStyle(AppColors.btnClear, AppColors.btnText),
+                      child: Text(
+                        AppStr.clear,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.bold.copyWith(color: AppColors.btnText),
+                      ),
                     ),
                   ),
                 ),
@@ -848,7 +1113,11 @@ class _GeneralScreenState extends State<GeneralScreen> {
                     child: ElevatedButton(
                       onPressed: _goToRatingsScreen,
                       style: buttonStyle(AppColors.yellow, Colors.black),
-                      child: Text(AppStr.next, overflow: TextOverflow.ellipsis, style: AppFonts.bold.copyWith(color: Colors.black)),
+                      child: Text(
+                        AppStr.next,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.bold.copyWith(color: Colors.black),
+                      ),
                     ),
                   ),
                 ),

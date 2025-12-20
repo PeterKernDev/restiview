@@ -380,7 +380,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                 ElevatedButton(
                   onPressed: _handleBack,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade300,
+                    backgroundColor: AppColors.greyShade300,
                     foregroundColor: Colors.black,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -391,7 +391,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                 ElevatedButton(
                   onPressed: _handleReset,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey,
+                    backgroundColor: AppColors.grey,
                     foregroundColor: Colors.black87,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

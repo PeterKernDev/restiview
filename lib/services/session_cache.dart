@@ -14,19 +14,21 @@ class SessionCache {
   /// Inject a storage instance (test-only). Non-breaking for existing callers.
   static void injectStorageForTesting(FlutterSecureStorage storage) {
     _storage = storage;
-    
   }
 
   // In-memory session values
   static String userName = '';
   static String userEmail = '';
-  static String sortOption = 'date'; // canonical values: 'date', 'name', 'rating'
+  static String sortOption =
+      'date'; // canonical values: 'date', 'name', 'rating'
   static String defaultCountry = 'Any';
   static String currency = '\$';
   static bool allowLocation = false;
   static bool allowPhotos = false;
   static int searchRadius = 50;
   static bool allowAutoCapture = false;
+  static bool reviewsAdded =
+      false; // Track if new reviews added since last review_info update
 
   // Device country code (used for registration defaults)
   static String deviceCountryCode = 'US';
@@ -36,7 +38,7 @@ class SessionCache {
   static String? cityFilter;
   static String? cuisineFilter;
 
-    // Pending friend passed between screens (optional fallback)
+  // Pending friend passed between screens (optional fallback)
   static String pendingFriendEmail = '';
   static String? pendingFriendUid;
 
@@ -44,16 +46,13 @@ class SessionCache {
   static void setPendingFriend(String email, String? uid) {
     pendingFriendEmail = email.trim();
     pendingFriendUid = (uid != null && uid.isNotEmpty) ? uid : null;
-    
   }
 
   /// Clear the pending friend fields after consumption.
   static void clearPendingFriend() {
     pendingFriendEmail = '';
     pendingFriendUid = null;
-    
   }
-
 
   // GoodFor selection (single source of truth) and notifier for UI updates
   static List<String> goodForFilter = [];
@@ -88,6 +87,7 @@ class SessionCache {
   static const _keySortOption = 'sortOption';
   static const _keySavedDisplayName = 'savedDisplayName';
   static const _keySavedCountry = 'savedCountry'; // new
+  static const _keyReviewsAdded = 'reviewsAdded';
 
   // Default system lists (fallbacks)
   static List<String> systemCuisinesFallback = <String>[
@@ -115,7 +115,6 @@ class SessionCache {
   static Future<void> setStaySignedIn(bool value) async {
     try {
       await _storage.write(key: _keyStaySignedIn, value: value.toString());
-      
     } catch (e) {
       // Non-fatal: ignore storage write errors here.
     }
@@ -124,7 +123,7 @@ class SessionCache {
   static Future<bool> getStaySignedIn() async {
     try {
       final String? value = await _storage.read(key: _keyStaySignedIn);
-      
+
       return value == 'true';
     } catch (e) {
       // Non-fatal: ignore storage read errors and return default.
@@ -137,7 +136,6 @@ class SessionCache {
     try {
       await _storage.write(key: _keySavedEmail, value: email);
       await _storage.write(key: _keySavedPassword, value: password);
-      
     } catch (e) {
       // Non-fatal: ignore storage errors when setting credentials.
     }
@@ -148,7 +146,6 @@ class SessionCache {
       await _storage.delete(key: _keySavedEmail);
       await _storage.delete(key: _keySavedPassword);
       await _storage.delete(key: _keySavedDisplayName);
-      
     } catch (e) {
       // Non-fatal: ignore errors when clearing credentials.
     }
@@ -157,7 +154,7 @@ class SessionCache {
   static Future<String?> getSavedEmail() async {
     try {
       final String? v = await _storage.read(key: _keySavedEmail);
-      
+
       return v;
     } catch (e) {
       // Non-fatal: ignore read errors and return null.
@@ -168,7 +165,7 @@ class SessionCache {
   static Future<String?> getSavedPassword() async {
     try {
       final String? v = await _storage.read(key: _keySavedPassword);
-      
+
       return v;
     } catch (e) {
       // Non-fatal: ignore read errors and return null.
@@ -180,7 +177,6 @@ class SessionCache {
   static Future<void> setSavedDisplayName(String displayName) async {
     try {
       await _storage.write(key: _keySavedDisplayName, value: displayName);
-      
     } catch (e) {
       // Non-fatal: ignore storage write errors for display name.
     }
@@ -189,7 +185,7 @@ class SessionCache {
   static Future<String?> getSavedDisplayName() async {
     try {
       final String? v = await _storage.read(key: _keySavedDisplayName);
-      
+
       return v;
     } catch (e) {
       // Non-fatal: ignore read errors and return null.
@@ -200,7 +196,6 @@ class SessionCache {
   static Future<void> clearSavedDisplayName() async {
     try {
       await _storage.delete(key: _keySavedDisplayName);
-      
     } catch (e) {
       // Non-fatal: ignore errors while deleting saved display name.
     }
@@ -210,7 +205,6 @@ class SessionCache {
   static Future<void> setSavedCountry(String countryCode) async {
     try {
       await _storage.write(key: _keySavedCountry, value: countryCode);
-      
     } catch (e) {
       // Non-fatal: ignore storage write errors for saved country.
     }
@@ -219,7 +213,7 @@ class SessionCache {
   static Future<String?> getSavedCountry() async {
     try {
       final String? v = await _storage.read(key: _keySavedCountry);
-      
+
       return v ?? (defaultCountry.isNotEmpty ? defaultCountry : null);
     } catch (e) {
       // Non-fatal: ignore read errors and return default country.
@@ -247,7 +241,6 @@ class SessionCache {
       final String canonical = option.toLowerCase();
       sortOption = canonical;
       await _storage.write(key: _keySortOption, value: canonical);
-      
     } catch (e) {
       // Non-fatal: ignore errors while setting sort option.
     }
@@ -258,14 +251,35 @@ class SessionCache {
       final String? stored = await _storage.read(key: _keySortOption);
       if (stored != null && stored.isNotEmpty) {
         sortOption = stored;
-        
+
         return stored;
       }
-      
+
       return sortOption;
     } catch (e) {
       // Non-fatal: ignore read errors and return current sortOption.
       return sortOption;
+    }
+  }
+
+  // Set/get reviewsAdded flag
+  static Future<void> setReviewsAdded(bool value) async {
+    reviewsAdded = value;
+    try {
+      await _storage.write(key: _keyReviewsAdded, value: value.toString());
+    } catch (e) {
+      debugPrint('Error writing reviewsAdded: $e');
+    }
+  }
+
+  static Future<bool> getReviewsAdded() async {
+    try {
+      final String? stored = await _storage.read(key: _keyReviewsAdded);
+      reviewsAdded = stored == 'true';
+      return reviewsAdded;
+    } catch (e) {
+      debugPrint('Error reading reviewsAdded: $e');
+      return false;
     }
   }
 
@@ -280,10 +294,13 @@ class SessionCache {
       if (c != null && c.isNotEmpty) {
         defaultCountry = c;
       }
-      
+      final String? r = await _storage.read(key: _keyReviewsAdded);
+      reviewsAdded = r == 'true';
+
       // Add more keys here if needed
     } catch (e) {
       // Non-fatal: ignore initialization errors and continue.
+      reviewsAdded = false;
     }
   }
 
@@ -293,7 +310,6 @@ class SessionCache {
     cityFilter = null;
     cuisineFilter = null;
     clearGoodForFilter();
-    
   }
 
   // Reset entire session (e.g. on sign-out or account deletion)
@@ -320,7 +336,6 @@ class SessionCache {
     try {
       await clearCredentials();
       await setStaySignedIn(false);
-      
     } catch (e) {
       // Non-fatal: ignore errors during reset; best-effort only.
     }

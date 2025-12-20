@@ -8,7 +8,7 @@ class ReviewRequestData {
     this.requestComment,
     this.filterCountry,
     this.filterCity,
-    this.filterCuisine,
+    this.filters,
     this.exCount,
     this.fromEmail,
     this.fromDisplayName,
@@ -16,9 +16,9 @@ class ReviewRequestData {
   });
 
   String? requestComment;
-  String? filterCountry;
-  String? filterCity;
-  String? filterCuisine;
+  String? filterCountry; // Legacy: kept for backward compatibility
+  String? filterCity; // Legacy: kept for backward compatibility
+  List<Map<String, String?>>? filters; // New: array of location filters
   int? exCount;
   String? fromEmail;
   String? fromDisplayName;
@@ -143,16 +143,29 @@ class FriendEntry {
     if (v == 'friend' || v == 'accepted' || v == '1' || v == 'fr') {
       return 1;
     }
-    if (v == 'fr-asked' || v == '0' || v.contains('asked') || v.contains('ask')) {
+    if (v == 'fr-asked' ||
+        v == '0' ||
+        v.contains('asked') ||
+        v.contains('ask')) {
       return 0;
     }
-    if (v == 'fr-wanted' || v == '2' || v.contains('want') || v.contains('wanted') || v.contains('requested')) {
+    if (v == 'fr-wanted' ||
+        v == '2' ||
+        v.contains('want') ||
+        v.contains('wanted') ||
+        v.contains('requested')) {
       return 2;
     }
-    if (v == 'rv-wants' || v == '3' || v.contains('rv-wants') || v.contains('rv-want')) {
+    if (v == 'rv-wants' ||
+        v == '3' ||
+        v.contains('rv-wants') ||
+        v.contains('rv-want')) {
       return 3;
     }
-    if (v == 'rv-asked' || v == '4' || v.contains('rv-asked') || v.contains('rv-ask')) {
+    if (v == 'rv-asked' ||
+        v == '4' ||
+        v.contains('rv-asked') ||
+        v.contains('rv-ask')) {
       return 4;
     }
     if (v == 'provided' || v == '5') {

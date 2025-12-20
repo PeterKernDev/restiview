@@ -38,65 +38,146 @@ String cleanRestaurantName(String rawName) {
   return cleaned.length > 40 ? '${cleaned.substring(0, 40)}…' : cleaned;
 }
 
-/// Improved heuristic to guess city from formatted address.
+/// Improved heuristic to extract city name from Google Places formatted address.
+/// Handles various country-specific address formats.
 /// Returns '' if no city can be determined.
 String extractCityFromAddress(String address) {
+  if (address.trim().isEmpty) {
+    return '';
+  }
+
+  // Split by comma to get address components
+  final List<String> parts = address.split(',').map((p) => p.trim()).toList();
+  if (parts.isEmpty) {
+    return '';
+  }
+
+  // Helper: Check if string looks like a ZIP/postal code
+  bool looksLikeZip(String s) {
+    return RegExp(r'^\d{5}(-\d{3,4})?$').hasMatch(s.trim()) || // US/Brazil ZIP
+           RegExp(r'^\d{5}$').hasMatch(s.trim()) || // Spain/other
+           RegExp(r'^[A-Z]\d[A-Z]\s?\d[A-Z]\d$').hasMatch(s.trim()); // Canada
+  }
+
+  // Helper: Check if string looks like a state/province abbreviation
+  bool looksLikeState(String s) {
+    final trimmed = s.trim();
+    return RegExp(r'^[A-Z]{2}$').hasMatch(trimmed) || // US states: FL, CA
+           RegExp(r'^[A-Z]{2,3}$').hasMatch(trimmed); // Other: SP, SC, UK
+  }
+
+  // Helper: Check if string starts with street number
+  bool startsWithNumber(String s) {
+    return RegExp(r'^\d+[\s\-]').hasMatch(s.trim());
+  }
+
+  // Helper: Extract city before hyphen in "City - State" format
+  String extractBeforeStateHyphen(String s) {
+    final segments = s.split('-').map((t) => t.trim()).toList();
+    if (segments.length >= 2 && looksLikeState(segments.last)) {
+      return segments.first; // Return "São Paulo" from "São Paulo - SP"
+    }
+    return s;
+  }
+
+  // Helper: Clean up postcode suffix (UK format: "London NW1 6JQ" -> "London")
+  String stripPostcode(String s) {
+    // Match UK postcodes: "London NW1 6JQ" or "London W1U 7BT"
+    final ukPostcodePattern = RegExp(r'\s+[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$');
+    return s.replaceAll(ukPostcodePattern, '').trim();
+  }
+
+  // Strategy 1: Try to find known city from system cities list
   final String country = SessionCache.defaultCountry;
   final List<String> countryCities = systemCitiesByCountry[country] ?? [];
-
   final String normalizedAddress = normalize(address);
+  
   for (final String city in countryCities) {
     if (normalizedAddress.contains(normalize(city))) {
       return city;
     }
   }
 
-  final List<String> parts = address.split(',').map((p) => p.trim()).toList();
-  if (parts.isEmpty) {
-    return '';
+  // Strategy 2: Parse based on number of components and patterns
+  
+  // Single component - might be just city name
+  if (parts.length == 1) {
+    return parts[0];
   }
 
-  // Handle "City - State" patterns
-  String takeBeforeHyphen(String s) {
-    final segs = s.split('-').map((t) => t.trim()).toList();
-    if (segs.length >= 2 && RegExp(r'^[A-Za-z]{2,3}$').hasMatch(segs.last)) {
-      return segs.first;
+  // Two components: usually "City, Country"
+  if (parts.length == 2) {
+    return stripPostcode(parts[0]);
+  }
+
+  // Three components: could be "Street, City, Country" or "City, State, Country"
+  if (parts.length == 3) {
+    final candidate = stripPostcode(parts[1]);
+    final cleaned = extractBeforeStateHyphen(candidate);
+    if (!startsWithNumber(cleaned) && !looksLikeZip(cleaned)) {
+      return cleaned;
     }
-    return s;
+    // Fallback to first component if second doesn't look like city
+    return stripPostcode(parts[0]);
   }
 
-  // Prefer second component if address has 4+ parts (Street, City, State, ZIP, Country)
+  // Four+ components - most common case
+  // Formats:
+  // - "Street, Number, ZIP City, Province, Country" (Spain: index 2 has "07810 Ibiza")
+  // - "Number Street, City Postcode, Country" (UK: index 1 has "London NW1 6JQ")
+  // - "Number Street, City, State ZIP, Country" (USA: index 1 has city)
+  // - "Street, Number - Neighborhood, City - State, ZIP, Country" (Brazil: index 2 has "São Paulo - SP")
+
   if (parts.length >= 4) {
-    final candidate = takeBeforeHyphen(parts[1]);
-    final bool looksLikeState = RegExp(r'^[A-Za-z]{2,3}$').hasMatch(candidate);
-    final bool looksLikeZip = RegExp(r'^\d{4,}$').hasMatch(candidate);
-    if (candidate.isNotEmpty && !looksLikeState && !looksLikeZip) {
-      return candidate;
+    // Check index 2 for "ZIP City" pattern (Spain style)
+    final part2 = parts[2].trim();
+    if (part2.contains(' ')) {
+      final subParts = part2.split(' ');
+      if (subParts.length >= 2 && looksLikeZip(subParts[0])) {
+        // Found "07810 Ibiza" - return city after ZIP
+        return subParts.sublist(1).join(' ').trim();
+      }
+    }
+
+    // Check index 2 for "City - State" pattern (Brazil style)
+    final cleaned2 = extractBeforeStateHyphen(part2);
+    if (cleaned2 != part2 && !startsWithNumber(cleaned2)) {
+      // Found "São Paulo - SP" pattern
+      return cleaned2;
+    }
+
+    // Check index 1 for city (UK/USA style)
+    final part1 = stripPostcode(parts[1].trim());
+    final cleaned1 = extractBeforeStateHyphen(part1);
+    if (!startsWithNumber(cleaned1) && !looksLikeZip(cleaned1) && !looksLikeState(cleaned1)) {
+      return cleaned1;
     }
   }
 
-  // Scan middle parts for a city-like token
+  // Strategy 3: Scan middle components (skip first street and last country)
   for (int i = 1; i < parts.length - 1; i++) {
-    final candidate = takeBeforeHyphen(parts[i]);
-    if (candidate.isNotEmpty &&
-        !RegExp(r'^[A-Za-z]{2,3}$').hasMatch(candidate) &&
-        !RegExp(r'^\d{4,}$').hasMatch(candidate)) {
-      return candidate;
+    final candidate = stripPostcode(parts[i].trim());
+    final cleaned = extractBeforeStateHyphen(candidate);
+    
+    // Skip if looks like street number, ZIP, or state
+    if (startsWithNumber(cleaned) || looksLikeZip(cleaned) || looksLikeState(cleaned)) {
+      continue;
     }
+    
+    // Skip very short strings (likely abbreviations)
+    if (cleaned.length < 3) {
+      continue;
+    }
+    
+    return cleaned;
   }
 
-  // Fallback: second-to-last part, cleaned
+  // Last resort: use second-to-last component if it exists
   if (parts.length >= 3) {
-    String fallback = parts[parts.length - 2].trim();
-    fallback = fallback.replaceAll(RegExp(r'\d{5}-\d{3}'), '').trim();
-    final segs = fallback.split('-').map((s) => s.trim()).toList();
-    if (segs.length >= 2 && RegExp(r'^[A-Za-z]{2,3}$').hasMatch(segs.last)) {
-      return segs.first;
-    }
-    if (fallback.isNotEmpty &&
-        !RegExp(r'^[A-Za-z]{2,3}$').hasMatch(fallback) &&
-        !RegExp(r'^\d{4,}$').hasMatch(fallback)) {
-      return fallback;
+    final fallback = stripPostcode(parts[parts.length - 2].trim());
+    final cleaned = extractBeforeStateHyphen(fallback);
+    if (!looksLikeZip(cleaned) && !looksLikeState(cleaned)) {
+      return cleaned;
     }
   }
 

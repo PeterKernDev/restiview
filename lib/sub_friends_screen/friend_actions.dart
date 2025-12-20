@@ -42,7 +42,10 @@ class FriendActions extends StatelessWidget {
   final String addFriendLabel;
 
   // Shared base style copied from RatingsScreen actionBtnBase
-  ButtonStyle _actionBtnBaseStyle(Color backgroundColor, Color foregroundColor) {
+  ButtonStyle _actionBtnBaseStyle(
+    Color backgroundColor,
+    Color foregroundColor,
+  ) {
     return ElevatedButton.styleFrom(
       textStyle: AppFonts.bold.copyWith(fontSize: 14, letterSpacing: 0.4),
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -64,7 +67,10 @@ class FriendActions extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
         child: ElevatedButton(
           onPressed: onPressed,
-          style: _actionBtnBaseStyle(onPressed != null ? activeColor : Colors.grey, textColor),
+          style: _actionBtnBaseStyle(
+            onPressed != null ? activeColor : AppColors.grey,
+            textColor,
+          ),
           child: SizedBox(
             height: 20,
             child: Center(
@@ -112,9 +118,9 @@ class FriendActions extends StatelessWidget {
     final Widget deleteBtn = _actionButton(
       label: AppStr.deleteLabel,
       onPressed: deleteEnabled ? onDelete : null,
-      activeColor: AppColors.blueAccent,
+      activeColor: AppColors.btnDelete,
       loading: deleting,
-      textColor: Colors.white,
+      textColor: AppColors.btnText,
     );
 
     // Row 2: Back | +Friend
@@ -154,19 +160,8 @@ class FriendActions extends StatelessWidget {
       color: Colors.transparent,
       child: Column(
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              acceptBtn,
-              declineBtn,
-              deleteBtn,
-            ],
-          ),
-          Row(
-            children: <Widget>[
-              backBtn,
-              addFriendBtn,
-            ],
-          ),
+          Row(children: <Widget>[acceptBtn, declineBtn, deleteBtn]),
+          Row(children: <Widget>[backBtn, addFriendBtn]),
         ],
       ),
     );
