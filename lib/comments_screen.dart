@@ -25,6 +25,7 @@ import 'widgets/full_screen_image.dart';
 import 'widgets/thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:gal/gal.dart';
 
 /// Small request object used when calling compute() to resize/encode images.
 class _ResizeRequest {
@@ -169,6 +170,14 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
       // Write resized bytes to temp file
       final path = await _writeTempFile(resized);
+
+      // Save to gallery in RestiView album
+      try {
+        await Gal.putImageBytes(resized, album: 'RestiView');
+      } catch (e) {
+        // Gallery save failed, but we still have the temp file
+        debugPrint('Failed to save to gallery: $e');
+      }
 
       if (!mounted) return;
       setState(() {

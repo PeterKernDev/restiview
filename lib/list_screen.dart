@@ -16,6 +16,7 @@ import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
 import 'services/db_utils.dart';
 import 'services/review_info_builder.dart';
+import 'services/audit_info.dart';
 import 'sub_list_screen/sort_filter.dart';
 import 'sub_list_screen/review_list_item.dart';
 import 'constants/fonts.dart';
@@ -443,6 +444,15 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     final shouldUpdate = await SessionCache.getReviewsAdded();
     if (!shouldUpdate) return;
 
+    // Check if already updated today
+    final lastUpdateDate = await SessionCache.getReviewInfoLastUpdate();
+    final today = DateTime.now().toIso8601String().substring(0, 10); // yyyy-MM-dd
+    if (lastUpdateDate == today) {
+      // Already updated today, clear flag and skip
+      await SessionCache.setReviewsAdded(false);
+      return;
+    }
+
     final userId = FirebaseAuth.instance.currentUser?.uid;
     final userEmail = SessionCache.userEmail;
 
@@ -463,7 +473,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       final normalizedEmail = normalizeEmailForPath(userEmail);
       await updateReviewInfo(userId, normalizedEmail);
 
-      // Clear the flag
+      // Update last update date and clear the flag
+      await SessionCache.setReviewInfoLastUpdate(today);
       await SessionCache.setReviewsAdded(false);
     } catch (e) {
       // Silent fail - non-critical operation
@@ -515,6 +526,19 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
               .ref('users/$userId/reviews_requested/$key')
               .remove();
         }
+      }
+
+      // Write audit record after deletions
+      try {
+        await writeAuditInfo(
+          userId: userId,
+          userEmail: SessionCache.userEmail,
+          type: 'requested_review_delete',
+          target: 'requested_reviews',
+          details: {'deletedCount': deletedCount},
+        );
+      } catch (e) {
+        debugPrint('Failed to write audit info: $e');
       }
 
       if (!mounted) return;

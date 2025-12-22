@@ -1,6 +1,7 @@
+
 // services/location_restaurant_helper.dart
 //
-// Defensive, timeout-aware helper to locate nearby restaurants.
+// Defensive, timeout-aware helper to locate nearby restaurants and perform location-based utilities.
 // Returns [] on any failure rather than throwing.
 
 import 'dart:async';
@@ -8,11 +9,33 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:diacritic/diacritic.dart';
 
 import '../constants/cuisine_constants.dart';
 import '../constants/restiview_constants.dart';
 import '../services/session_cache.dart';
+
+/// Returns the current country name using reverse geocoding.
+/// Returns null if location or country cannot be determined.
+Future<String?> getCurrentCountrySafe({Duration timeout = const Duration(seconds: 10)}) async {
+  final pos = await getCurrentLocationSafe(timeout: timeout);
+  if (pos == null) {
+    return null;
+  }
+  try {
+    final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude)
+        .timeout(timeout);
+    if (placemarks.isNotEmpty) {
+      return placemarks.first.country;
+    }
+    return null;
+  } on TimeoutException {
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
 
 String normalize(String input) => removeDiacritics(input.toLowerCase());
 

@@ -31,6 +31,14 @@ dependencies:
   image: ^4.0.17
   uuid: ^4.0.0
 
+  # Added for reverse geocoding (lat/lng to country)
+  geocoding: ^3.0.0
+
+  disk_space_2: ^1.0.11
+  shared_preferences: ^2.2.2
+
+  gal: ^2.3.2
+
 
 
 fonts:

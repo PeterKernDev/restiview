@@ -7,6 +7,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:uuid/uuid.dart';
+import 'package:gal/gal.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
@@ -163,8 +167,22 @@ class _DetailsScreenState extends State<DetailsScreen> {
       );
       if (picked == null) return;
       if (!mounted) return;
+      // Move photo to persistent storage
+      final dir = await getApplicationDocumentsDirectory();
+      final id = const Uuid().v4();
+      final newPath = '${dir.path}/restiview_$id.jpg';
+      await File(picked.path).copy(newPath);
+      
+      // Save to gallery in RestiView album
+      try {
+        await Gal.putImage(newPath, album: 'RestiView');
+      } catch (e) {
+        // Gallery save failed, but we still have the app copy
+        debugPrint('Failed to save to gallery: $e');
+      }
+      
       setState(() {
-        _items[index].photoPath = picked.path;
+        _items[index].photoPath = newPath;
         _items[index].timestamp = DateTime.now();
         widget.context.hasChanges = true;
       });

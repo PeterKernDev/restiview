@@ -72,7 +72,7 @@ class MyApp extends StatelessWidget {
           case '/list':
             return MaterialPageRoute(builder: (_) {
               final args = settings.arguments;
-              if (args is Map && args['newReviewKey'] != null) {
+              if (args is Map && args.containsKey('newReviewKey')) {
                 return ReviewListScreen(newReviewKey: args['newReviewKey'] as String?, mode: 'list');
               }
               return const ReviewListScreen(mode: 'list');

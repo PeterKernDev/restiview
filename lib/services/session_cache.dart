@@ -29,6 +29,7 @@ class SessionCache {
   static bool allowAutoCapture = false;
   static bool reviewsAdded =
       false; // Track if new reviews added since last review_info update
+  static String reviewInfoLastUpdateDate = ''; // Track last date review_info was updated (yyyy-MM-dd format)
 
   // Device country code (used for registration defaults)
   static String deviceCountryCode = 'US';
@@ -88,6 +89,7 @@ class SessionCache {
   static const _keySavedDisplayName = 'savedDisplayName';
   static const _keySavedCountry = 'savedCountry'; // new
   static const _keyReviewsAdded = 'reviewsAdded';
+  static const _keyReviewInfoLastUpdate = 'reviewInfoLastUpdate';
 
   // Default system lists (fallbacks)
   static List<String> systemCuisinesFallback = <String>[
@@ -280,6 +282,27 @@ class SessionCache {
     } catch (e) {
       debugPrint('Error reading reviewsAdded: $e');
       return false;
+    }
+  }
+
+  // Set/get review info last update date
+  static Future<void> setReviewInfoLastUpdate(String dateString) async {
+    reviewInfoLastUpdateDate = dateString;
+    try {
+      await _storage.write(key: _keyReviewInfoLastUpdate, value: dateString);
+    } catch (e) {
+      debugPrint('Error writing reviewInfoLastUpdate: $e');
+    }
+  }
+
+  static Future<String> getReviewInfoLastUpdate() async {
+    try {
+      final String? stored = await _storage.read(key: _keyReviewInfoLastUpdate);
+      reviewInfoLastUpdateDate = stored ?? '';
+      return reviewInfoLastUpdateDate;
+    } catch (e) {
+      debugPrint('Error reading reviewInfoLastUpdate: $e');
+      return '';
     }
   }
 

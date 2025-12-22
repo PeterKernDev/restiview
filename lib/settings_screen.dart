@@ -14,6 +14,7 @@ import 'constants/fonts.dart';
 import 'top_screen.dart';
 import 'services/session_cache.dart';
 import 'custom_values_screen.dart';
+import 'services/audit_info.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -50,17 +51,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true) {
-      _deleteAccount();
+      String? reason;
+      if (mounted) {
+        reason = await showDialog<String?>(
+          context: context,
+          builder: (context) => const _DeleteReasonDialog(),
+        );
+      }
+      if (reason != null) {
+        _deleteAccount(reason);
+      }
     }
   }
 
-  Future<void> _deleteAccount() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+  Future<void> _deleteAccount([String? reason]) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    final email = SessionCache.userEmail;
+    if (uid == null || user == null) return;
+
+    // Write audit record before deleting user
+    try {
+      await writeAuditInfo(
+        userId: uid,
+        userEmail: email,
+        type: 'account_delete',
+        target: 'account',
+        details: (reason != null && reason.isNotEmpty) ? {'reason': reason} : null,
+      );
+    } catch (e) {
+      debugPrint('Failed to write audit info: $e');
+    }
 
     try {
+      // Delete database node first
       await FirebaseDatabase.instance.ref('users/$uid').remove();
-      await FirebaseAuth.instance.currentUser?.delete();
+      
+      // Attempt to delete the auth user - may require re-authentication
+      try {
+        await user.delete();
+      } on FirebaseAuthException catch (authError) {
+        if (authError.code == 'requires-recent-login') {
+          // Need to re-authenticate before deletion
+          if (!mounted) return;
+          final password = await _promptForPassword();
+          if (password == null || password.isEmpty) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Account deletion cancelled - password required')),
+            );
+            return;
+          }
+          
+          // Re-authenticate and try again
+          final credential = EmailAuthProvider.credential(email: email, password: password);
+          await user.reauthenticateWithCredential(credential);
+          await user.delete();
+        } else {
+          rethrow;
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,6 +135,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ).showSnackBar(SnackBar(content: Text(AppStr.deleteAccountSignedOut)));
       }
     });
+  }
+
+  Future<String?> _promptForPassword() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Password', style: AppFonts.bold),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'For security, please enter your password to confirm account deletion:',
+              style: AppFonts.standard,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: Text(AppStr.cancel, style: AppFonts.standard),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: Text('Confirm', style: AppFonts.standard),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   @override
@@ -455,6 +546,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Separate StatefulWidget for delete reason dialog to properly manage TextEditingController lifecycle
+class _DeleteReasonDialog extends StatefulWidget {
+  const _DeleteReasonDialog();
+
+  @override
+  State<_DeleteReasonDialog> createState() => _DeleteReasonDialogState();
+}
+
+class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('We are sorry to see you go', style: AppFonts.bold),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'If you wish, please let us know why you are deleting your account (optional):',
+            style: AppFonts.standard,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Reason (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text(AppStr.cancel, style: AppFonts.standard),
+        ),
+        TextButton(
+          onPressed: () {
+            final text = _controller.text.trim();
+            Navigator.pop(context, text);
+          },
+          child: Text('Continue', style: AppFonts.standard),
+        ),
+      ],
     );
   }
 }

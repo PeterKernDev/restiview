@@ -13,6 +13,8 @@ import 'settings_screen.dart';
 import 'list_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
+import 'services/db_utils.dart';
+import 'services/review_info_builder.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
@@ -27,13 +29,24 @@ class TopScreen extends StatefulWidget {
 class _TopScreenState extends State<TopScreen> {
   bool _isLoading = false;
   bool _acceptsFriends = true; // whether this user accepts friends (controls button enabled)
-  bool _hasRequestedReviews = false; // whether user has any requested reviews
+    bool _hasRequestedReviews = false; // whether user has any requested reviews
+    bool _hasFriends = false; // whether user has any friends
 
   @override
   void initState() {
     super.initState();
     _loadAcceptsFriends();
-    _checkRequestedReviews();
+     _checkRequestedReviews();
+     _checkFriends();
+  }
+  void _checkFriends() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final friendsRef = FirebaseDatabase.instance.ref().child('users').child(user.uid).child('friends');
+    final snapshot = await friendsRef.get();
+    setState(() {
+      _hasFriends = snapshot.exists && (snapshot.value != null);
+    });
   }
 
   Future<void> _checkRequestedReviews() async {
@@ -101,7 +114,20 @@ class _TopScreenState extends State<TopScreen> {
     }
   }
 
-  Future<void> _signOut() async {
+  Future<void> _signOut() async {    // Update review_info before signing out (regardless of daily limit)
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userEmail = SessionCache.userEmail;
+    if (userId != null && userEmail.isNotEmpty) {
+      try {
+        final normalizedEmail = normalizeEmailForPath(userEmail);
+        await updateReviewInfo(userId, normalizedEmail);
+        final today = DateTime.now().toIso8601String().substring(0, 10);
+        await SessionCache.setReviewInfoLastUpdate(today);
+        await SessionCache.setReviewsAdded(false);
+      } catch (e) {
+        debugPrint('Error updating review_info on sign out: \$e');
+      }
+    }
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
@@ -281,16 +307,16 @@ class _TopScreenState extends State<TopScreen> {
                           )
                         : Text(AppStr.viewReviews, style: AppFonts.standard),
                   ),
-                  if (_hasRequestedReviews) ...<Widget>[
+                  if (_hasFriends) ...<Widget>[
                     const SizedBox(height: 16),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.ochre,
+                        backgroundColor: _hasRequestedReviews ? AppColors.ochre : AppColors.greyShade400,
                         foregroundColor: Colors.black87,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: _handleViewRequestedReviews,
+                      onPressed: _hasRequestedReviews ? _handleViewRequestedReviews : null,
                       child: Text(AppStr.friendReviewsButton, style: AppFonts.standard),
                     ),
                   ],

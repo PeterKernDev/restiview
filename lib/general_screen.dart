@@ -27,6 +27,8 @@ class GeneralScreen extends StatefulWidget {
 }
 
 class _GeneralScreenState extends State<GeneralScreen> {
+    bool _countryMismatchChecked = false;
+
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _restaurantController;
@@ -45,6 +47,43 @@ class _GeneralScreenState extends State<GeneralScreen> {
   late String _selectedOccasion;
   DateTime _selectedDate = DateTime.now();
   List<NearbyRestaurant> _restaurantOptions = [];
+
+  Future<void> checkCountryMismatch() async {
+    if (_countryMismatchChecked) return;
+    _countryMismatchChecked = true;
+    final String? currentCountry = await getCurrentCountrySafe();
+    final String homeCountry = SessionCache.defaultCountry;
+    if (currentCountry != null && currentCountry.isNotEmpty && currentCountry != homeCountry) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text(AppStr.countryMismatchTitle),
+            content: const Text(AppStr.countryMismatchBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    SessionCache.defaultCountry = currentCountry;
+                    widget.context.reviewMap['country'] = currentCountry;
+                  });
+                },
+                child: const Text(AppStr.countryMismatchUpdate),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text(AppStr.countryMismatchContinue),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -72,6 +111,14 @@ class _GeneralScreenState extends State<GeneralScreen> {
           return;
         }
         _autoFillRestaurantFromLocation();
+        checkCountryMismatch();
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        checkCountryMismatch();
       });
     }
 

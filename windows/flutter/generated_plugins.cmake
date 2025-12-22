@@ -3,10 +3,12 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  disk_space_2
   file_selector_windows
   firebase_auth
   firebase_core
   flutter_secure_storage_windows
+  gal
   geolocator_windows
   url_launcher_windows
 )

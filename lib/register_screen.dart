@@ -20,6 +20,8 @@ import 'constants/fonts.dart';
 import 'services/session_cache.dart';
 import 'services/startup_tasks.dart';
 import 'services/user_setup.dart'; // ensureUserSetup helper
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -61,6 +63,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     _homeCountry = _getDeviceCountryName();
+    _detectCountryFromLocation();
+  }
+
+  Future<void> _detectCountryFromLocation() async {
+    try {
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Location services are disabled');
+        return;
+      }
+      
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low);
+        final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+        if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _homeCountry = placemarks.first.country!;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Geo country detection failed in init: $e');
+    }
   }
 
   void _toggleLoading(bool value) {
@@ -129,7 +161,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordController.text.trim();
 
     _toggleLoading(true);
+    String detectedCountry = _homeCountry;
+    debugPrint('Initial _homeCountry: $_homeCountry');
     try {
+      // Get location and reverse-geocode to country
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        debugPrint('Location service enabled: $serviceEnabled');
+        if (!serviceEnabled) {
+          debugPrint('Location services are disabled, using device country');
+        } else {
+          LocationPermission permission = await Geolocator.checkPermission();
+          debugPrint('Location permission status: $permission');
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+            debugPrint('Requested permission, new status: $permission');
+          }
+          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+            final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low);
+            debugPrint('Got position: lat=${pos.latitude}, lon=${pos.longitude}');
+            final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+            debugPrint('Placemarks: $placemarks');
+            if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
+              detectedCountry = placemarks.first.country!;
+              debugPrint('Detected country from placemark: $detectedCountry');
+            } else {
+              debugPrint('No valid country found in placemarks');
+            }
+          } else {
+            debugPrint('Location permission not granted for geolocation');
+          }
+        }
+      } catch (e) {
+        debugPrint('Geo country detection failed: $e');
+      }
+      debugPrint('Final detectedCountry: $detectedCountry');
+
+      if (!mounted) return;
+
       final userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
@@ -139,8 +208,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'userName': name,
           'userEmail': email,
           'userSettings1': 'Name',
-          'userSettings2': _homeCountry,
-          'baseCountry': _homeCountry,
+          'userSettings2': detectedCountry,
+          'baseCountry': detectedCountry,
           'userSettings3': _allowLocation,
           'userSettings4': _allowPhotos,
           'userSettings5': 50,
@@ -169,7 +238,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           uid: uid,
           userName: name,
           userEmail: email,
-          homeCountry: _homeCountry,
+          homeCountry: detectedCountry,
         );
 
         if (!mounted) return;

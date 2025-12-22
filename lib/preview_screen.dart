@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:disk_space_2/disk_space_2.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
@@ -17,6 +18,7 @@ import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'sub_preview_screen/review_transform.dart';
 import 'top_screen.dart';
 import 'general_screen.dart';
+import 'services/audit_info.dart';
 
 class PreviewScreen extends StatefulWidget {
   final ReviewContext context;
@@ -238,6 +240,43 @@ class _PreviewScreenState extends State<PreviewScreen> {
     return proceed ?? false;
   }
 
+  Future<bool> _checkStorageSpace() async {
+    try {
+      final freeDiskSpace = await DiskSpace.getFreeDiskSpace;
+      if (freeDiskSpace == null) return true; // If we can't check, proceed
+      
+      // Check if less than 100 MB (convert MB to appropriate comparison)
+      if (freeDiskSpace < 100) {
+        if (!mounted) return false;
+        final shouldContinue = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(AppStr.lowStorageTitle, style: AppFonts.bold),
+            content: Text(
+              '${AppStr.lowStorageMessage} ${freeDiskSpace.toStringAsFixed(0)} ${AppStr.lowStorageMB}',
+              style: AppFonts.standard,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(AppStr.cancel, style: AppFonts.standard),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(AppStr.continueAnyway, style: AppFonts.standard),
+              ),
+            ],
+          ),
+        );
+        return shouldContinue ?? false;
+      }
+      return true; // Enough space available
+    } catch (e) {
+      debugPrint('Storage check failed: $e');
+      return true; // If check fails, allow save to proceed
+    }
+  }
+
   List<Map<String, dynamic>> normalizeCards(dynamic raw) {
     final normalized = <Map<String, dynamic>>[];
     if (raw == null) return normalized;
@@ -278,6 +317,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
       _isSaving = true;
     });
     try {
+      // Check storage space before proceeding
+      final hasSpace = await _checkStorageSpace();
+      if (!hasSpace) return;
+      
       final restName = reviewData?['restname']?.toString().trim() ?? '';
       final reviewDate = reviewData?['reviewdate']?.toString().trim() ?? '';
       final shouldProceed = await _checkForDuplicateReview(
@@ -408,6 +451,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
       _isSaving = true;
     });
     try {
+      // Check storage space before proceeding
+      final hasSpace = await _checkStorageSpace();
+      if (!hasSpace) return;
+      
       final nowIso = DateTime.now().toIso8601String();
       final payload = Map<String, dynamic>.from(reviewData!);
 
@@ -529,42 +576,138 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<void> deleteReview() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userEmail = SessionCache.userEmail;
     if (userId == null) return;
-    final confirm = await showDialog<bool>(
+    
+    // Collect all photo paths from the review
+    final List<String> photoPaths = [];
+    if (reviewData != null) {
+      // Main photo
+      final mainPhoto = reviewData!['photoPath'];
+      if (mainPhoto != null && mainPhoto is String && mainPhoto.trim().isNotEmpty) {
+        photoPaths.add(mainPhoto);
+      }
+      
+      // Comment photos (photoPath0, photoPath1, photoPath2)
+      for (int i = 0; i < 3; i++) {
+        final path = reviewData!['photoPath$i'];
+        if (path != null && path is String && path.trim().isNotEmpty) {
+          photoPaths.add(path);
+        }
+      }
+      
+      // Detail category photos
+      final detailKeys = [
+        'details_cocktails',
+        'details_starters',
+        'details_wine',
+        'details_main',
+        'details_dessert',
+        'details_otherdrinks',
+      ];
+      for (final key in detailKeys) {
+        final details = reviewData![key];
+        if (details is List) {
+          for (final item in details) {
+            if (item is Map) {
+              final photo = item['photoPath'];
+              if (photo != null && photo is String && photo.trim().isNotEmpty) {
+                photoPaths.add(photo);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Remove duplicates
+    final uniquePhotoPaths = photoPaths.toSet().toList();
+    final hasPhotos = uniquePhotoPaths.isNotEmpty;
+    
+    // Show delete dialog with optional photo toggle
+    bool deletePhotos = false;
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text(AppStr.deleteTitle),
-        content: Text(
-          widget.context.reviewKey == null
-              ? AppStr.deletePendingMessage
-              : AppStr.deletePermanentMessage,
-          style: AppFonts.standard,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(AppStr.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(AppStr.confirmDelete),
-          ),
-        ],
-      ),
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(AppStr.deleteTitle, style: AppFonts.bold),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.context.reviewKey == null
+                        ? AppStr.deletePendingMessage
+                        : AppStr.deletePermanentMessage,
+                    style: AppFonts.standard,
+                  ),
+                  if (hasPhotos) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      '${uniquePhotoPaths.length} ${AppStr.photosWillBeDeleted}',
+                      style: AppFonts.standard.copyWith(
+                        fontSize: 12,
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      title: Text(
+                        AppStr.deletePhotosLabel,
+                        style: AppFonts.standard.copyWith(fontSize: 14),
+                      ),
+                      value: deletePhotos,
+                      onChanged: (value) {
+                        setState(() {
+                          deletePhotos = value ?? false;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text(AppStr.cancel, style: AppFonts.standard),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(
+                    context,
+                    {'confirm': true, 'deletePhotos': deletePhotos},
+                  ),
+                  child: Text(AppStr.confirmDelete, style: AppFonts.standard),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
-    if (!(confirm ?? false)) {
+    
+    if (result == null || result['confirm'] != true) {
       return;
     }
+    
+    final shouldDeletePhotos = result['deletePhotos'] == true;
+    
     if (!mounted) {
       return;
     }
+    
     if (widget.context.reviewKey == null) {
+      // Pending review - just navigate away
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => TopScreen()),
         (route) => false,
       );
     } else {
+      // Delete saved review
       try {
         final local = widget.context.reviewMap.isNotEmpty
             ? reverseFormatReviewData(widget.context.reviewMap)
@@ -574,9 +717,40 @@ class _PreviewScreenState extends State<PreviewScreen> {
         }
       } catch (_) {}
 
+      // Write audit record before deleting review
+      try {
+        await writeAuditInfo(
+          userId: userId,
+          userEmail: userEmail,
+          type: 'review_delete',
+          target: widget.context.reviewKey ?? '',
+        );
+      } catch (e) {
+        debugPrint('Failed to write audit info: $e');
+      }
+
+      // Delete review from Firebase
       await FirebaseDatabase.instance
           .ref('users/$userId/reviews/${widget.context.reviewKey}')
           .remove();
+      
+      // Delete photo files if requested
+      if (shouldDeletePhotos && uniquePhotoPaths.isNotEmpty) {
+        int deletedCount = 0;
+        for (final photoPath in uniquePhotoPaths) {
+          try {
+            final file = File(photoPath);
+            if (await file.exists()) {
+              await file.delete();
+              deletedCount++;
+            }
+          } catch (e) {
+            debugPrint('Failed to delete photo $photoPath: $e');
+          }
+        }
+        debugPrint('Deleted $deletedCount of ${uniquePhotoPaths.length} photo files');
+      }
+      
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

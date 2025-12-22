@@ -2,6 +2,10 @@
 // Centralized app strings used across the app.
 // Keep keys stable for localization. Add new keys here as screens/features are added.
 class AppStr {
+    static const String countryMismatchTitle = 'Country Mismatch';
+    static const String countryMismatchBody = 'Your home country in settings does not match your current location. Please check your settings before continuing.';
+    static const String countryMismatchUpdate = 'Update Home Country';
+    static const String countryMismatchContinue = 'Continue Anyway';
   static const String releaseNumber = 'RestiView Release Number : ';
   static const String aboutDescription =
       'RestiView is a simple app which allows you to create and save your own personal restaurant reviews. Build up your own library and history of reviews and then search through to find your favourite restaurant next time you visit 🍽️ or scroll through to find the best place suited for a particular event.';
@@ -45,6 +49,8 @@ class AppStr {
       'This will permanently delete your review. Continue?';
   static const String deleteAccountSignedOut = 'Account deleted and signed out';
   static const String deleteTitle = 'Delete Review?';
+  static const String deletePhotosLabel = 'Also delete photos from device';
+  static const String photosWillBeDeleted = 'photos will be permanently deleted from your device';
   static const String dinersLabel = 'Number of Diners';
   static const String discardMessage =
       'Going back will discard all unsaved changes. Continue?';
@@ -97,6 +103,10 @@ class AppStr {
   static const String photoDisabled = 'Photo access is disabled in settings.';
   static const String photoError = 'Photo not found';
   static const String pickDate = 'Pick Date';
+  static const String lowStorageTitle = 'Low Storage Space';
+  static const String lowStorageMessage = 'You have only';
+  static const String lowStorageMB = 'MB of free space remaining. Saving this review may fail if storage runs out.';
+  static const String continueAnyway = 'Continue Anyway';
   static const String preview = 'PREVIEW';
   static const String previewTitle = 'Restiview – Preview';
   static const String proceed = 'Proceed';
