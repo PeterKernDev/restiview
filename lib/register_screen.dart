@@ -80,7 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low);
+        final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
         final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
         if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
           if (mounted) {
@@ -178,7 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             debugPrint('Requested permission, new status: $permission');
           }
           if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-            final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low);
+            final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
             debugPrint('Got position: lat=${pos.latitude}, lon=${pos.longitude}');
             final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
             debugPrint('Placemarks: $placemarks');

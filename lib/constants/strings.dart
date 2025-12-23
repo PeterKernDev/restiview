@@ -51,7 +51,7 @@ class AppStr {
   static const String deleteTitle = 'Delete Review?';
   static const String deletePhotosLabel = 'Also delete photos from device';
   static const String photosWillBeDeleted = 'photos will be permanently deleted from your device';
-  static const String dinersLabel = 'Number of Diners';
+  static const String dinersLabel = 'Diners';
   static const String discardMessage =
       'Going back will discard all unsaved changes. Continue?';
   static const String discardTitle = 'Discard Changes?';

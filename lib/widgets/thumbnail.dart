@@ -107,7 +107,7 @@ class Thumbnail extends StatelessWidget {
         fit: fit,
         width: size,
         height: size,
-        errorBuilder: (_, __, ___) => Container(
+        errorBuilder: (context, error, stackTrace) => Container(
           color: AppColors.lightGrey,
           child: Center(
             child: Icon(

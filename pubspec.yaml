@@ -12,27 +12,27 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^2.25.4
-  firebase_auth: ^4.17.4
-  firebase_database: ^10.4.5
-  cloud_functions: ^4.0.1 
+  firebase_core: ^4.3.0
+  firebase_auth: ^6.1.3
+  firebase_database: ^12.1.1
+  cloud_functions: ^6.0.5 
   cupertino_icons: ^1.0.8
-  intl: ^0.18.1
+  intl: ^0.20.2
   flutter_rating_bar: ^4.0.0
   image_picker: ^1.0.4
   path_provider: ^2.1.1
-  geolocator: ^10.1.0
+  geolocator: ^14.0.1
   http: ^1.1.0
   url_launcher: ^6.2.5
   diacritic: ^0.1.3
   package_info_plus: ^9.0.0
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: ^10.0.0
   # added for image processing and temp file naming
   image: ^4.0.17
   uuid: ^4.0.0
 
   # Added for reverse geocoding (lat/lng to country)
-  geocoding: ^3.0.0
+  geocoding: ^4.0.0
 
   disk_space_2: ^1.0.11
   shared_preferences: ^2.2.2
@@ -52,7 +52,7 @@ fonts:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   
 
 flutter:

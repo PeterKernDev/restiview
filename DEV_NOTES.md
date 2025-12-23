@@ -4,6 +4,52 @@ Generated: 2025-12-01
 
 This document is a concise developer-oriented overview of the RestiView Flutter app. It was produced by reading the source files under `lib/` in batches. Sections flagged as "(TODO: expand)" indicate files or details pending full parsing.
 
+---
+
+## ⚠️ Developer rules / coding conventions (project-wide)
+
+**CRITICAL:** These rules guide all development and code reviews. All contributors and automated checks must follow these conventions.
+
+- **REMINDER: Don't change anything unless the owner has asked for it or we've explicitly agreed the change.**
+- Statements in an `if` should be enclosed in a block (use `{ ... }`).
+- All user-visible text strings should live in a centralized `strings.dart` (or similar) file. Example pattern:
+  - class AppStr { static const String strName = "String name"; }
+- Avoid deprecated `value` on form fields; use `initialValue` instead to set initial form field values (deprecated after v3.33.0-1.0.pre).
+- Avoid `withOpacity`; prefer `.withValues()` to avoid precision loss when adjusting colors.
+- Always use braced blocks for bodies of `for`/`if`/`while`, and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state.
+  - Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
+- Do not use `MaterialStateProperty` (deprecated in this project). Use the recommended replacement patterns for button and style state handling.
+- `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated; avoid using them.
+- Put the file name and a brief description at the top of every `*.dart` file as a comment. Preserve any existing file header comments and add missing ones where appropriate.
+- Do not use `return` inside a `finally` clause.
+- Prefer `debugPrint` over `kDebugMode` checks for in-code debug messages.
+- Release build command used by the project:
+  - `flutter build appbundle --release`
+
+
+## ⚠️ REMINDERS (owner supplied)
+
+**AUTHORITATIVE:** The project owner supplied the following hard constraints and reminders. These must be followed for all subsequent edits unless the owner explicitly authorizes a change.
+
+- Don't change anything unless I have asked you to change it, or we have agreed the change.
+- Statements in an if should be enclosed in a block.
+- Remember all text messages should be stored in `strings.dart`.
+  - Example pattern: class AppStr { static const String strName = "String name"; }
+- Remember - `value` is deprecated and shouldn't be used. Use `initialValue` instead to set the initial value for form fields (deprecated after v3.33.0-1.0.pre).
+- Remember - `withOpacity` is deprecated and shouldn't be used. Use `.withValues()` to avoid precision loss. Try replacing deprecated members with the replacement.
+- Remember - always use braced blocks for for/if/while bodies and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state. Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
+- Remember not to use `MaterialStateProperty` — it is deprecated.
+- Remember `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated.
+- Remember we put the file name and a brief description in a comment at the top of every `*.dart` file. Preserve existing comments and add them if they are missing.
+- Don't use `return` in a `finally` clause.
+- Don't use `kDebugMode`; use `debugPrint` instead.
+
+NOTE: The code in `lib/review_request_details_screen.dart` contained three occurrences where `BuildContext` could be used across async gaps; these were corrected to guard with `mounted`. Follow the same pattern elsewhere when you find similar issues.
+
+Include or reference this section in code reviews and the repository README so new contributors see the conventions.
+
+---
+
 ## Table of contents
 
 - Project summary
@@ -25,6 +71,28 @@ Key libraries used (observed in code):
 - flutter_secure_storage, image_picker, geolocator
 - flutter_rating_bar, package_info_plus
 - image (for resizing), uuid, intl
+
+
+## Configuration & Credentials
+
+### Google Cloud / Firebase Configuration
+
+**Package Name:** `com.restiview.app`
+
+**Google Maps / Places API Key:** `AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4`
+- This is the "Android key (auto created by Firebase)" from Google Cloud Console
+- Configured for Android apps with package name `com.restiview.app`
+- Has Places API enabled (required for nearby restaurant search)
+- Located in code: `lib/constants/restiview_constants.dart`
+
+**Android Signing Certificate Fingerprints:**
+- **SHA-1:** `2D:62:8A:01:ED:94:E4:F4:1C:5B:7E:D6:20:40:9E:0C:C8:FF:4A:DB`
+- **SHA-256:** `0D:41:53:85:EA:4A:DD:87:F1:45:35:CB:67:E7:98:3C:69:D8:04:D1:8C:F9:B5:21:AA:D0:28:FC:89:BE:6A:98`
+
+**Important Notes:**
+- The Android API key is restricted to the package name and SHA-1 fingerprint above
+- Places API must be enabled in Google Cloud Console for restaurant search to work
+- API changes can take up to 5 minutes to propagate
 
 
 ## App architecture
@@ -201,48 +269,6 @@ There's a workspace `task` labelled "Clean, Get, Run" in the VS Code tasks that 
 ---
 
 Notes: This is a working draft. I created this `DEV_NOTES.md` with the summaries collected so far and placeholder guidance for the remaining files. Tell me how you'd like me to proceed: continue reading the remaining files, immediately remediate the API key, or commit this file on a branch and open a PR.
-
-## Developer rules / coding conventions (project-wide)
-
-Add these rules to guide development and code reviews. These are project conventions the team expects all contributors and automated checks to follow:
-
-- REMINDER: Don’t change anything unless the owner has asked for it or we've explicitly agreed the change.
-- Statements in an `if` should be enclosed in a block (use `{ ... }`).
-- All user-visible text strings should live in a centralized `strings.dart` (or similar) file. Example pattern:
-  - class AppStr { static const String strName = "String name"; }
-- Avoid deprecated `value` on form fields; use `initialValue` instead to set initial form field values (deprecated after v3.33.0-1.0.pre).
-- Avoid `withOpacity`; prefer `.withValues()` to avoid precision loss when adjusting colors.
-- Always use braced blocks for bodies of `for`/`if`/`while`, and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state.
-  - Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
-- Do not use `MaterialStateProperty` (deprecated in this project). Use the recommended replacement patterns for button and style state handling.
-- `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated; avoid using them.
-- Put the file name and a brief description at the top of every `*.dart` file as a comment. Preserve any existing file header comments and add missing ones where appropriate.
-- Do not use `return` inside a `finally` clause.
-- Prefer `debugPrint` over `kDebugMode` checks for in-code debug messages.
-- Release build command used by the project:
-  - `flutter build appbundle --release`
-
-
-## REMINDERS (owner supplied)
-
-The project owner supplied the following hard constraints and reminders. These are authoritative and should be followed for all subsequent edits unless the owner explicitly authorizes a change.
-
-- Don’t change anything unless I have asked you to change it, or we have agreed the change.
-- Statements in an if should be enclosed in a block.
-- Remember all text messages should be stored in `strings.dart`.
-  - Example pattern: class AppStr { static const String strName = "String name"; }
-- Remember - `value` is deprecated and shouldn't be used. Use `initialValue` instead to set the initial value for form fields (deprecated after v3.33.0-1.0.pre).
-- Remember - `withOpacity` is deprecated and shouldn't be used. Use `.withValues()` to avoid precision loss. Try replacing deprecated members with the replacement.
-- Remember - always use braced blocks for for/if/while bodies and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state. Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
-- Remember not to use `MaterialStateProperty` — it is deprecated.
-- Remember `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated.
-- Remember we put the file name and a brief description in a comment at the top of every `*.dart` file. Preserve existing comments and add them if they are missing.
-- Don’t use `return` in a `finally` clause.
-- Don’t use `kDebugMode`; use `debugPrint` instead.
-
-NOTE: The code in `lib/review_request_details_screen.dart` contained three occurrences where `BuildContext` could be used across async gaps; these were corrected to guard with `mounted`. Follow the same pattern elsewhere when you find similar issues.
-
-Include or reference this section in code reviews and the repository README so new contributors see the conventions.
 
 ## Friend / Friend-request flow (summary)
 

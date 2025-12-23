@@ -977,7 +977,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   fit: BoxFit.cover,
                                   width: 72,
                                   height: 72,
-                                  errorBuilder: (_, __, ___) => const Icon(
+                                  errorBuilder: (context, error, stackTrace) => const Icon(
                                     Icons.broken_image,
                                     color: Colors.grey,
                                   ),
@@ -1066,6 +1066,96 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildCommentSection(String commentText) {
+    // Estimate if comment will wrap to multiple lines
+    // Rough estimate: if longer than ~50 characters, it will likely wrap
+    final bool isLongComment = commentText.length > 50;
+
+    if (isLongComment) {
+      // For long comments: label on top, comment text below spanning full width
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${AppStr.commentLabel}:',
+              style: AppFonts.bold,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              commentText,
+              style: AppFonts.standard,
+            ),
+          ],
+        ),
+      );
+    } else {
+      // For short comments: use standard row format
+      return formatter.reviewRow(AppStr.commentLabel, commentText);
+    }
+  }
+
+  Widget _buildAddressSection(String addressText) {
+    // Estimate if address will wrap to multiple lines
+    // Rough estimate: if longer than ~50 characters, it will likely wrap
+    final bool isLongAddress = addressText.length > 50;
+
+    if (isLongAddress) {
+      // For long addresses: label on top, address text below spanning full width
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${AppStr.addressLabel}:',
+              style: AppFonts.bold,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              addressText,
+              style: AppFonts.standard,
+            ),
+          ],
+        ),
+      );
+    } else {
+      // For short addresses: use standard row format
+      return formatter.reviewRow(AppStr.addressLabel, addressText);
+    }
+  }
+
+  Widget _buildGoodForSection(String goodForText) {
+    // Estimate if good for tags will wrap to multiple lines
+    // Rough estimate: if longer than ~50 characters, it will likely wrap
+    final bool isLongGoodFor = goodForText.length > 50;
+
+    if (isLongGoodFor) {
+      // For long good for text: label on top, text below spanning full width
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Good for:',
+              style: AppFonts.bold,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              goodForText,
+              style: AppFonts.standard,
+            ),
+          ],
+        ),
+      );
+    } else {
+      // For short good for text: use standard row format
+      return formatter.reviewRow('Good for', goodForText);
+    }
   }
 
   @override
@@ -1406,7 +1496,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                       height: 100,
                                       width: 100,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (context, error, stackTrace) =>
                                           const Text(AppStr.photoError),
                                     ),
                                   ),
@@ -1438,18 +1528,23 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
                   const SizedBox(height: 6),
                   if (commentsValue != null && commentsValue.isNotEmpty)
-                    formatter.reviewRow(AppStr.commentLabel, commentsValue),
+                    _buildCommentSection(commentsValue),
                   if (goodForTags.isNotEmpty)
-                    formatter.reviewRow('Good for', goodForTags.join(', ')),
+                    _buildGoodForSection(goodForTags.join(', ')),
 
-                  // Comment photos rendered with Wrap to avoid overflow
+                  // Comment photos rendered with aligned Row (left, center, right)
                   if (commentPhotos.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: commentPhotos.map((path) {
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: commentPhotos.asMap().entries.map((entry) {
+                          final int index = entry.key;
+                          final String path = entry.value;
+                          // Determine alignment: 0=left, 1=center, 2=right
+                          final Alignment align = index == 0
+                              ? Alignment.centerLeft
+                              : (index == 1 ? Alignment.center : Alignment.centerRight);
                           final String p = path;
                           bool exists = false;
                           try {
@@ -1458,8 +1553,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                             exists = false;
                           }
 
+                          Widget photoWidget;
                           if (exists) {
-                            return GestureDetector(
+                            photoWidget = GestureDetector(
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -1482,7 +1578,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                     width: 84,
                                     height: 84,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
+                                    errorBuilder: (context, error, stackTrace) => const Icon(
                                       Icons.broken_image,
                                       color: Colors.grey,
                                     ),
@@ -1490,25 +1586,30 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 ),
                               ),
                             );
+                          } else {
+                            photoWidget = ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 72,
+                                minHeight: 72,
+                                maxWidth: 84,
+                                maxHeight: 84,
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.grey.shade400),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.close, color: Colors.white70),
+                                ),
+                              ),
+                            );
                           }
 
-                          return ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              minWidth: 72,
-                              minHeight: 72,
-                              maxWidth: 84,
-                              maxHeight: 84,
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.grey.shade400),
-                              ),
-                              child: const Center(
-                                child: Icon(Icons.close, color: Colors.white70),
-                              ),
-                            ),
+                          return Align(
+                            alignment: align,
+                            child: photoWidget,
                           );
                         }).toList(),
                       ),
@@ -1528,7 +1629,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   ],
 
                   if (addressValue != null && addressValue.isNotEmpty)
-                    formatter.reviewRow(AppStr.addressLabel, addressValue),
+                    _buildAddressSection(addressValue),
                   if (phoneValue != null && phoneValue.isNotEmpty)
                     formatter.reviewRow(AppStr.phoneLabel, phoneValue),
 

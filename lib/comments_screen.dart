@@ -459,16 +459,28 @@ class _CommentsScreenState extends State<CommentsScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Thumbnails: use Wrap so slots wrap on narrow screens and never overflow
+                          // Thumbnails: aligned row - left, center, right
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
-                              children: List<Widget>.generate(
-                                3,
-                                (i) => _photoSlot(i),
-                              ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // First photo - left aligned
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: _photoSlot(0),
+                                ),
+                                // Second photo - center aligned
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: _photoSlot(1),
+                                ),
+                                // Third photo - right aligned
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _photoSlot(2),
+                                ),
+                              ],
                             ),
                           ),
 

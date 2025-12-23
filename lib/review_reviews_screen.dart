@@ -633,7 +633,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                         )
                       : ListView.separated(
                           itemCount: _reviews.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (context, index) => const Divider(height: 1),
                           itemBuilder: (BuildContext ctx, int idx) {
                             final Map<String, dynamic> rv = _reviews[idx];
                             return Opacity(

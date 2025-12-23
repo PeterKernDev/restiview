@@ -21,7 +21,7 @@ class FullScreenImage extends StatelessWidget {
           child: Image.file(
             File(path),
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Text(
+            errorBuilder: (context, error, stackTrace) => const Text(
               AppStr.photoError,
               style: TextStyle(color: Colors.white),
               textAlign: TextAlign.center,

@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -245,7 +246,7 @@ Future<Position?> getCurrentLocationSafe({Duration timeout = const Duration(seco
     } catch (_) {}
 
     try {
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high))
           .timeout(timeout);
       return pos;
     } on TimeoutException {
@@ -275,21 +276,26 @@ Future<List<NearbyRestaurant>> findNearbyRestaurants({
 Future<List<NearbyRestaurant>> _internalFind(
     Duration positionTimeout, Duration httpTimeout, int maxPlacesToProcess) async {
   if (!SessionCache.allowLocation) {
+    debugPrint('🔍 Restaurant search: Location not allowed');
     return [];
   }
 
   if (googlePlacesApiKey.isEmpty) {
+    debugPrint('🔍 Restaurant search: API key is empty');
     return [];
   }
 
   try {
     final pos = await getCurrentLocationSafe(timeout: positionTimeout);
     if (pos == null) {
+      debugPrint('🔍 Restaurant search: Could not get location');
       return [];
     }
     final lat = pos.latitude;
     final lng = pos.longitude;
     final radius = SessionCache.searchRadius;
+    
+    debugPrint('🔍 Restaurant search: lat=$lat, lng=$lng, radius=$radius meters');
 
     final nearbyUrl =
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=$radius&type=restaurant&key=$googlePlacesApiKey';
@@ -298,17 +304,29 @@ Future<List<NearbyRestaurant>> _internalFind(
     try {
       nearbyResponse = await http.get(Uri.parse(nearbyUrl)).timeout(httpTimeout);
     } on TimeoutException {
+      debugPrint('🔍 Restaurant search: HTTP request timed out');
       return [];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('🔍 Restaurant search: HTTP request failed: $e');
       return [];
     }
 
     if (nearbyResponse.statusCode != 200) {
+      debugPrint('🔍 Restaurant search: HTTP status ${nearbyResponse.statusCode}');
+      debugPrint('🔍 Response body: ${nearbyResponse.body}');
       return [];
     }
 
     final nearbyData = jsonDecode(nearbyResponse.body) as Map<String, dynamic>? ?? {};
+    final status = nearbyData['status'] as String?;
+    final errorMessage = nearbyData['error_message'] as String?;
+    debugPrint('🔍 Restaurant search: API status=$status');
+    if (errorMessage != null) {
+      debugPrint('🔍 Restaurant search: Error message: $errorMessage');
+    }
+    
     final results = nearbyData['results'] as List<dynamic>? ?? [];
+    debugPrint('🔍 Restaurant search: Found ${results.length} places');
 
     if (results.isEmpty) {
       return [];
@@ -329,8 +347,11 @@ Future<List<NearbyRestaurant>> _internalFind(
     final details = await Future.wait(detailFutures);
 
     final restaurants = details.whereType<NearbyRestaurant>().toList();
+    debugPrint('🔍 Restaurant search: Returning ${restaurants.length} restaurants');
     return restaurants;
-  } catch (_) {
+  } catch (e, stackTrace) {
+    debugPrint('🔍 Restaurant search: Exception: $e');
+    debugPrint('🔍 Stack trace: $stackTrace');
     return [];
   }
 }
