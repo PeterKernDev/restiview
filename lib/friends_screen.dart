@@ -12,6 +12,7 @@ import 'constants/fonts.dart';
 import 'constants/strings.dart';
 import 'top_screen.dart';
 import 'services/session_cache.dart';
+import 'services/mailbox_helper.dart';
 import 'sub_friends_screen/friend_entry.dart';
 import 'sub_friends_screen/friend_row.dart';
 import 'sub_friends_screen/friend_actions.dart';
@@ -19,7 +20,6 @@ import 'services/db_utils.dart';
 import 'services/review_counter.dart';
 import 'services/ube_provider.dart';
 import 'services/accept_provided_reviews.dart';
-import '/sub_friends_screen/friends_delete.dart';
 
 // Canonical status codes
 const int statusRequesterSent = 0; // FR-ASKED (requester)
@@ -31,7 +31,9 @@ const int statusProvided = 5; // provider has shared reviews (local marker)
 const int statusRvDeclined =
     6; // provider declined review request (recipient marker)
 const int statusDeclined = 8;
-const int statusUnknown = 9;
+const int statusFriendDeleted =
+    9; // friend deleted relationship (notification to other user)
+const int statusUnknown = 10;
 const int statusPendingDelete = 99;
 
 // TTL for re-checking rvCount (seconds)
@@ -60,6 +62,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
+    _checkMailbox(); // Check mailbox for pending requests
     _subscribeToFriends();
   }
 
@@ -67,6 +70,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void dispose() {
     _sub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkMailbox() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) {
+      return;
+    }
+
+    final String normalizedEmail = normalizeEmailForPath(
+      user.email!.toLowerCase(),
+    );
+
+    try {
+      // Process any pending mailbox requests
+      await processUserMailbox(user.uid, normalizedEmail);
+      // The _subscribeToFriends() listener will automatically
+      // pick up the updated friend stubs and refresh the UI
+    } catch (e) {
+      // Silent failure with logging
+      debugPrint('Error processing mailbox in friends screen: $e');
+    }
   }
 
   Future<void> _subscribeToFriends() async {
@@ -217,11 +241,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     }
 
                     // Parse filters array
-                    final List<Map<String, String?>> filters = <Map<String, String?>>[];
+                    final List<Map<String, String?>> filters =
+                        <Map<String, String?>>[];
                     if (rrMap['filters'] is List) {
-                      for (final dynamic filterItem in rrMap['filters'] as List) {
+                      for (final dynamic filterItem
+                          in rrMap['filters'] as List) {
                         if (filterItem is Map) {
-                          final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+                          final Map<dynamic, dynamic> filterMap =
+                              Map<dynamic, dynamic>.from(filterItem);
                           filters.add(<String, String?>{
                             'country': filterMap['country']?.toString(),
                             'city': filterMap['city']?.toString(),
@@ -493,13 +520,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
           final List<dynamic> filtersList = requestData['filters'] as List;
           for (final dynamic filterItem in filtersList) {
             if (filterItem is Map) {
-              final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+              final Map<dynamic, dynamic> filterMap =
+                  Map<dynamic, dynamic>.from(filterItem);
               final String? country = filterMap['country']?.toString();
               final String? city = filterMap['city']?.toString();
               if (country != null && country.isNotEmpty) {
                 filters.add(<String, String?>{
                   'country': country,
-                  'city': (city == null || city.isEmpty || city == 'none') ? null : city,
+                  'city': (city == null || city.isEmpty || city == 'none')
+                      ? null
+                      : city,
                 });
               }
             }
@@ -886,11 +916,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
           String message;
           if (result.reviewsAccepted > 0 && result.duplicatesSkipped > 0) {
-            message = '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s), ${result.duplicatesSkipped} duplicate(s) skipped';
+            message =
+                '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s), ${result.duplicatesSkipped} duplicate(s) skipped';
           } else if (result.reviewsAccepted > 0) {
-            message = '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s)';
+            message =
+                '${AppStr.accept} — accepted ${result.reviewsAccepted} review(s)';
           } else if (result.duplicatesSkipped > 0) {
-            message = '${AppStr.accept} — all ${result.duplicatesSkipped} review(s) already received';
+            message =
+                '${AppStr.accept} — all ${result.duplicatesSkipped} review(s) already received';
           } else {
             message = '${AppStr.accept} — no reviews to accept';
           }
@@ -951,13 +984,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
             final List<dynamic> filtersList = requestData['filters'] as List;
             for (final dynamic filterItem in filtersList) {
               if (filterItem is Map) {
-                final Map<dynamic, dynamic> filterMap = Map<dynamic, dynamic>.from(filterItem);
+                final Map<dynamic, dynamic> filterMap =
+                    Map<dynamic, dynamic>.from(filterItem);
                 final String? country = filterMap['country']?.toString();
                 final String? city = filterMap['city']?.toString();
                 if (country != null && country.isNotEmpty) {
                   filters.add(<String, String?>{
                     'country': country.trim(),
-                    'city': (city == null || city.isEmpty || city == 'none') ? null : city.trim(),
+                    'city': (city == null || city.isEmpty || city == 'none')
+                        ? null
+                        : city.trim(),
                   });
                 }
               }
@@ -1030,7 +1066,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
             // Check if review matches ANY filter (OR logic)
             bool matchesAnyFilter = false;
             for (final Map<String, String?> filter in filters) {
-              final String fCountry = (filter['country'] ?? '').trim().toLowerCase();
+              final String fCountry = (filter['country'] ?? '')
+                  .trim()
+                  .toLowerCase();
               final String fCity = (filter['city'] ?? '').trim().toLowerCase();
 
               // Country must match if specified
@@ -1049,7 +1087,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
             if (matchesAnyFilter) {
               totalMatches += 1;
               if (toProvide.length < 50) {
-                final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(rv);
+                final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(
+                  rv,
+                );
                 item['key'] = keyStr;
                 toProvide.add(item);
               }
@@ -1542,8 +1582,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final FriendEntry? reloaded = _friendByUid[_selectedUid];
       if (reloaded != null) {
         setState(() {
-          reloaded.fsc =
-              statusUnknown; // 9 - actor declines, sets to unknown/not interested
+          reloaded.fsc = statusDeclined; // Actor declines, sets to declined
           reloaded.review = null;
           _selectedUid = null;
         });
@@ -1695,22 +1734,42 @@ class _FriendsScreenState extends State<FriendsScreen> {
         await scanMailboxForFromUid(myNormalized, friendUid);
       }
 
-      final FriendsDelete fd = FriendsDelete();
       bool parentDeleteSucceeded = false;
       try {
-        if (me.isNotEmpty) {
-          await fd.performFinalizeAndDelete(meUid: me, friendUid: friendUid);
+        if (me.isNotEmpty && friendUid.isNotEmpty) {
+          // Delete your own friend stub
+          await FirebaseDatabase.instance
+              .ref('users/$me/friends/$friendUid')
+              .remove();
           parentDeleteSucceeded = true;
-        } else {
-          final Map<String, dynamic> parentPatch = <String, dynamic>{
-            'users/$me/friends/$friendUid': null,
-            'users/$friendUid/friends/$me': null,
-          };
-          try {
-            await rootRef.update(parentPatch);
-            parentDeleteSucceeded = true;
-          } catch (_) {
-            parentDeleteSucceeded = false;
+
+          // Send status code 9 notification to the other user via their mailbox
+          // This tells them the friend relationship was deleted
+          if (friendNormalized != null && friendNormalized.isNotEmpty) {
+            try {
+              final String nowIso = DateTime.now().toUtc().toIso8601String();
+              final String myDisplayName =
+                  currentUser?.displayName ?? myEmail ?? me;
+
+              // Use push() to generate a unique key instead of potentially conflicting timestamp
+              final DatabaseReference notificationRef = FirebaseDatabase
+                  .instance
+                  .ref('users_by_email/$friendNormalized/requests')
+                  .push();
+
+              await notificationRef.set({
+                'statusCode': 9,
+                'fromUid': me,
+                'type': 'friend_deleted',
+                'displayName': myDisplayName,
+                'email': myEmail ?? me,
+                'createdAt': nowIso,
+                'clientRequestId': notificationRef.key ?? nowIso,
+              });
+            } catch (e) {
+              // Non-fatal, continue with deletion
+              debugPrint('Warning: Could not send deletion notification: $e');
+            }
           }
         }
       } catch (_) {
@@ -1719,32 +1778,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
       int mailboxDeleted = 0;
       if (mailboxPaths.isNotEmpty) {
-        final Map<String, dynamic> mailboxPatch = <String, dynamic>{};
+        // Delete mailbox entries individually instead of multi-path update
         for (final String p in mailboxPaths) {
-          mailboxPatch[p] = null;
-        }
-        try {
-          await rootRef.update(mailboxPatch);
-          for (final String p in mailboxPaths) {
-            try {
-              final DataSnapshot snap = await rootRef.child(p).get();
-              if (!snap.exists) {
-                mailboxDeleted += 1;
-              }
-            } catch (_) {}
-          }
-        } catch (_) {
-          mailboxDeleted = 0;
-          for (final String p in mailboxPaths) {
-            try {
-              await rootRef.child(p).remove();
-              try {
-                final DataSnapshot snap = await rootRef.child(p).get();
-                if (!snap.exists) {
-                  mailboxDeleted += 1;
-                }
-              } catch (_) {}
-            } catch (_) {}
+          try {
+            await FirebaseDatabase.instance.ref(p).remove();
+            mailboxDeleted += 1;
+          } catch (_) {
+            // Continue even if one fails
           }
         }
       }
@@ -1835,6 +1875,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final FriendEntry? selected = _friendByUid[_selectedUid];
     if (selected == null) {
       Navigator.pushNamed(context, '/friend-request');
+      return;
+    }
+
+    // Only allow review requests for accepted friends (statusCode 1)
+    if (selected.fsc != statusAccepted) {
       return;
     }
 

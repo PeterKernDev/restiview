@@ -16,6 +16,7 @@ This document is a concise developer-oriented overview of the RestiView Flutter 
   - class AppStr { static const String strName = "String name"; }
 - Avoid deprecated `value` on form fields; use `initialValue` instead to set initial form field values (deprecated after v3.33.0-1.0.pre).
 - Avoid `withOpacity`; prefer `.withValues()` to avoid precision loss when adjusting colors.
+- We do not use any Cloud functions and we do not want to use them in the future, so do not propose or suggest any Cloud based solution.
 - Always use braced blocks for bodies of `for`/`if`/`while`, and expand arrow or single-line callbacks into full blocks whenever the body performs more than one action or touches context/state.
   - Guard any async gaps with a `mounted` check before using `context`, `ScaffoldMessenger`, or `setState`.
 - Do not use `MaterialStateProperty` (deprecated in this project). Use the recommended replacement patterns for button and style state handling.

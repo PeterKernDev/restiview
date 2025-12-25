@@ -5,6 +5,7 @@
 //
 // Change: removed accepted-friends counter entirely (no reads or display).
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -15,9 +16,11 @@ import 'sub_preview_screen/review_context.dart';
 import 'services/session_cache.dart';
 import 'services/db_utils.dart';
 import 'services/review_info_builder.dart';
+import 'services/mailbox_helper.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'constants/restiview_constants.dart';
 
 class TopScreen extends StatefulWidget {
   const TopScreen({super.key});
@@ -28,25 +31,123 @@ class TopScreen extends StatefulWidget {
 
 class _TopScreenState extends State<TopScreen> {
   bool _isLoading = false;
-  bool _acceptsFriends = true; // whether this user accepts friends (controls button enabled)
-    bool _hasRequestedReviews = false; // whether user has any requested reviews
-    bool _hasFriends = false; // whether user has any friends
+  bool _acceptsFriends =
+      true; // whether this user accepts friends (controls button enabled)
+  bool _hasRequestedReviews = false; // whether user has any requested reviews
+  bool _hasFriends = false; // whether user has any friends
+  bool _hasPendingMailboxRequests =
+      false; // whether user has pending friend/review requests
+  Timer? _mailboxCheckTimer; // Periodic timer to check mailbox
 
   @override
   void initState() {
     super.initState();
     _loadAcceptsFriends();
-     _checkRequestedReviews();
-     _checkFriends();
+    _checkRequestedReviews();
+    _checkFriends();
+    _checkMailbox(); // Check mailbox on screen open
+    _startMailboxTimer(); // Start periodic mailbox checks
   }
+
+  @override
+  void dispose() {
+    _mailboxCheckTimer?.cancel();
+    super.dispose();
+  }
+
   void _checkFriends() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final friendsRef = FirebaseDatabase.instance.ref().child('users').child(user.uid).child('friends');
+    final friendsRef = FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .child(user.uid)
+        .child('friends');
     final snapshot = await friendsRef.get();
-    setState(() {
-      _hasFriends = snapshot.exists && (snapshot.value != null);
-    });
+    if (mounted) {
+      setState(() {
+        _hasFriends = snapshot.exists && (snapshot.value != null);
+      });
+    }
+  }
+
+  void _startMailboxTimer() {
+    // Start periodic timer to check mailbox every N seconds
+    // mailboxCheckIntervalSeconds is 30 for testing, 600 for production
+    _mailboxCheckTimer = Timer.periodic(
+      Duration(seconds: mailboxCheckIntervalSeconds),
+      (Timer timer) {
+        _checkMailbox();
+      },
+    );
+  }
+
+  Future<void> _checkMailbox() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) {
+      return;
+    }
+
+    final String normalizedEmail = normalizeEmailForPath(
+      user.email!.toLowerCase(),
+    );
+
+    try {
+      // Process any pending mailbox requests
+      bool hasPending = await hasMailboxRequests(normalizedEmail);
+      if (hasPending) {
+        await processUserMailbox(user.uid, normalizedEmail);
+      }
+
+      // After processing mailbox, check if there are any pending friend actions
+      // (unaccepted friend requests or review requests)
+      bool hasPendingActions = await _hasPendingFriendActions(user.uid);
+
+      if (mounted) {
+        setState(() {
+          _hasPendingMailboxRequests = hasPendingActions;
+        });
+      }
+    } catch (e) {
+      // Silent failure with logging
+      debugPrint('Error checking mailbox: $e');
+    }
+  }
+
+  /// Check if user has any pending friend actions requiring attention
+  /// Returns true if there are friend requests (statusCode=2) or review requests (statusCode=3)
+  Future<bool> _hasPendingFriendActions(String uid) async {
+    try {
+      final DatabaseReference friendsRef = FirebaseDatabase.instance.ref(
+        'users/$uid/friends',
+      );
+      final DataSnapshot snapshot = await friendsRef.get();
+
+      if (!snapshot.exists || snapshot.value == null) {
+        return false;
+      }
+
+      if (snapshot.value is! Map) {
+        return false;
+      }
+
+      final Map<dynamic, dynamic> friends = snapshot.value as Map;
+
+      // Check if any friend has statusCode 2 (FR-WANTED) or 3 (RV-WANTED)
+      for (final entry in friends.values) {
+        if (entry is Map) {
+          final statusCode = entry['statusCode'];
+          if (statusCode == 2 || statusCode == 3) {
+            return true; // Found a pending action
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking pending friend actions: $e');
+      return false;
+    }
   }
 
   Future<void> _checkRequestedReviews() async {
@@ -56,12 +157,17 @@ class _TopScreenState extends State<TopScreen> {
     }
 
     try {
-      final DatabaseReference requestedRef = FirebaseDatabase.instance.ref('users/$userId/reviews_requested');
+      final DatabaseReference requestedRef = FirebaseDatabase.instance.ref(
+        'users/$userId/reviews_requested',
+      );
       final DataSnapshot snapshot = await requestedRef.get();
-      
+
       if (mounted) {
         setState(() {
-          _hasRequestedReviews = snapshot.exists && snapshot.value is Map && (snapshot.value as Map).isNotEmpty;
+          _hasRequestedReviews =
+              snapshot.exists &&
+              snapshot.value is Map &&
+              (snapshot.value as Map).isNotEmpty;
         });
       }
     } catch (e) {
@@ -83,7 +189,9 @@ class _TopScreenState extends State<TopScreen> {
     try {
       bool accepts = true;
       try {
-        final DataSnapshot s7 = await FirebaseDatabase.instance.ref('users/$userId/userSettings7').get();
+        final DataSnapshot s7 = await FirebaseDatabase.instance
+            .ref('users/$userId/userSettings7')
+            .get();
         if (s7.exists && s7.value != null) {
           final Object? v = s7.value;
           if (v is bool) {
@@ -108,13 +216,14 @@ class _TopScreenState extends State<TopScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStr.loadFriendsError}: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.loadFriendsError}: $e')));
     }
   }
 
-  Future<void> _signOut() async {    // Update review_info before signing out (regardless of daily limit)
+  Future<void> _signOut() async {
+    // Update review_info before signing out (regardless of daily limit)
     final userId = FirebaseAuth.instance.currentUser?.uid;
     final userEmail = SessionCache.userEmail;
     if (userId != null && userEmail.isNotEmpty) {
@@ -134,9 +243,9 @@ class _TopScreenState extends State<TopScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStr.signOutFailed}: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.signOutFailed}: $e')));
       return;
     }
 
@@ -149,7 +258,9 @@ class _TopScreenState extends State<TopScreen> {
   void _handleViewRequestedReviews() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ReviewListScreen(mode: 'requested')),
+      MaterialPageRoute(
+        builder: (_) => const ReviewListScreen(mode: 'requested'),
+      ),
     );
   }
 
@@ -167,14 +278,16 @@ class _TopScreenState extends State<TopScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppStr.userNotAuthenticated)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(AppStr.userNotAuthenticated)));
       }
       return;
     }
 
-    final DatabaseReference reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
+    final DatabaseReference reviewsRef = FirebaseDatabase.instance.ref(
+      'users/$userId/reviews',
+    );
 
     try {
       final DataSnapshot snapshot = await reviewsRef.get();
@@ -183,7 +296,9 @@ class _TopScreenState extends State<TopScreen> {
         if (snapshot.exists && snapshot.value is Map) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ReviewListScreen(mode: 'list')),
+            MaterialPageRoute(
+              builder: (_) => const ReviewListScreen(mode: 'list'),
+            ),
           );
         } else {
           showDialog(
@@ -191,7 +306,10 @@ class _TopScreenState extends State<TopScreen> {
             builder: (_) {
               return AlertDialog(
                 title: Text(AppStr.noReviewsTitle, style: AppFonts.bold),
-                content: Text(AppStr.noReviewsMessage, style: AppFonts.standard),
+                content: Text(
+                  AppStr.noReviewsMessage,
+                  style: AppFonts.standard,
+                ),
                 actions: <Widget>[
                   TextButton(
                     onPressed: () {
@@ -229,9 +347,7 @@ class _TopScreenState extends State<TopScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => GeneralScreen(context: newContext),
-      ),
+      MaterialPageRoute(builder: (_) => GeneralScreen(context: newContext)),
     );
   }
 
@@ -246,12 +362,19 @@ class _TopScreenState extends State<TopScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String displayName = SessionCache.userName.isNotEmpty ? SessionCache.userName : AppStr.anonUser;
+    final String displayName = SessionCache.userName.isNotEmpty
+        ? SessionCache.userName
+        : AppStr.anonUser;
 
-    // friendsLabel no longer includes a count
-    final String friendsLabel = AppStr.friendsUpper;
+    // Add (!) to friends label if there are pending mailbox requests
+    String friendsLabel = AppStr.friendsUpper;
+    if (_hasPendingMailboxRequests) {
+      friendsLabel = '$friendsLabel (!)';
+    }
 
-    final Color friendsBg = _acceptsFriends ? AppColors.ochre : AppColors.greyShade400;
+    final Color friendsBg = _acceptsFriends
+        ? AppColors.ochre
+        : AppColors.greyShade400;
     final Color friendsFg = _acceptsFriends ? Colors.black87 : Colors.black38;
 
     return Scaffold(
@@ -276,7 +399,10 @@ class _TopScreenState extends State<TopScreen> {
                   const SizedBox(height: 48),
                   Text(
                     AppStr.restaurantReviews,
-                    style: AppFonts.bold.copyWith(fontSize: 24, color: AppColors.red),
+                    style: AppFonts.bold.copyWith(
+                      fontSize: 24,
+                      color: AppColors.red,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
@@ -285,7 +411,9 @@ class _TopScreenState extends State<TopScreen> {
                       backgroundColor: AppColors.ochre,
                       foregroundColor: Colors.black87,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _startNewReview,
                     child: Text(AppStr.addReview, style: AppFonts.standard),
@@ -296,7 +424,9 @@ class _TopScreenState extends State<TopScreen> {
                       backgroundColor: AppColors.ochre,
                       foregroundColor: Colors.black87,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _isLoading ? null : _handleViewReviews,
                     child: _isLoading
@@ -311,13 +441,22 @@ class _TopScreenState extends State<TopScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _hasRequestedReviews ? AppColors.ochre : AppColors.greyShade400,
+                        backgroundColor: _hasRequestedReviews
+                            ? AppColors.ochre
+                            : AppColors.greyShade400,
                         foregroundColor: Colors.black87,
                         minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      onPressed: _hasRequestedReviews ? _handleViewRequestedReviews : null,
-                      child: Text(AppStr.friendReviewsButton, style: AppFonts.standard),
+                      onPressed: _hasRequestedReviews
+                          ? _handleViewRequestedReviews
+                          : null,
+                      child: Text(
+                        AppStr.friendReviewsButton,
+                        style: AppFonts.standard,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -326,10 +465,15 @@ class _TopScreenState extends State<TopScreen> {
                       backgroundColor: friendsBg,
                       foregroundColor: friendsFg,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _acceptsFriends ? _openFriends : null,
-                    child: Text(friendsLabel, style: AppFonts.standard.copyWith(color: friendsFg)),
+                    child: Text(
+                      friendsLabel,
+                      style: AppFonts.standard.copyWith(color: friendsFg),
+                    ),
                   ),
                 ],
               ),
@@ -344,15 +488,25 @@ class _TopScreenState extends State<TopScreen> {
                 children: <Widget>[
                   ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.settings, color: Colors.white),
-                    label: Text(AppStr.settings, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    label: Text(
+                      AppStr.settings,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.grey,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -361,12 +515,17 @@ class _TopScreenState extends State<TopScreen> {
                       backgroundColor: Colors.lightBlueAccent,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: () {
                       Navigator.pushNamed(context, '/help');
                     },
-                    child: Text(AppStr.help, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    child: Text(
+                      AppStr.help,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
@@ -374,10 +533,15 @@ class _TopScreenState extends State<TopScreen> {
                       backgroundColor: AppColors.red,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: _signOut,
-                    child: Text(AppStr.signOut, style: AppFonts.standard.copyWith(color: Colors.white)),
+                    child: Text(
+                      AppStr.signOut,
+                      style: AppFonts.standard.copyWith(color: Colors.white),
+                    ),
                   ),
                 ],
               ),
