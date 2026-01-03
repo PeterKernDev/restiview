@@ -115,6 +115,7 @@
             "mailboxNormalized": { ".validate": "newData.isString()" },
             "pendingDeleteBy": { ".validate": "newData.isString()" },
             "pendingDeleteAt": { ".validate": "newData.isString()" },
+            "auditEventId": { ".validate": "newData.isString()" },
 
             "___validateAcceptReject": {
               ".write": false,
@@ -144,7 +145,7 @@
         "reviews_requested": {
           "$reviewId": {
             ".read": "auth != null && auth.uid === $uid",
-            ".write": "auth != null && auth.uid === $uid"
+            ".write": "auth != null && (auth.uid === $uid || newData.child('owner_email').exists())"
           }
         },
 
@@ -186,6 +187,16 @@
           ".read": "auth != null",
           ".write": "auth != null",
           ".validate": "newData.hasChildren(['action','actor','target','at']) &&\n             newData.child('action').isString() &&\n             newData.child('actor').isString() &&\n             newData.child('actor').val() === auth.uid &&\n             newData.child('target').isString() &&\n             newData.child('at').isString()"
+        }
+      }
+    },
+
+    "audit_info": {
+      "request_events": {
+        "$eventId": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['timestamp','eventType','actorUid','targetUid']) &&\n             newData.child('timestamp').isString() &&\n             newData.child('eventType').isString() &&\n             newData.child('actorUid').isString() &&\n             newData.child('targetUid').isString()"
         }
       }
     }

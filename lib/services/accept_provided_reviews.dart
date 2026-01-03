@@ -96,10 +96,10 @@ Future<Map<String, Map<String, dynamic>>> loadProvidedReviewsMetadata({
         if (metaProviderUid == providerUid) {
           result[providerUid] = <String, dynamic>{
             'requestId': requestId,
-            'providerMessage': meta['provider-message']?.toString() ?? '',
-            'rqCount': (meta['rqCount'] is int)
-                ? meta['rqCount'] as int
-                : int.tryParse(meta['rqCount']?.toString() ?? '') ?? 0,
+            'providerMessage': meta['comment']?.toString() ?? '',
+            'rqCount': (meta['count'] is int)
+                ? meta['count'] as int
+                : int.tryParse(meta['count']?.toString() ?? '') ?? 0,
           };
           break;
         }
@@ -127,7 +127,7 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
 
     // 1. Read all reviews from source
     final DatabaseReference reviewsRef = FirebaseDatabase.instance.ref(
-      '$sourceBasePath/reviews',
+      '$sourceBasePath/reviews_requested',
     );
     final DataSnapshot reviewsSnap = await reviewsRef.get();
 
@@ -145,9 +145,9 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
     // 2. Get provider's email to use as owner_email
     String providerEmail = '';
     try {
-      final DataSnapshot providerEmailSnap = await FirebaseDatabase.instance.ref(
-        'public_profiles/$providerUid/email',
-      ).get();
+      final DataSnapshot providerEmailSnap = await FirebaseDatabase.instance
+          .ref('public_profiles/$providerUid/email')
+          .get();
       if (providerEmailSnap.exists && providerEmailSnap.value is String) {
         providerEmail = (providerEmailSnap.value as String).trim();
       }
@@ -155,7 +155,7 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
 
     // 3. Prepare destination writes (flat structure under reviews_requested)
     final String destBasePath = 'users/$myUid/reviews_requested';
-    
+
     final Map<String, dynamic> updates = <String, dynamic>{};
     int reviewsAccepted = 0;
     int duplicatesSkipped = 0;
@@ -176,7 +176,9 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
 
       if (!existingSnap.exists) {
         // Ensure owner_email field is present for filtering
-        final Map<String, dynamic> reviewMap = Map<String, dynamic>.from(reviewData);
+        final Map<String, dynamic> reviewMap = Map<String, dynamic>.from(
+          reviewData,
+        );
         if (providerEmail.isNotEmpty && !reviewMap.containsKey('owner_email')) {
           reviewMap['owner_email'] = providerEmail;
         }

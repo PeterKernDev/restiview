@@ -1,6 +1,7 @@
 // lib/services/ube_provider.dart
 // Helper service to build and perform provider-side "heavy copy" (UBE).
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 // import 'package:flutter/rendering.dart';
 import 'db_utils.dart';
 
@@ -20,14 +21,14 @@ Future<Map<String, dynamic>> buildProvideUpdate({
   required String providerUid,
   required String requesterUid,
   required List<Map<dynamic, dynamic>> reviews,
-  required String providerCommentShort,
 }) async {
   if (reviews.isEmpty) {
     return <String, dynamic>{};
   }
 
   // Enforce strict limit of 50 reviews
-  final List<Map<dynamic, dynamic>> reviewsToProvide = reviews.length > kProvideMaxReviews
+  final List<Map<dynamic, dynamic>> reviewsToProvide =
+      reviews.length > kProvideMaxReviews
       ? reviews.sublist(0, kProvideMaxReviews)
       : reviews;
 
@@ -35,15 +36,23 @@ Future<Map<String, dynamic>> buildProvideUpdate({
   // Determine requester's normalized email so we can write under users_by_email/<norm>/requests
   String requesterEmail = '';
   try {
-    final DataSnapshot pubEmailSnap = await rootRef.child('public_profiles/$requesterUid/email').get();
-    if (pubEmailSnap.exists && pubEmailSnap.value is String && (pubEmailSnap.value as String).trim().isNotEmpty) {
+    final DataSnapshot pubEmailSnap = await rootRef
+        .child('public_profiles/$requesterUid/email')
+        .get();
+    if (pubEmailSnap.exists &&
+        pubEmailSnap.value is String &&
+        (pubEmailSnap.value as String).trim().isNotEmpty) {
       requesterEmail = (pubEmailSnap.value as String).trim();
     }
   } catch (_) {}
   if (requesterEmail.isEmpty) {
     try {
-      final DataSnapshot userEmailSnap = await rootRef.child('users/$requesterUid/email').get();
-      if (userEmailSnap.exists && userEmailSnap.value is String && (userEmailSnap.value as String).trim().isNotEmpty) {
+      final DataSnapshot userEmailSnap = await rootRef
+          .child('users/$requesterUid/email')
+          .get();
+      if (userEmailSnap.exists &&
+          userEmailSnap.value is String &&
+          (userEmailSnap.value as String).trim().isNotEmpty) {
         requesterEmail = (userEmailSnap.value as String).trim();
       }
     } catch (_) {}
@@ -58,57 +67,85 @@ Future<Map<String, dynamic>> buildProvideUpdate({
   }
 
   // Use a client request ID based on timestamp for the requests collection
-  final String clientRequestId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String clientRequestId = DateTime.now().millisecondsSinceEpoch
+      .toString();
   final String requestId = clientRequestId;
-
-  final String requestBasePath = 'users_by_email/$norm/requests/$requestId';
-  final String metaPath = '$requestBasePath/meta';
-  final String reviewsBase = '$requestBasePath/reviews';
 
   final Map<String, dynamic> updates = <String, dynamic>{};
 
-  // Top-level request fields (required by security rules)
+  // Write reviews to mailbox - PK4 will auto-process them to reviews_requested
+  final String requestBasePath = 'users_by_email/$norm/requests/$requestId';
+  final String destBasePath = '$requestBasePath/reviews_requested';
+
+  // Get provider's email to set as owner_email for filtering
+  String providerEmail = '';
+  try {
+    final DataSnapshot providerEmailSnap = await rootRef
+        .child('public_profiles/$providerUid/email')
+        .get();
+    if (providerEmailSnap.exists && providerEmailSnap.value is String) {
+      providerEmail = (providerEmailSnap.value as String).trim();
+    }
+  } catch (_) {}
+
+  debugPrint(
+    'DEBUG buildProvideUpdate: providerUid=$providerUid, providerEmail=$providerEmail, requesterUid=$requesterUid',
+  );
+
+  // Copy each review (strip photos) to mailbox
+  for (final Map<dynamic, dynamic> r in reviewsToProvide) {
+    String destKey = '';
+    try {
+      if (r.containsKey('key') &&
+          r['key'] != null &&
+          r['key'].toString().isNotEmpty) {
+        destKey = r['key'].toString();
+      }
+    } catch (_) {
+      destKey = '';
+    }
+    if (destKey.isEmpty) {
+      destKey = safePushKey(
+        rootRef.child('users').child(requesterUid).child('reviews_requested'),
+      );
+    }
+
+    final Map<String, dynamic> clean = stripPhotosFromReview(
+      Map<String, dynamic>.from(r),
+    );
+    clean.remove('key');
+    // Ensure owner_email field is present for filtering
+    if (providerEmail.isNotEmpty && !clean.containsKey('owner_email')) {
+      clean['owner_email'] = providerEmail;
+    }
+    debugPrint(
+      'DEBUG: Review $destKey has owner_email: ${clean.containsKey('owner_email')}, value: ${clean['owner_email']}',
+    );
+    // Remove financial information: set cost to empty/blank
+    clean['cost'] = '';
+
+    updates['$destBasePath/$destKey'] = clean;
+  }
+
+  // Create mailbox notification (statusCode=5) - reviews will be auto-processed
   updates['$requestBasePath/fromUid'] = providerUid;
-  updates['$requestBasePath/statusCode'] = 5; // RV-PROVIDED
+  updates['$requestBasePath/statusCode'] = 5; // RV-PROVIDED (auto-process)
   updates['$requestBasePath/createdAt'] = nowIso;
   updates['$requestBasePath/clientRequestId'] = clientRequestId;
   updates['$requestBasePath/type'] = 'review_provided';
 
-  // Meta: provider details
-  updates[metaPath] = <String, dynamic>{
-    'provider-message': (providerCommentShort.isNotEmpty) ? providerCommentShort : '',
+  // Store metadata in mailbox notification
+  updates['$requestBasePath/meta'] = <String, dynamic>{
     'rqCount': reviewsToProvide.length,
     'providerUid': providerUid,
-    'providedAt': nowIso,
+    'deliveredAt': nowIso,
   };
 
-  // Copy each review (strip photos) into the requested_reviews collection
-  for (final Map<dynamic, dynamic> r in reviewsToProvide) {
-      String destKey = '';
-      try {
-        if (r.containsKey('key') && r['key'] != null && r['key'].toString().isNotEmpty) {
-          destKey = r['key'].toString();
-        }
-      } catch (_) {
-        destKey = '';
-      }
-      if (destKey.isEmpty) {
-        destKey = safePushKey(rootRef.child('users_by_email').child(norm).child('requests').child(requestId).child('reviews'));
-      }
-
-  final Map<String, dynamic> clean = stripPhotosFromReview(Map<String, dynamic>.from(r));
-  clean.remove('key');
-  // Add provenance fields so security rules can validate the provider identity and time
-  clean['providedByUid'] = providerUid;
-  clean['providedAt'] = nowIso;
-
-  updates['$reviewsBase/$destKey'] = clean;
-  }
-
-  // Friend stub update: set provider-side friend stub to accepted (1)
-  // Note: requester will update their own stub when they process the mailbox notification
-  final String providerFriendPathBase = 'users/$providerUid/friends/$requesterUid';
-  updates['$providerFriendPathBase/statusCode'] = 1; // FRIEND / accepted
+  // Update provider's friend stub back to accepted (statusCode=1)
+  // Provider goes back to FRIEND status immediately after delivering reviews
+  final String providerFriendPathBase =
+      'users/$providerUid/friends/$requesterUid';
+  updates['$providerFriendPathBase/statusCode'] = 1;
   updates['$providerFriendPathBase/updatedAt'] = nowIso;
 
   return updates;
@@ -116,7 +153,10 @@ Future<Map<String, dynamic>> buildProvideUpdate({
 
 /// Execute a prepared multi-path update map against [rootRef].
 /// Throws any exception returned by the underlying update call.
-Future<void> performProvide({required DatabaseReference rootRef, required Map<String, dynamic> updates}) async {
+Future<void> performProvide({
+  required DatabaseReference rootRef,
+  required Map<String, dynamic> updates,
+}) async {
   if (updates.isEmpty) {
     return;
   }

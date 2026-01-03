@@ -6,6 +6,8 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'review_counter.dart'; // For countMatchingReviews
+import 'friend_event_audit.dart'; // For audit logging
+import 'db_utils.dart'; // For normalizeEmailForPath
 
 /// Result of mailbox processing operation
 class MailboxProcessResult {
@@ -136,7 +138,7 @@ Future<void> _writeRequestAuditEvent({
 
 // Main mailbox processing function
 // Processes all pending requests in users_by_email/<normalizedMailbox>/requests
-// Handles all 6 status codes: 0,1,3,5,6,8
+// Handles all 7 status codes: 0,1,3,5,6,7,8
 Future<MailboxProcessResult> processUserMailbox(
   String myUid,
   String normalizedMailbox,
@@ -263,8 +265,8 @@ Future<MailboxProcessResult> processUserMailbox(
         // - statusCode=0: incoming friend request
         // - statusCode=1: friend acceptance notification
         // - statusCode=8: friend decline notification
-        // - statusCode=3: review request
-        // - statusCode=5: reviews provided notification
+        // - statusCode=3: review request notification
+        // - statusCode=5: reviews provided notification (auto-copy to reviews_requested)
         // - statusCode=6: review request declined notification
 
         if (statusCode == 1) {
@@ -279,17 +281,26 @@ Future<MailboxProcessResult> processUserMailbox(
           };
           await FirebaseDatabase.instance.ref().update(atomic);
 
-          // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Friend request accepted',
-            fromUid: fromUid,
-            toUid: myUid,
-          );
-
           notificationsProcessed++;
         } else if (statusCode == 8) {
           // This is a friend decline notification
-          // Update my existing friend stub to declined status
+          // Check if I already have statusCode=9 for this friend (I was the instigator)
+          // If so, skip processing this mailbox - statusCode=9 takes precedence
+          final DataSnapshot existingStub = await FirebaseDatabase.instance
+              .ref('users/$myUid/friends/$fromUid/statusCode')
+              .get();
+          
+          if (existingStub.exists && existingStub.value == 9) {
+            // I was the instigator of decline, don't overwrite with statusCode=8
+            debugPrint('SKIP: Ignoring statusCode=8 mailbox - I have statusCode=9 (instigator)');
+            await FirebaseDatabase.instance
+                .ref('users_by_email/$normalizedMailbox/requests/$reqId')
+                .remove();
+            notificationsProcessed++;
+            continue;
+          }
+          
+          // Update my existing friend stub to declined status (I was the recipient)
           final Map<String, dynamic> atomic = <String, dynamic>{
             'users/$myUid/friends/$fromUid/statusCode': 8,
             'users/$myUid/friends/$fromUid/accepted': false,
@@ -310,21 +321,65 @@ Future<MailboxProcessResult> processUserMailbox(
         } else if (statusCode == 9) {
           // This is a friend deletion notification
           // The other user deleted their friend stub, so update mine to declined
-          final Map<String, dynamic> atomic = <String, dynamic>{
-            'users/$myUid/friends/$fromUid/statusCode': 8,
-            'users/$myUid/friends/$fromUid/accepted': false,
-            'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
-                .toIso8601String(),
-            'users_by_email/$normalizedMailbox/requests/$reqId': null,
-          };
-          await FirebaseDatabase.instance.ref().update(atomic);
+          
+          // Check if there's already a friend stub - if it exists and has a different
+          // status (e.g., a newer friend request), skip processing this stale deletion
+          bool shouldProcess = true;
+          try {
+            final DataSnapshot existingStub = await FirebaseDatabase.instance
+                .ref('users/$myUid/friends/$fromUid/statusCode')
+                .get();
+            if (existingStub.exists) {
+              final int existingStatus = existingStub.value is int
+                  ? existingStub.value as int
+                  : int.tryParse(existingStub.value?.toString() ?? '') ?? -1;
+              // If there's already a friend request (status 0 or 2) or accepted (1),
+              // don't overwrite it with this stale deletion notification
+              if (existingStatus == 0 ||
+                  existingStatus == 1 ||
+                  existingStatus == 2) {
+                shouldProcess = false;
+                debugPrint(
+                  'Skipping stale deletion notification - newer friend stub exists (status=$existingStatus)',
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('Error checking existing friend stub: $e');
+          }
 
-          // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Friend deleted by other user',
-            fromUid: fromUid,
-            toUid: myUid,
-          );
+          if (shouldProcess) {
+            // Extract auditEventId if present
+            String? auditEventId;
+            try {
+              if (m['auditEventId'] is String) {
+                auditEventId = m['auditEventId'] as String;
+              }
+            } catch (e) {
+              debugPrint('Error extracting auditEventId: $e');
+            }
+
+            final Map<String, dynamic> atomic = <String, dynamic>{
+              'users/$myUid/friends/$fromUid/statusCode': 8,
+              'users/$myUid/friends/$fromUid/accepted': false,
+              'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
+                  .toIso8601String(),
+              'users_by_email/$normalizedMailbox/requests/$reqId': null,
+            };
+
+            // Store auditEventId on friend stub if present
+            if (auditEventId != null && auditEventId.isNotEmpty) {
+              atomic['users/$myUid/friends/$fromUid/auditEventId'] =
+                  auditEventId;
+            }
+
+            await FirebaseDatabase.instance.ref().update(atomic);
+          } else {
+            // Just delete the stale mailbox entry
+            await FirebaseDatabase.instance
+                .ref('users_by_email/$normalizedMailbox/requests/$reqId')
+                .remove();
+          }
 
           notificationsProcessed++;
         } else if (statusCode == 3) {
@@ -398,59 +453,108 @@ Future<MailboxProcessResult> processUserMailbox(
           };
           await FirebaseDatabase.instance.ref().update(atomic);
 
-          // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Review request received',
-            fromUid: fromUid,
-            toUid: myUid,
-            details: 'rvCount: $rvCount',
-          );
-
           reviewRequestsProcessed++;
         } else if (statusCode == 5) {
           // This is a provided reviews notification (RV-PROVIDED)
-          // Extract metadata from mailbox record and store on friend stub
-          int rqCount = 0;
-          String providerMessage = '';
-          String providedAt = '';
+          // Auto-copy reviews from mailbox to reviews_requested
+          String deliveredAt = '';
 
           try {
             if (m['meta'] is Map) {
               final Map<dynamic, dynamic> meta = Map<dynamic, dynamic>.from(
                 m['meta'] as Map,
               );
-              rqCount = (meta['rqCount'] is int)
-                  ? meta['rqCount'] as int
-                  : int.tryParse(meta['rqCount']?.toString() ?? '') ?? 0;
-              providerMessage = meta['provider-message']?.toString() ?? '';
-              providedAt = meta['providedAt']?.toString() ?? '';
+              deliveredAt = meta['deliveredAt']?.toString() ?? '';
             }
           } catch (e) {
             errors.add('Error parsing RV-PROVIDED metadata: $e');
           }
 
-          // Update friend stub to statusCode=5 with metadata from mailbox
+          // Read reviews from mailbox and copy to reviews_requested
+          int copiedCount = 0;
+          int skippedCount = 0;
+          try {
+            final String reviewsPath =
+                'users_by_email/$normalizedMailbox/requests/$reqId/reviews_requested';
+            final DataSnapshot reviewsSnap = await FirebaseDatabase.instance
+                .ref(reviewsPath)
+                .get();
+
+            if (reviewsSnap.exists && reviewsSnap.value is Map) {
+              final Map<dynamic, dynamic> reviews = Map<dynamic, dynamic>.from(
+                reviewsSnap.value as Map,
+              );
+
+              // First, read existing reviews_requested to check for duplicates
+              final DataSnapshot existingSnap = await FirebaseDatabase.instance
+                  .ref('users/$myUid/reviews_requested')
+                  .get();
+
+              final Set<String> existingKeys = <String>{};
+              if (existingSnap.exists && existingSnap.value is Map) {
+                final Map<dynamic, dynamic> existing =
+                    Map<dynamic, dynamic>.from(existingSnap.value as Map);
+                existingKeys.addAll(
+                  existing.keys.map((dynamic k) => k.toString()),
+                );
+              }
+
+              // Copy each review to user's reviews_requested (skip duplicates)
+              for (final MapEntry<dynamic, dynamic> entry in reviews.entries) {
+                final String reviewKey = entry.key.toString();
+                final dynamic reviewData = entry.value;
+
+                if (reviewData is Map) {
+                  // Skip if review already exists
+                  if (existingKeys.contains(reviewKey)) {
+                    skippedCount++;
+                    debugPrint(
+                      'Skipping duplicate review: $reviewKey (already in reviews_requested)',
+                    );
+                    continue;
+                  }
+
+                  // Prepare review map with required modifications
+                  final Map<String, dynamic> reviewMap =
+                      Map<String, dynamic>.from(reviewData);
+
+                  // Ensure owner_email field is present for filtering by provider
+                  if (fromEmail.isNotEmpty &&
+                      !reviewMap.containsKey('owner_email')) {
+                    reviewMap['owner_email'] = fromEmail;
+                  }
+
+                  // Remove financial information: set cost to empty/blank
+                  reviewMap['cost'] = '';
+
+                  final String destPath =
+                      'users/$myUid/reviews_requested/$reviewKey';
+                  await FirebaseDatabase.instance
+                      .ref(destPath)
+                      .set(reviewMap);
+                  copiedCount++;
+                }
+              }
+            }
+          } catch (e) {
+            errors.add('Error copying reviews from mailbox: $e');
+          }
+
+          // Update friend stub back to FRIEND status (statusCode=1)
+          // Set hasNewReviews flag to show (!) indicator
           final Map<String, dynamic> atomic = <String, dynamic>{
-            'users/$myUid/friends/$fromUid/statusCode': 5,
+            'users/$myUid/friends/$fromUid/statusCode': 1,
             'users/$myUid/friends/$fromUid/updatedAt': DateTime.now()
                 .toIso8601String(),
-            'users/$myUid/friends/$fromUid/mailboxReqId': reqId,
-            'users/$myUid/friends/$fromUid/mailboxNormalized':
-                normalizedMailbox,
-            'users/$myUid/friends/$fromUid/providedRequestId': reqId,
-            'users/$myUid/friends/$fromUid/providedRqCount': rqCount,
-            'users/$myUid/friends/$fromUid/comment': providerMessage,
-            'users/$myUid/friends/$fromUid/providedAt': providedAt,
+            'users/$myUid/friends/$fromUid/review_request': null,
+            'users/$myUid/friends/$fromUid/comment': null,
+            'users/$myUid/friends/$fromUid/hasNewReviews': true,
+            'users/$myUid/friends/$fromUid/newReviewsCount': copiedCount,
+            'users/$myUid/friends/$fromUid/duplicatesSkipped': skippedCount,
+            'users/$myUid/friends/$fromUid/newReviewsAt': deliveredAt,
+            'users_by_email/$normalizedMailbox/requests/$reqId': null,
           };
           await FirebaseDatabase.instance.ref().update(atomic);
-
-          // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Review request accepted',
-            fromUid: fromUid,
-            toUid: myUid,
-            details: '$rqCount reviews shared',
-          );
 
           notificationsProcessed++;
         } else if (statusCode == 6) {
@@ -488,7 +592,66 @@ Future<MailboxProcessResult> processUserMailbox(
 
           notificationsProcessed++;
         } else if (statusCode == 0) {
-          // This is an incoming friend request
+          // This is an incoming friend request (FR-ASKED)
+          
+          // PHASE 2: Check if recipient has a statusCode=9 stub for sender (auto-decline protection)
+          final DataSnapshot recipientStubSnap = await FirebaseDatabase.instance
+              .ref('users/$myUid/friends/$fromUid')
+              .get();
+          
+          if (recipientStubSnap.exists && recipientStubSnap.value != null) {
+            final Map<dynamic, dynamic> existingStub = 
+                Map<dynamic, dynamic>.from(recipientStubSnap.value as Map);
+            final int existingStatusCode = existingStub['statusCode'] as int? ?? -1;
+            
+            if (existingStatusCode == 9) {
+              // Recipient has declined this user previously (statusCode=9)
+              // Auto-decline: create statusCode=8 mailbox entry for sender, delete incoming request
+              debugPrint('AUTO-DECLINE: Recipient $myUid has statusCode=9 for sender $fromUid');
+              
+              final String nowIso = DateTime.now().toUtc().toIso8601String();
+              final String autoDeclineReqId = DateTime.now().millisecondsSinceEpoch.toString();
+              
+              // Create statusCode=8 mailbox entry for sender (auto-declined notification)
+              final String senderNormalizedMailbox = normalizeEmailForPath(fromEmail);
+              final Map<String, dynamic> atomic = <String, dynamic>{
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/fromUid': myUid,
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/statusCode': 8,
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/createdAt': nowIso,
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/clientRequestId': autoDeclineReqId,
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/type': 'friend_request_auto_declined',
+                'users_by_email/$senderNormalizedMailbox/requests/$autoDeclineReqId/meta': <String, dynamic>{
+                  'reason': 'recipient_has_declined_stub',
+                  'autoDeclined': true,
+                },
+                // Delete the incoming friend request from recipient's mailbox
+                'users_by_email/$normalizedMailbox/requests/$reqId': null,
+              };
+              
+              await FirebaseDatabase.instance.ref().update(atomic);
+              
+              // Write audit event
+              await writeAutoDeclineEvent(
+                blockedUid: myUid,
+                requesterUid: fromUid,
+                reason: 'recipient_has_declined_stub',
+              );
+              
+              notificationsProcessed++;
+              continue; // Skip normal friend request processing
+            }
+            
+            // If any other friend stub exists (not statusCode=9), just delete the mailbox entry
+            // and don't overwrite the existing stub
+            debugPrint('SKIP: Friend stub already exists with statusCode=$existingStatusCode for $fromUid');
+            await FirebaseDatabase.instance
+                .ref('users_by_email/$normalizedMailbox/requests/$reqId')
+                .remove();
+            notificationsProcessed++;
+            continue;
+          }
+          
+          // Normal friend request processing - no friend stub exists at all
           // Create the recipient's own friend stub (my stub).
           final Map<String, dynamic> recipientStub = <String, dynamic>{
             'statusCode': 2, // FR-WANTED
@@ -507,13 +670,6 @@ Future<MailboxProcessResult> processUserMailbox(
             'users_by_email/$normalizedMailbox/requests/$reqId': null,
           };
           await FirebaseDatabase.instance.ref().update(atomic);
-
-          // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Friend request received',
-            fromUid: fromUid,
-            toUid: myUid,
-          );
 
           friendRequestsProcessed++;
         }

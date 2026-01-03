@@ -76,30 +76,35 @@ class FriendRow extends StatelessWidget {
       List<Map<String, String?>> filters = <Map<String, String?>>[];
 
       if (entry.reviewRequest != null) {
-        if (entry.reviewRequest!.filters != null && entry.reviewRequest!.filters!.isNotEmpty) {
+        if (entry.reviewRequest!.filters != null &&
+            entry.reviewRequest!.filters!.isNotEmpty) {
           // Use new filters array
           filters = entry.reviewRequest!.filters!;
-        } else if (entry.reviewRequest!.filterCountry != null && entry.reviewRequest!.filterCountry!.isNotEmpty) {
+        } else if (entry.reviewRequest!.filterCountry != null &&
+            entry.reviewRequest!.filterCountry!.isNotEmpty) {
           // Fallback to legacy single filter
-          filters = [<String, String?>{
-            'country': entry.reviewRequest!.filterCountry,
-            'city': entry.reviewRequest!.filterCity,
-          }];
+          filters = [
+            <String, String?>{
+              'country': entry.reviewRequest!.filterCountry,
+              'city': entry.reviewRequest!.filterCity,
+            },
+          ];
         }
       } else {
         // Legacy review structure
         final Map<String, String>? legacyFilters = entry.review?.filters;
-        final String? country = (legacyFilters != null && legacyFilters.containsKey('country'))
+        final String? country =
+            (legacyFilters != null && legacyFilters.containsKey('country'))
             ? legacyFilters['country']
             : null;
-        final String? city = (legacyFilters != null && legacyFilters.containsKey('city'))
+        final String? city =
+            (legacyFilters != null && legacyFilters.containsKey('city'))
             ? legacyFilters['city']
             : null;
         if (country != null && country.isNotEmpty) {
-          filters = [<String, String?>{
-            'country': country,
-            'city': city,
-          }];
+          filters = [
+            <String, String?>{'country': country, 'city': city},
+          ];
         }
       }
 
@@ -229,7 +234,8 @@ class FriendRow extends StatelessWidget {
     // Show comment when:
     //  - there is a non-empty comment, AND
     //  - the relationship is not accepted or declined (we hide comments after accept/decline),
-    //    OR the relationship is a review request state (RV-ASKED / RV-WANTS).
+    //    OR the relationship is a review request state (RV-ASKED / RV-WANTS),
+    //    OR the relationship is RV-DECLINED (show decline message from provider).
     // The comment field now stores all types of messages:
     //  - Friend request comments (statusCode 0/2)
     //  - Review request comments (statusCode 3/4)
@@ -242,7 +248,8 @@ class FriendRow extends StatelessWidget {
         : null;
     final bool showReviewComment =
         (entry.status == FriendStatus.rvAsked ||
-        entry.status == FriendStatus.rvWants);
+        entry.status == FriendStatus.rvWants ||
+        entry.status == FriendStatus.rvDeclined); // Also show for RV-DECLINED
     final bool hideComment =
         (entry.status == FriendStatus.accepted ||
         entry.status == FriendStatus.declined);

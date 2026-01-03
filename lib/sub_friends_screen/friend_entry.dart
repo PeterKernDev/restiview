@@ -134,8 +134,10 @@ class FriendEntry {
     // The current user can act when they are the recipient of a friend request (2)
     // or when they have an RV-WANTS/ASKED entry to resolve (3 or 4)
     // or when they need to accept provided reviews (5)
-    // or when they need to acknowledge a declined review request (6).
-    return (fsc == 2 || fsc == 3 || fsc == 4 || fsc == 5 || fsc == 6);
+    // or when they need to acknowledge a declined review request (6)
+    // or when they have an established friend to decline (1)
+    // or when they have sent a friend/review request to retract (0, 4)
+    return (fsc == 0 || fsc == 1 || fsc == 2 || fsc == 3 || fsc == 4 || fsc == 5 || fsc == 6);
   }
 
   static int mapStringStatusToFsc(String s) {

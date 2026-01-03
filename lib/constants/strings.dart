@@ -2,10 +2,11 @@
 // Centralized app strings used across the app.
 // Keep keys stable for localization. Add new keys here as screens/features are added.
 class AppStr {
-    static const String countryMismatchTitle = 'Country Mismatch';
-    static const String countryMismatchBody = 'Your home country in settings does not match your current location. Please check your settings before continuing.';
-    static const String countryMismatchUpdate = 'Update Home Country';
-    static const String countryMismatchContinue = 'Continue Anyway';
+  static const String countryMismatchTitle = 'Country Mismatch';
+  static const String countryMismatchBody =
+      'Your home country in settings does not match your current location. Please check your settings before continuing.';
+  static const String countryMismatchUpdate = 'Update Home Country';
+  static const String countryMismatchContinue = 'Continue Anyway';
   static const String releaseNumber = 'RestiView Release Number : ';
   static const String aboutDescription =
       'RestiView is a simple app which allows you to create and save your own personal restaurant reviews. Build up your own library and history of reviews and then search through to find your favourite restaurant next time you visit 🍽️ or scroll through to find the best place suited for a particular event.';
@@ -50,7 +51,8 @@ class AppStr {
   static const String deleteAccountSignedOut = 'Account deleted and signed out';
   static const String deleteTitle = 'Delete Review?';
   static const String deletePhotosLabel = 'Also delete photos from device';
-  static const String photosWillBeDeleted = 'photos will be permanently deleted from your device';
+  static const String photosWillBeDeleted =
+      'photos will be permanently deleted from your device';
   static const String dinersLabel = 'Diners';
   static const String discardMessage =
       'Going back will discard all unsaved changes. Continue?';
@@ -105,7 +107,8 @@ class AppStr {
   static const String pickDate = 'Pick Date';
   static const String lowStorageTitle = 'Low Storage Space';
   static const String lowStorageMessage = 'You have only';
-  static const String lowStorageMB = 'MB of free space remaining. Saving this review may fail if storage runs out.';
+  static const String lowStorageMB =
+      'MB of free space remaining. Saving this review may fail if storage runs out.';
   static const String continueAnyway = 'Continue Anyway';
   static const String preview = 'PREVIEW';
   static const String previewTitle = 'Restiview – Preview';
@@ -331,8 +334,8 @@ class AppStr {
   static const String mappingWriteFailed = "Failed to ensure email mapping";
   static const String signInRequired = 'Please sign in to continue';
   static const String cannotAddSelf = 'You cannot add yourself as a friend';
-  static const String requestSent = 'Friend request sent';
-  static const String requestSendFailed = 'Failed to send friend request';
+  static const String requestSent = 'Review request sent';
+  static const String requestSendFailed = 'Failed to send review request';
   static const String requestsTitle = 'Requests';
   static const String requestCommentLabel = 'Comment (optional)';
   static const String validEmailConfirmed = 'valid email confirmed';
@@ -412,12 +415,27 @@ class AppStr {
   static const String rvAskedLabel = 'RV-ASKED';
   static const String declinedLabel = 'DECLINED';
   static const String unknownLabel = 'UNKNOWN';
-  
+
   // Additional friend/review request strings
   static const String validEmailAddress = 'Valid email address';
   static const String declineAcknowledged = 'Decline acknowledged';
   static const String declineProvidedReviewsTitle = 'Decline Provided Reviews';
+  static const String declineReviewRequestTitle = 'Decline Review Request';
+  static const String declineReviewRequestMessage =
+      'Are you sure you want to decline this review request? You can optionally provide a message to the requester:';
+  static const String optionalDeclineMessageHint =
+      'Optional decline message (max 30 characters)';
   static const String deleteFriendTitle = 'Delete Friend';
   static const String friendReviewsButton = 'FRIEND REVIEWS';
-  static const String selectLocationRequired = 'Please select at least one country or city';
+  static const String selectLocationRequired =
+      'Please select at least one country or city';
+  
+  // Friend deletion and decline confirmations (Phase 1-4)
+  static const String deleteDeclinedFriendInstigator =
+      'You declined this friend relationship. If you delete this record, this user will be able to send you a new friend request. Confirm deletion?';
+  static const String deleteDeclinedFriendRecipient =
+      'This friend declined your request. If you send another friend request to this user, it will probably be automatically declined. Confirm deletion?';
+  static const String declineEstablishedFriendTitle = 'Decline Friend';
+  static const String declineEstablishedFriendMessage =
+      'Are you sure you want to decline this established friend relationship? This will change the status to declined.';
 }

@@ -31,9 +31,6 @@ class ReviewRequestDetailsScreen extends StatefulWidget {
 
 class _ReviewRequestDetailsScreenState
     extends State<ReviewRequestDetailsScreen> {
-  final TextEditingController _providerCommentController =
-      TextEditingController();
-
   bool _loading = false;
 
   late final String _requesterEmail;
@@ -60,7 +57,6 @@ class _ReviewRequestDetailsScreenState
 
   @override
   void dispose() {
-    _providerCommentController.dispose();
     super.dispose();
   }
 
@@ -145,12 +141,6 @@ class _ReviewRequestDetailsScreenState
         }
 
         _includePhotos = reviewMap['includePhotos'] == true;
-        // populate provider comment if present
-        if (reviewMap['providerComment'] is String &&
-            (reviewMap['providerComment'] as String).isNotEmpty) {
-          _providerCommentController.text =
-              reviewMap['providerComment'] as String;
-        }
       } else {
         _country = null;
         _city = null;
@@ -173,33 +163,6 @@ class _ReviewRequestDetailsScreenState
   }
 
   Future<void> _onBack() async {
-    // persist provider comment (trimmed) to the review_request subnode
-    final String trimmed = _providerCommentController.text.trim();
-    if (myUid.isNotEmpty) {
-      final DatabaseReference ref = FirebaseDatabase.instance.ref();
-      try {
-        if (trimmed.isEmpty) {
-          // remove the field by setting it to null
-          await ref
-              .child(
-                'users/$myUid/friends/$friendUid/review_request/providerComment',
-              )
-              .set(null);
-        } else {
-          await ref
-              .child(
-                'users/$myUid/friends/$friendUid/review_request/providerComment',
-              )
-              .set(trimmed);
-        }
-      } catch (_) {
-        // ignore write failure
-      }
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-      return;
-    }
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -212,27 +175,6 @@ class _ReviewRequestDetailsScreenState
       'country': _country,
       'city': _city,
     };
-
-    if (!mounted) {
-      return;
-    }
-
-    // persist provider comment before navigating so it's available to the review screen
-    final String trimmed = _providerCommentController.text.trim();
-    if (myUid.isNotEmpty) {
-      final DatabaseReference ref = FirebaseDatabase.instance.ref(
-        'users/$myUid/friends/$friendUid/review_request/providerComment',
-      );
-      try {
-        if (trimmed.isEmpty) {
-          await ref.set(null);
-        } else {
-          await ref.set(trimmed);
-        }
-      } catch (_) {
-        // ignore; navigation should still proceed
-      }
-    }
 
     if (!mounted) {
       return;
@@ -378,29 +320,6 @@ class _ReviewRequestDetailsScreenState
                           child: Switch(value: _includePhotos, onChanged: null),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12.0),
-                    Text(
-                      AppStr.providerCommentLabel,
-                      style: AppFonts.smallHint.copyWith(
-                        color: AppColors.mutedText,
-                      ),
-                    ),
-                    const SizedBox(height: 6.0),
-                    TextField(
-                      controller: _providerCommentController,
-                      maxLines: 1,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        hintText: AppStr.providerCommentHint,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6.0),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12.0,
-                          horizontal: 12.0,
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 24.0),
                   ],

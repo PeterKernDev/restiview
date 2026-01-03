@@ -24,8 +24,9 @@ import 'constants/fonts.dart';
 class ReviewListScreen extends StatefulWidget {
   final String? newReviewKey;
   final String mode; // 'list' or 'requested'
+  final String? toastMessage; // Optional toast to show on load
 
-  const ReviewListScreen({super.key, this.newReviewKey, this.mode = 'list'});
+  const ReviewListScreen({super.key, this.newReviewKey, this.mode = 'list', this.toastMessage});
 
   @override
   State<ReviewListScreen> createState() => _ReviewListScreenState();
@@ -61,6 +62,17 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     localCuisineFilter = SessionCache.cuisineFilter;
     localFriendFilter = widget.mode == 'requested' ? 'ALL' : null;
 
+    // Show toast message if provided
+    if (widget.toastMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.toastMessage!)),
+          );
+        }
+      });
+    }
+
     SessionCache.getSortOption().then((stored) {
       if (!mounted) return;
       setState(() {
@@ -78,6 +90,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       // Load existing friends meta record for requested mode
       if (widget.mode == 'requested') {
         _loadFriendsMeta();
+        _checkAndShowNewReviewsNotification();
       }
 
       _reviewSubscription = _reviewsRef.onValue.listen(
@@ -187,10 +200,14 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
           country == null ||
           (review['restcountry']?.toString().toLowerCase() ?? '') ==
               country.toLowerCase();
+      // For requested reviews, use owner_email; for regular reviews, use userEmail
+      final reviewEmail = widget.mode == 'requested'
+          ? review['owner_email']?.toString() ?? ''
+          : review['userEmail']?.toString() ?? '';
       final friendMatch =
           friend == null ||
           friend == 'ALL' ||
-          (review['userEmail']?.toString() ?? '') == friend;
+          reviewEmail == friend;
 
       final binary = review['goodfor'] ?? '';
       final String binaryStr = binary.toString();
@@ -393,6 +410,75 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     }
   }
 
+  Future<void> _checkAndShowNewReviewsNotification() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      // Read all friend stubs to find any with hasNewReviews flag
+      final snapshot = await FirebaseDatabase.instance
+          .ref('users/$userId/friends')
+          .get();
+
+      if (!snapshot.exists || snapshot.value == null) {
+        return;
+      }
+
+      final Map<dynamic, dynamic> friends = Map<dynamic, dynamic>.from(
+        snapshot.value as Map,
+      );
+
+      int totalNewReviews = 0;
+      int totalDuplicatesSkipped = 0;
+
+      for (final entry in friends.entries) {
+        final friendData = entry.value;
+        if (friendData is Map) {
+          final Map<dynamic, dynamic> friendMap = Map<dynamic, dynamic>.from(
+            friendData,
+          );
+          final bool hasNewReviews = friendMap['hasNewReviews'] == true;
+
+          if (hasNewReviews) {
+            final int newCount = (friendMap['newReviewsCount'] is int)
+                ? friendMap['newReviewsCount'] as int
+                : int.tryParse(
+                        friendMap['newReviewsCount']?.toString() ?? '',
+                      ) ??
+                    0;
+            final int duplicates = (friendMap['duplicatesSkipped'] is int)
+                ? friendMap['duplicatesSkipped'] as int
+                : int.tryParse(
+                        friendMap['duplicatesSkipped']?.toString() ?? '',
+                      ) ??
+                    0;
+
+            totalNewReviews += newCount;
+            totalDuplicatesSkipped += duplicates;
+          }
+        }
+      }
+
+      // Show notification if there are new reviews
+      if (totalNewReviews > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final String message = totalDuplicatesSkipped > 0
+              ? '$totalNewReviews new reviews received ($totalDuplicatesSkipped duplicates already existed)'
+              : '$totalNewReviews new reviews received';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
+      }
+    } catch (e) {
+      // Silent fail
+    }
+  }
+
   Future<void> _refreshFriendsMeta() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
@@ -401,7 +487,10 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     // Map uses normalized email as key (Firebase-safe) with value being "email|username"
     final Map<String, String> friends = {};
     for (final review in _allReviews) {
-      final email = review['userEmail']?.toString();
+      // For requested reviews, use owner_email; for regular reviews, use userEmail
+      final email = widget.mode == 'requested'
+          ? review['owner_email']?.toString()
+          : review['userEmail']?.toString();
       final username = review['userName']?.toString();
 
       if (email != null && email.isNotEmpty) {

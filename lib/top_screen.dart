@@ -37,6 +37,8 @@ class _TopScreenState extends State<TopScreen> {
   bool _hasFriends = false; // whether user has any friends
   bool _hasPendingMailboxRequests =
       false; // whether user has pending friend/review requests
+  bool _hasNewReviewsDelivered =
+      false; // whether user has new reviews delivered from friends
   Timer? _mailboxCheckTimer; // Periodic timer to check mailbox
 
   @override
@@ -45,6 +47,7 @@ class _TopScreenState extends State<TopScreen> {
     _loadAcceptsFriends();
     _checkRequestedReviews();
     _checkFriends();
+    _checkNewReviewsDelivered(); // Check for new reviews delivered
     _checkMailbox(); // Check mailbox on screen open
     _startMailboxTimer(); // Start periodic mailbox checks
   }
@@ -103,9 +106,13 @@ class _TopScreenState extends State<TopScreen> {
       // (unaccepted friend requests or review requests)
       bool hasPendingActions = await _hasPendingFriendActions(user.uid);
 
+      // Also check for new reviews delivered
+      bool hasNewReviews = await _checkIfUserHasNewReviewsDelivered(user.uid);
+
       if (mounted) {
         setState(() {
           _hasPendingMailboxRequests = hasPendingActions;
+          _hasNewReviewsDelivered = hasNewReviews;
         });
       }
     } catch (e) {
@@ -147,6 +154,61 @@ class _TopScreenState extends State<TopScreen> {
     } catch (e) {
       debugPrint('Error checking pending friend actions: $e');
       return false;
+    }
+  }
+
+  /// Check if user has any new reviews delivered from friends
+  /// Returns true if any friend has hasNewReviews flag set
+  Future<bool> _checkIfUserHasNewReviewsDelivered(String uid) async {
+    try {
+      final DatabaseReference friendsRef = FirebaseDatabase.instance.ref(
+        'users/$uid/friends',
+      );
+      final DataSnapshot snapshot = await friendsRef.get();
+
+      if (!snapshot.exists || snapshot.value == null) {
+        return false;
+      }
+
+      if (snapshot.value is! Map) {
+        return false;
+      }
+
+      final Map<dynamic, dynamic> friends = snapshot.value as Map;
+
+      // Check if any friend has hasNewReviews flag set
+      for (final entry in friends.values) {
+        if (entry is Map) {
+          final hasNewReviews = entry['hasNewReviews'];
+          if (hasNewReviews == true) {
+            return true; // Found new reviews delivered
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking new reviews delivered: $e');
+      return false;
+    }
+  }
+
+  Future<void> _checkNewReviewsDelivered() async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      bool hasNewReviews = await _checkIfUserHasNewReviewsDelivered(userId);
+
+      if (mounted) {
+        setState(() {
+          _hasNewReviewsDelivered = hasNewReviews;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking new reviews delivered: $e');
     }
   }
 
@@ -216,9 +278,11 @@ class _TopScreenState extends State<TopScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${AppStr.loadFriendsError}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${AppStr.loadFriendsError}: $e')),
+        );
+      }
     }
   }
 
@@ -243,9 +307,11 @@ class _TopScreenState extends State<TopScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${AppStr.signOutFailed}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${AppStr.signOutFailed}: $e')));
+      }
       return;
     }
 
@@ -255,13 +321,103 @@ class _TopScreenState extends State<TopScreen> {
     Navigator.pushReplacementNamed(context, '/');
   }
 
-  void _handleViewRequestedReviews() {
-    Navigator.push(
+  void _handleViewRequestedReviews() async {
+    // Collect data and clear flags, then show toast after navigation
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+    String? toastMessage;
+    
+    if (userId != null) {
+      toastMessage = await _collectAndClearNewReviewsFlags(userId);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const ReviewListScreen(mode: 'requested'),
+        builder: (_) => ReviewListScreen(
+          mode: 'requested',
+          toastMessage: toastMessage,
+        ),
       ),
     );
+    
+    // After returning from the screen, refresh state
+    if (mounted) {
+      _checkNewReviewsDelivered();
+      _checkRequestedReviews();
+    }
+  }
+
+  /// Collect toast data, clear hasNewReviews flags, and return toast message
+  Future<String?> _collectAndClearNewReviewsFlags(String uid) async {
+    try {
+      final DatabaseReference friendsRef = FirebaseDatabase.instance.ref(
+        'users/$uid/friends',
+      );
+      final DataSnapshot snapshot = await friendsRef.get();
+
+      if (!snapshot.exists ||
+          snapshot.value == null ||
+          snapshot.value is! Map) {
+        return null;
+      }
+
+      final Map<dynamic, dynamic> friends = snapshot.value as Map;
+      final Map<String, dynamic> updates = {};
+      int totalNewReviews = 0;
+      int totalDuplicates = 0;
+
+      // Build update map to clear hasNewReviews flags and collect counts
+      for (final MapEntry<dynamic, dynamic> entry in friends.entries) {
+        final String friendUid = entry.key.toString();
+        if (entry.value is Map) {
+          final Map<dynamic, dynamic> friendData = entry.value as Map;
+          final hasNewReviews = friendData['hasNewReviews'];
+          if (hasNewReviews == true) {
+            // Collect counts for toast
+            if (friendData['newReviewsCount'] is int) {
+              totalNewReviews += friendData['newReviewsCount'] as int;
+            }
+            if (friendData['duplicatesSkipped'] is int) {
+              totalDuplicates += friendData['duplicatesSkipped'] as int;
+            }
+            
+            // Clear flags
+            updates['users/$uid/friends/$friendUid/hasNewReviews'] = null;
+            updates['users/$uid/friends/$friendUid/newReviewsCount'] = null;
+            updates['users/$uid/friends/$friendUid/duplicatesSkipped'] = null;
+            updates['users/$uid/friends/$friendUid/newReviewsAt'] = null;
+          }
+        }
+      }
+
+      if (updates.isNotEmpty) {
+        await FirebaseDatabase.instance.ref().update(updates);
+        if (mounted) {
+          setState(() {
+            _hasNewReviewsDelivered = false;
+          });
+        }
+        
+        // Build and return toast message
+        if (totalNewReviews > 0 && totalDuplicates > 0) {
+          return 'Received $totalNewReviews new review${totalNewReviews == 1 ? '' : 's'} ($totalDuplicates duplicate${totalDuplicates == 1 ? '' : 's'} skipped)';
+        } else if (totalNewReviews > 0) {
+          return 'Received $totalNewReviews new review${totalNewReviews == 1 ? '' : 's'}';
+        } else if (totalDuplicates > 0) {
+          return 'All $totalDuplicates review${totalDuplicates == 1 ? '' : 's'} already exist';
+        } else {
+          return 'New reviews received';
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error collecting and clearing new reviews flags: $e');
+      return null;
+    }
   }
 
   Future<void> _handleViewReviews() async {
@@ -454,7 +610,9 @@ class _TopScreenState extends State<TopScreen> {
                           ? _handleViewRequestedReviews
                           : null,
                       child: Text(
-                        AppStr.friendReviewsButton,
+                        _hasNewReviewsDelivered
+                            ? '${AppStr.friendReviewsButton} (!)'
+                            : AppStr.friendReviewsButton,
                         style: AppFonts.standard,
                       ),
                     ),
