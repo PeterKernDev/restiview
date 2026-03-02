@@ -158,7 +158,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
             itemSize: 30,
             itemPadding: const EdgeInsets.symmetric(horizontal: 2),
             itemBuilder: (context, _) =>
-                const Icon(Icons.star, color: Colors.blue),
+                const Icon(Icons.star, color: AppColors.blue),
             onRatingUpdate: (val) {
               if (!mounted) return;
               setState(() {

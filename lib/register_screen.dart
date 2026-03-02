@@ -20,6 +20,7 @@ import 'constants/fonts.dart';
 import 'services/session_cache.dart';
 import 'services/startup_tasks.dart';
 import 'services/user_setup.dart'; // ensureUserSetup helper
+import 'services/location_restaurant_helper.dart'; // normalizeCountryName helper
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
@@ -85,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
           if (mounted) {
             setState(() {
-              _homeCountry = placemarks.first.country!;
+              _homeCountry = normalizeCountryName(placemarks.first.country);
             });
           }
         }
@@ -183,8 +184,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
             debugPrint('Placemarks: $placemarks');
             if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
-              detectedCountry = placemarks.first.country!;
-              debugPrint('Detected country from placemark: $detectedCountry');
+              detectedCountry = normalizeCountryName(placemarks.first.country);
+              debugPrint('Detected country from placemark (normalized): $detectedCountry');
             } else {
               debugPrint('No valid country found in placemarks');
             }
@@ -305,7 +306,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _showPassword
                               ? Icons.visibility_off
                               : Icons.visibility,
-                          color: Colors.grey,
+                          color: AppColors.grey,
                         ),
                         onPressed: () {
                           if (!mounted) return;

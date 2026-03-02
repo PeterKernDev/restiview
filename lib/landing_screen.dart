@@ -61,7 +61,7 @@ class _LandingScreenState extends State<LandingScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orangeAccent,
+                  backgroundColor: AppColors.orangeAccent,
                   foregroundColor: Colors.black87,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -72,13 +72,13 @@ class _LandingScreenState extends State<LandingScreen> {
               const SizedBox(height: 12),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ochre,
-                  foregroundColor: Colors.black87,
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pushNamed(context, '/help'),
-                child: Text(AppStr.help, style: AppFonts.standard.copyWith(color: Colors.black)),
+                child: Text(AppStr.help, style: AppFonts.standard.copyWith(color: Colors.white)),
               ),
               const SizedBox(height: 12),
               ElevatedButton(

@@ -882,7 +882,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                       ),
                                       IconButton(
                                         tooltip: AppStr.cancel,
-                                        color: Colors.grey,
+                                        color: AppColors.grey,
                                         icon: const Icon(Icons.close),
                                         onPressed: () {
                                           if (!mounted) {
@@ -977,7 +977,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                       ),
                                       IconButton(
                                         tooltip: AppStr.cancel,
-                                        color: Colors.grey,
+                                        color: AppColors.grey,
                                         icon: const Icon(Icons.close),
                                         onPressed: () {
                                           if (!mounted) {
@@ -1081,7 +1081,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                                 onPressed:
                                                     _autoFillRestaurantFromLocation,
                                                 style: buttonStyle(
-                                                  Colors.blue,
+                                                  AppColors.blue,
                                                   Colors.white,
                                                 ),
                                                 child: Text(

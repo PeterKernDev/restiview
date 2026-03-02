@@ -104,7 +104,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (_selectedCuisine.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a cuisine to edit')),
+        const SnackBar(content: Text(AppStr.selectCuisineToEdit)),
       );
       return;
     }
@@ -113,7 +113,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.valueUnchanged)));
       return;
     }
 
@@ -137,7 +137,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.notSignedIn)));
       return;
     }
 
@@ -146,7 +146,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No custom values found to edit')),
+        const SnackBar(content: Text(AppStr.noCustomValuesToEdit)),
       );
       return;
     }
@@ -157,7 +157,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (index == -1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selected cuisine not found')),
+        const SnackBar(content: Text(AppStr.selectedCuisineNotFound)),
       );
       return;
     }
@@ -356,7 +356,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (_selectedOccasion.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an occasion to edit')),
+        const SnackBar(content: Text(AppStr.selectOccasionToEdit)),
       );
       return;
     }
@@ -365,7 +365,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Value unchanged')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.valueUnchanged)));
       return;
     }
 
@@ -389,7 +389,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Not signed in')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.notSignedIn)));
       return;
     }
 
@@ -398,7 +398,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No custom values found to edit')),
+        const SnackBar(content: Text(AppStr.noCustomValuesToEdit)),
       );
       return;
     }
@@ -411,7 +411,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (index == -1) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selected occasion not found')),
+        const SnackBar(content: Text(AppStr.selectedOccasionNotFound)),
       );
       return;
     }
@@ -752,7 +752,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                 initialValue: extendedCuisines.contains(_selectedCuisine)
                     ? _selectedCuisine
                     : null,
-                hint: Text('Select cuisine', style: AppFonts.standard),
+                hint: Text(AppStr.selectCuisineHint, style: AppFonts.standard),
                 items: extendedCuisines.map((c) {
                   return DropdownMenuItem<String>(
                     value: c,
@@ -852,7 +852,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                               });
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: AppColors.blue,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
@@ -881,9 +881,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isEditingCuisine
-                            ? Colors.lightGreenAccent
-                            : Colors.grey[300],
-                        disabledBackgroundColor: Colors.grey[300],
+                            ? AppColors.lightGreenAccent
+                            : AppColors.greyShade300,
+                        disabledBackgroundColor: AppColors.greyShade300,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -912,7 +912,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                         });
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade100,
+                        backgroundColor: AppColors.redShade100,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -948,7 +948,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                 initialValue: extendedOccasions.contains(_selectedOccasion)
                     ? _selectedOccasion
                     : null,
-                hint: Text('Select occasion', style: AppFonts.standard),
+                hint: Text(AppStr.selectOccasionHint, style: AppFonts.standard),
                 items: extendedOccasions.map((c) {
                   return DropdownMenuItem<String>(
                     value: c,
@@ -1049,7 +1049,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                               });
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: AppColors.blue,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
@@ -1078,9 +1078,9 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _isEditingOccasion
-                            ? Colors.lightGreenAccent
-                            : Colors.grey[300],
-                        disabledBackgroundColor: Colors.grey[300],
+                            ? AppColors.lightGreenAccent
+                            : AppColors.greyShade300,
+                        disabledBackgroundColor: AppColors.greyShade300,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -1109,7 +1109,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                         });
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade100,
+                        backgroundColor: AppColors.redShade100,
                         padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -1134,7 +1134,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                 initialValue: countryList.contains(_selectedCountry)
                     ? _selectedCountry
                     : null,
-                hint: Text('Select country', style: AppFonts.standard),
+                hint: Text(AppStr.selectCountryHint, style: AppFonts.standard),
                 items: countryList.map((c) {
                   return DropdownMenuItem<String>(
                     value: c,

@@ -150,7 +150,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                                   border: Border.all(
                                     color: checked
                                         ? Colors.black54
-                                        : Colors.grey.shade300,
+                                        : AppColors.greyShade300,
                                   ),
                                   boxShadow: const [
                                     BoxShadow(
@@ -183,7 +183,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                                       size: 18,
                                       color: checked
                                           ? Colors.black87
-                                          : Colors.grey,
+                                          : AppColors.grey,
                                     ),
                                   ],
                                 ),

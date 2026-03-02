@@ -190,7 +190,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
                                   border: Border.all(
                                     color: checked
                                         ? Colors.black54
-                                        : Colors.grey.shade300,
+                                        : AppColors.greyShade300,
                                   ),
                                   boxShadow: const [
                                     BoxShadow(
@@ -223,7 +223,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
                                       size: 18,
                                       color: checked
                                           ? Colors.black87
-                                          : Colors.grey,
+                                          : AppColors.grey,
                                     ),
                                   ],
                                 ),

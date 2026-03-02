@@ -221,18 +221,18 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Duplicate Review Detected'),
+        title: const Text(AppStr.duplicateTitle),
         content: Text(
           'A review for "$name" on "$date" already exists.\nDo you still want to create a new one?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text(AppStr.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Proceed'),
+            child: const Text(AppStr.proceed),
           ),
         ],
       ),
@@ -649,7 +649,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                       '${uniquePhotoPaths.length} ${AppStr.photosWillBeDeleted}',
                       style: AppFonts.standard.copyWith(
                         fontSize: 12,
-                        color: Colors.orange.shade700,
+                        color: AppColors.orangeShade700,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -967,7 +967,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                         height: 72,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          color: Colors.grey.shade200,
+                          color: AppColors.greyShade200,
                         ),
                         child: hasPhoto
                             ? ClipRRect(
@@ -979,14 +979,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   height: 72,
                                   errorBuilder: (context, error, stackTrace) => const Icon(
                                     Icons.broken_image,
-                                    color: Colors.grey,
+                                    color: AppColors.grey,
                                   ),
                                 ),
                               )
                             : const Center(
                                 child: Icon(
                                   Icons.camera_alt_outlined,
-                                  color: Colors.grey,
+                                  color: AppColors.grey,
                                 ),
                               ),
                       ),
@@ -1001,7 +1001,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: AppColors.greyShade200),
                         ),
                         child: Text(
                           text.isNotEmpty ? text : AppStr.detailsNoText,
@@ -1286,7 +1286,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           reviewData!['restname']?.toString().trim() ?? '',
                           style: AppFonts.bold.copyWith(
                             fontSize: 16,
-                            color: Colors.blue,
+                            color: AppColors.blue,
                           ),
                           maxLines: 2, // cap to 2 lines
                           overflow: TextOverflow.ellipsis,
@@ -1507,10 +1507,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 width: 100,
                                 height: 100,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade300,
+                                  color: AppColors.greyShade300,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: Colors.grey.shade400,
+                                    color: AppColors.greyShade400,
                                   ),
                                 ),
                                 child: const Center(
@@ -1580,7 +1580,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) => const Icon(
                                       Icons.broken_image,
-                                      color: Colors.grey,
+                                      color: AppColors.grey,
                                     ),
                                   ),
                                 ),
@@ -1596,9 +1596,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade300,
+                                  color: AppColors.greyShade300,
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.grey.shade400),
+                                  border: Border.all(color: AppColors.greyShade400),
                                 ),
                                 child: const Center(
                                   child: Icon(Icons.close, color: Colors.white70),
@@ -1652,7 +1652,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   goToList();
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.grey,
+                                  backgroundColor: AppColors.grey,
                                   foregroundColor: Colors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,
@@ -1681,7 +1681,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   goToEditFlow();
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
+                                  backgroundColor: AppColors.orange,
                                   foregroundColor: Colors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,
@@ -1811,7 +1811,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   Navigator.pop(context, true);
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
+                                  backgroundColor: AppColors.red,
                                   foregroundColor: Colors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,

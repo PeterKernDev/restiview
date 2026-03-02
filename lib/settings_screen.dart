@@ -15,6 +15,7 @@ import 'top_screen.dart';
 import 'services/session_cache.dart';
 import 'custom_values_screen.dart';
 import 'services/audit_info.dart';
+import 'services/friend_event_audit.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late bool _allowPhotos;
   late int _searchRadius;
   late bool _allowAutoCapture;
+  late bool _allowFriends;
 
   void _confirmDeleteAccount() async {
     final confirmed = await showDialog<bool>(
@@ -77,7 +79,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         userEmail: email,
         type: 'account_delete',
         target: 'account',
-        details: (reason != null && reason.isNotEmpty) ? {'reason': reason} : null,
+        details: (reason != null && reason.isNotEmpty)
+            ? {'reason': reason}
+            : null,
       );
     } catch (e) {
       debugPrint('Failed to write audit info: $e');
@@ -86,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       // Delete database node first
       await FirebaseDatabase.instance.ref('users/$uid').remove();
-      
+
       // Attempt to delete the auth user - may require re-authentication
       try {
         await user.delete();
@@ -98,13 +102,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (password == null || password.isEmpty) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Account deletion cancelled - password required')),
+              const SnackBar(
+                content: Text(AppStr.accountDeletionCancelledPassword),
+              ),
             );
             return;
           }
-          
+
           // Re-authenticate and try again
-          final credential = EmailAuthProvider.credential(email: email, password: password);
+          final credential = EmailAuthProvider.credential(
+            email: email,
+            password: password,
+          );
           await user.reauthenticateWithCredential(credential);
           await user.delete();
         } else {
@@ -143,12 +152,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text('Confirm Password', style: AppFonts.bold),
+        title: Text(AppStr.confirmPasswordTitle, style: AppFonts.bold),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'For security, please enter your password to confirm account deletion:',
+              AppStr.confirmDeletePasswordPrompt,
               style: AppFonts.standard,
             ),
             const SizedBox(height: 12),
@@ -156,7 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               controller: controller,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'Password',
+                labelText: AppStr.passwordLabel,
                 border: OutlineInputBorder(),
               ),
             ),
@@ -169,7 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: Text('Confirm', style: AppFonts.standard),
+            child: Text(AppStr.confirm, style: AppFonts.standard),
           ),
         ],
       ),
@@ -202,6 +211,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _allowPhotos = SessionCache.allowPhotos;
     _searchRadius = SessionCache.searchRadius.clamp(10, 200);
     _allowAutoCapture = SessionCache.allowAutoCapture;
+
+    // Load allowFriends setting from Firebase
+    _allowFriends = true; // default
+    _loadAllowFriends();
+  }
+
+  Future<void> _loadAllowFriends() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final snapshot = await FirebaseDatabase.instance
+          .ref('users/$uid/userSettings7')
+          .get();
+
+      if (snapshot.exists && snapshot.value != null) {
+        final value = snapshot.value;
+        bool allows = true;
+
+        if (value is bool) {
+          allows = value;
+        } else if (value is String) {
+          allows = value.toLowerCase() == 'true';
+        } else if (value is num) {
+          allows = value != 0;
+        }
+
+        if (mounted) {
+          setState(() => _allowFriends = allows);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading allowFriends: $e');
+    }
   }
 
   void _resetSettings() {
@@ -216,6 +259,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _handleAllowFriendsToggle(bool newValue) async {
+    // If turning on, just set it
+    if (newValue) {
+      setState(() => _allowFriends = newValue);
+      return;
+    }
+
+    // If turning off, need to check friend status
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final friendsSnapshot = await FirebaseDatabase.instance
+          .ref('users/$uid/friends')
+          .get();
+
+      if (!friendsSnapshot.exists || friendsSnapshot.value == null) {
+        // No friends, safe to turn off
+        setState(() => _allowFriends = newValue);
+        return;
+      }
+
+      final friendsData = friendsSnapshot.value as Map<dynamic, dynamic>;
+
+      // Count active and inactive friends
+      int activeFriends = 0;
+      int inactiveFriends = 0;
+      List<String> inactiveFriendUids = [];
+
+      friendsData.forEach((key, value) {
+        if (value is Map) {
+          final statusCode = value['statusCode'] as int? ?? 10;
+
+          // Status codes 8 and 9 are inactive (declined/deleted)
+          if (statusCode == 8 || statusCode == 9) {
+            inactiveFriends++;
+            inactiveFriendUids.add(key.toString());
+          } else {
+            activeFriends++;
+          }
+        }
+      });
+
+      if (!mounted) return;
+
+      // If has active friends, show blocking dialog
+      if (activeFriends > 0) {
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(AppStr.cannotDisableFriendsTitle, style: AppFonts.bold),
+            content: Text(
+              'You have $activeFriends active friend${activeFriends == 1 ? '' : 's'}. All friend relationships must be declined or deleted before this function can be closed.',
+              style: AppFonts.standard,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK', style: AppFonts.standard),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // If has only inactive friends, ask to delete them
+      if (inactiveFriends > 0) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(AppStr.deleteDeclinedFriendsConfirmTitle, style: AppFonts.bold),
+            content: Text(
+              'You have $inactiveFriends declined friend relationship${inactiveFriends == 1 ? '' : 's'}. These will be deleted if you proceed.',
+              style: AppFonts.standard,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('No', style: AppFonts.standard),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text('Yes', style: AppFonts.standard),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed == true) {
+          // Delete all inactive friend relationships
+          int deletedCount = 0;
+
+          for (final friendUid in inactiveFriendUids) {
+            try {
+              // Get the friend stub to determine statusCode for audit
+              final friendSnapshot = await FirebaseDatabase.instance
+                  .ref('users/$uid/friends/$friendUid')
+                  .get();
+
+              int statusCode = 10; // unknown
+              if (friendSnapshot.exists && friendSnapshot.value is Map) {
+                final friendData = friendSnapshot.value as Map;
+                statusCode = friendData['statusCode'] as int? ?? 10;
+              }
+
+              // Delete the friend stub
+              await FirebaseDatabase.instance
+                  .ref('users/$uid/friends/$friendUid')
+                  .remove();
+
+              // Write audit event
+              final String eventType = (statusCode == 9)
+                  ? 'friend_deleted_by_instigator' // statusCode=9: User declined this friend
+                  : 'friend_deleted_by_recipient'; // statusCode=8: Friend declined user
+
+              await writeFriendEvent(
+                eventType: eventType,
+                actorUid: uid,
+                targetUid: friendUid,
+                metadata: <String, dynamic>{
+                  'deletedStatusCode': statusCode,
+                  'deletedVia': 'settings_disable_friends',
+                },
+              );
+
+              deletedCount++;
+            } catch (e) {
+              debugPrint('Error deleting friend $friendUid: $e');
+              // Continue with other deletions
+            }
+          }
+
+          if (!mounted) return;
+          setState(() => _allowFriends = newValue);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '$deletedCount declined friend relationship${deletedCount == 1 ? '' : 's'} deleted',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // No friends at all, safe to turn off
+      setState(() => _allowFriends = newValue);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${AppStr.errorCheckingFriends}: $e')));
+    }
+  }
+
   Future<void> _saveSettings() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
@@ -226,6 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'userSettings4': _allowPhotos,
         'userSettings5': _searchRadius,
         'userSettings6': _allowAutoCapture,
+        'userSettings7': _allowFriends,
       });
 
       SessionCache.sortOption = _selectedSort;
@@ -403,6 +604,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeThumbColor: AppColors.darkGreen,
               ),
               SwitchListTile(
+                title: Text(AppStr.allowFriendsLabel, style: AppFonts.standard),
+                subtitle: Text(
+                  'Enable or disable friend requests',
+                  style: AppFonts.standard.copyWith(fontSize: 12),
+                ),
+                value: _allowFriends,
+                onChanged: _handleAllowFriendsToggle,
+                activeThumbColor: AppColors.darkGreen,
+              ),
+              SwitchListTile(
                 title: Text(
                   AppStr.allowAutoCaptureLabel,
                   style: AppFonts.standard,
@@ -430,7 +641,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                       style: topActionStyle.copyWith(
-                        backgroundColor: WidgetStateProperty.all(AppColors.orange),
+                        backgroundColor: WidgetStateProperty.all(
+                          AppColors.orange,
+                        ),
                         foregroundColor: WidgetStateProperty.all(
                           Colors.black87,
                         ),
@@ -570,12 +783,12 @@ class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('We are sorry to see you go', style: AppFonts.bold),
+      title: Text(AppStr.deletionFarewellTitle, style: AppFonts.bold),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'If you wish, please let us know why you are deleting your account (optional):',
+            AppStr.deletionFarewellPrompt,
             style: AppFonts.standard,
           ),
           const SizedBox(height: 12),
@@ -583,7 +796,7 @@ class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
             controller: _controller,
             maxLines: 3,
             decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
+              labelText: AppStr.deletionReasonHint,
               border: OutlineInputBorder(),
             ),
           ),
@@ -599,7 +812,7 @@ class _DeleteReasonDialogState extends State<_DeleteReasonDialog> {
             final text = _controller.text.trim();
             Navigator.pop(context, text);
           },
-          child: Text('Continue', style: AppFonts.standard),
+          child: Text(AppStr.continueButton, style: AppFonts.standard),
         ),
       ],
     );

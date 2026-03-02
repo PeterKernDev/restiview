@@ -552,7 +552,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Updating review info...'),
+            content: Text(AppStr.updatingReviewInfo),
             duration: Duration(seconds: 1),
           ),
         );
@@ -575,25 +575,25 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No reviews to delete')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.noReviewsToDelete)));
       return;
     }
 
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Reviews'),
+        title: const Text(AppStr.deleteReviewsTitle),
         content: Text(
           'Are you sure you want to delete these ${_filteredReviews.length} review(s)?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
+            child: const Text(AppStr.noLabel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yes'),
+            child: const Text(AppStr.yes),
           ),
         ],
       ),
@@ -648,7 +648,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error deleting reviews: $e')));
+      ).showSnackBar(SnackBar(content: Text('${AppStr.errorDeletingReviews}: $e')));
     }
   }
 
@@ -698,7 +698,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                         AppStr.noReviewsMatch,
                         style: AppFonts.standard.copyWith(
                           fontSize: 16,
-                          color: Colors.grey,
+                          color: AppColors.grey,
                         ),
                       ),
                     )

@@ -1010,7 +1010,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             _accepting = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error gathering reviews: $e')),
+            SnackBar(content: Text('${AppStr.errorGatheringReviews}: $e')),
           );
         }
         return;
@@ -1254,7 +1254,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (selected.fsc == statusRequesterSent || selected.fsc == statusRvAsked) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This feature is not available')),
+          const SnackBar(content: Text(AppStr.featureNotAvailable)),
         );
       }
       return;
@@ -1398,7 +1398,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         
         debugPrint('DEBUG: Review request declined successfully');
         success = true;
-        snackbarMsg = 'Review request declined';
+        snackbarMsg = AppStr.reviewRequestDeclined;
       } catch (e) {
         debugPrint('DEBUG: Error declining review request: $e');
         snackbarMsg = '${AppStr.requestSendFailed}: $e';

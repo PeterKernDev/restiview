@@ -307,7 +307,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
             onPressed: (photoPath == null || _isBusy)
                 ? null
                 : () => _deletePhoto(index),
-            icon: const Icon(Icons.delete_outline, color: Colors.grey),
+            icon: const Icon(Icons.delete_outline, color: AppColors.grey),
             label: const SizedBox.shrink(),
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
@@ -351,7 +351,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: AppStr.remove,
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(Icons.delete, color: AppColors.red),
                   onPressed: _isBusy
                       ? null
                       : () {
@@ -487,7 +487,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                               child: ElevatedButton(
                                 onPressed: canAddMore ? _addMore : null,
                                 style: buttonStyle(
-                                  Colors.orange,
+                                  AppColors.orange,
                                   AppColors.btnText,
                                 ),
                                 child: Text(

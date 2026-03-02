@@ -368,7 +368,7 @@ class _ReviewRequestDetailsScreenState
                             onPressed: _onReview,
                             style: actionBtnBase.copyWith(
                               backgroundColor: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
+                                backgroundColor: AppColors.orange,
                               ).backgroundColor,
                               foregroundColor: ElevatedButton.styleFrom(
                                 foregroundColor: Colors.white,

@@ -438,4 +438,47 @@ class AppStr {
   static const String declineEstablishedFriendTitle = 'Decline Friend';
   static const String declineEstablishedFriendMessage =
       'Are you sure you want to decline this established friend relationship? This will change the status to declined.';
+
+  // Settings screen
+  static const String accountDeletionCancelledPassword =
+      'Account deletion cancelled - password required';
+  static const String confirmPasswordTitle = 'Confirm Password';
+  static const String confirmDeletePasswordPrompt =
+      'For security, please enter your password to confirm account deletion:';
+  static const String cannotDisableFriendsTitle = 'Cannot Disable Friends';
+  static const String deleteDeclinedFriendsConfirmTitle =
+      'Delete Declined Friends?';
+  static const String errorCheckingFriends = 'Error checking friends';
+  static const String deletionFarewellTitle = 'We are sorry to see you go';
+  static const String deletionFarewellPrompt =
+      'If you wish, please let us know why you are deleting your account (optional):';
+  static const String deletionReasonHint = 'Reason (optional)';
+  static const String continueButton = 'Continue';
+
+  // List screen
+  static const String updatingReviewInfo = 'Updating review info...';
+  static const String noReviewsToDelete = 'No reviews to delete';
+  static const String deleteReviewsTitle = 'Delete Reviews';
+  static const String errorDeletingReviews = 'Error deleting reviews';
+
+  // Custom values screen
+  static const String selectCuisineToEdit =
+      'Please select a cuisine to edit';
+  static const String valueUnchanged = 'Value unchanged';
+  static const String notSignedIn = 'Not signed in';
+  static const String noCustomValuesToEdit =
+      'No custom values found to edit';
+  static const String selectedCuisineNotFound = 'Selected cuisine not found';
+  static const String selectOccasionToEdit =
+      'Please select an occasion to edit';
+  static const String selectedOccasionNotFound =
+      'Selected occasion not found';
+  static const String selectCuisineHint = 'Select cuisine';
+  static const String selectOccasionHint = 'Select occasion';
+  static const String selectCountryHint = 'Select country';
+
+  // Friends screen
+  static const String errorGatheringReviews = 'Error gathering reviews';
+  static const String featureNotAvailable = 'This feature is not available';
+  static const String reviewRequestDeclined = 'Review request declined';
 }
