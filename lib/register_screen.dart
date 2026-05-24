@@ -284,6 +284,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
 
         // Run shared startup logic
+        FirebaseDatabase.instance.goOnline();
         await runStartupTasks(
           uid: uid,
           userName: name,

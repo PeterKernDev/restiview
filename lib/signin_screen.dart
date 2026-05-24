@@ -411,6 +411,7 @@ class _SignInScreenState extends State<SignInScreen> {
       await SessionCache.clearCredentials();
     }
 
+    FirebaseDatabase.instance.goOnline();
     await runStartupTasks(
       uid: uid,
       userName: userName,
