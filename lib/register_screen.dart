@@ -68,31 +68,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _detectCountryFromLocation() async {
+    appLog('GeoDetect: starting');
     try {
-      // Check if location services are enabled
+      appLog('GeoDetect: checking if location services enabled');
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      appLog('GeoDetect: serviceEnabled=$serviceEnabled');
       if (!serviceEnabled) {
-        debugPrint('Location services are disabled');
+        appLog('GeoDetect: location services disabled, aborting');
         return;
       }
-      
+
+      appLog('GeoDetect: checking permission');
       LocationPermission permission = await Geolocator.checkPermission();
+      appLog('GeoDetect: permission=$permission');
       if (permission == LocationPermission.denied) {
+        appLog('GeoDetect: requesting permission');
         permission = await Geolocator.requestPermission();
+        appLog('GeoDetect: permission after request=$permission');
       }
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        appLog('GeoDetect: getting current position');
         final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
+        appLog('GeoDetect: position=${pos.latitude},${pos.longitude}');
+        appLog('GeoDetect: calling placemarkFromCoordinates');
         final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+        appLog('GeoDetect: placemarks count=${placemarks.length}');
         if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
+          appLog('GeoDetect: country=${placemarks.first.country}');
           if (mounted) {
             setState(() {
               _homeCountry = normalizeCountryName(placemarks.first.country);
             });
           }
         }
+      } else {
+        appLog('GeoDetect: permission denied, skipping position fetch');
       }
-    } catch (e) {
-      debugPrint('Geo country detection failed in init: $e');
+      appLog('GeoDetect: completed successfully');
+    } catch (e, st) {
+      appLog('GeoDetect: FAILED with error: $e');
+      appLog('GeoDetect: stack trace: $st');
     }
   }
 
