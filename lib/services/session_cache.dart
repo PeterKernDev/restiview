@@ -33,7 +33,7 @@ class SessionCache {
   static String reviewInfoLastUpdateDate = ''; // Track last date review_info was updated (yyyy-MM-dd format)
 
   // Device country code (used for registration defaults)
-  static String deviceCountryCode = 'US';
+  static String deviceCountryCode = '';
 
   // Filters
   static String? countryFilter;
@@ -382,7 +382,7 @@ class SessionCache {
     allowPhotos = false;
     allowAutoCapture = false;
     searchRadius = 50;
-    deviceCountryCode = 'US';
+    deviceCountryCode = '';
 
     countryFilter = null;
     clearGoodForFilter();
