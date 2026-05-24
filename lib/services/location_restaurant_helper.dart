@@ -32,6 +32,8 @@ String normalizeCountryName(String? geocodedCountry) {
     'South Korea': 'South Korea',
     'Korea': 'South Korea',
     'Republic of Korea': 'South Korea',
+    'Brasil': 'Brazil',
+    'Brazil': 'Brazil',
     // Add more mappings as needed
   };
   

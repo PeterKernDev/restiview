@@ -383,8 +383,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    initialValue: _homeCountry,
-                    items: systemCountries
+                    value: systemCountries.any((c) => c['name'] == _homeCountry)
+                        ? _homeCountry
+                        : null,
+                    items: ([...systemCountries]
+                          ..sort((a, b) => a['name']!.compareTo(b['name']!)))
                         .map(
                           (c) => DropdownMenuItem(
                             value: c['name'],
