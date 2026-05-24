@@ -65,7 +65,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     _homeCountry = _getDeviceCountryName();
-    _detectCountryFromLocation();
   }
 
   Future<void> _detectCountryFromLocation() async {
@@ -416,6 +415,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onChanged: (value) {
                       if (!mounted) return;
                       setState(() => _allowLocation = value);
+                      if (value) _detectCountryFromLocation();
                     },
                     activeThumbColor: AppColors.darkGreen,
                     activeTrackColor: AppColors.ochre,
