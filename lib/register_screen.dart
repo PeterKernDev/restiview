@@ -196,44 +196,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
-    String detectedCountry = _homeCountry;
-    debugPrint('Initial _homeCountry: $_homeCountry');
+
+    // Bring RTDB online before any reads or writes.
+    FirebaseDatabase.instance.goOnline();
+
+    final String detectedCountry = _homeCountry;
+    appLog('Register: detectedCountry=$detectedCountry');
+
     try {
-      // Get location and reverse-geocode to country
-      try {
-        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        debugPrint('Location service enabled: $serviceEnabled');
-        if (!serviceEnabled) {
-          debugPrint('Location services are disabled, using device country');
-        } else {
-          LocationPermission permission = await Geolocator.checkPermission();
-          debugPrint('Location permission status: $permission');
-          if (permission == LocationPermission.denied) {
-            permission = await Geolocator.requestPermission();
-            debugPrint('Requested permission, new status: $permission');
-          }
-          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-            final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
-            debugPrint('Got position: lat=${pos.latitude}, lon=${pos.longitude}');
-            final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
-            debugPrint('Placemarks: $placemarks');
-            if (placemarks.isNotEmpty && placemarks.first.country != null && placemarks.first.country!.isNotEmpty) {
-              detectedCountry = normalizeCountryName(placemarks.first.country);
-              debugPrint('Detected country from placemark (normalized): $detectedCountry');
-            } else {
-              debugPrint('No valid country found in placemarks');
-            }
-          } else {
-            debugPrint('Location permission not granted for geolocation');
-          }
-        }
-      } catch (e) {
-        debugPrint('Geo country detection failed: $e');
-      }
-      debugPrint('Final detectedCountry: $detectedCountry');
-
-      if (!mounted) return;
-
       final userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
@@ -284,7 +254,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
 
         // Run shared startup logic
-        FirebaseDatabase.instance.goOnline();
         await runStartupTasks(
           uid: uid,
           userName: name,
