@@ -19,7 +19,6 @@ import 'friend_request_screen.dart'; // dedicated friend request screen
 import 'review_request_screen.dart'; // dedicated review request screen
 import 'review_request_details_screen.dart'; // provider review request details
 import 'sub_friends_screen/friend_entry.dart'; // FriendEntry type for routing arguments
-import 'package:firebase_database/firebase_database.dart';
 import 'services/session_cache.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
@@ -39,10 +38,6 @@ Future<void> main() async {
   // Then initialize Firebase.
   await Firebase.initializeApp();
   FirebaseAuth.instance.setLanguageCode('en');
-
-  // Keep RTDB offline until the user signs in — prevents a native iOS crash
-  // caused by Firebase's background WebSocket connection timing out on iOS 26+.
-  FirebaseDatabase.instance.goOffline();
 
   runApp(const MyApp());
 }

@@ -187,9 +187,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Bring RTDB online before any reads or writes.
-    FirebaseDatabase.instance.goOnline();
-
     final String detectedCountry = _homeCountry;
     appLog('Register: detectedCountry=$detectedCountry');
 
