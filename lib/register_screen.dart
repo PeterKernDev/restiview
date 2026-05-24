@@ -404,7 +404,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onChanged: (value) {
                       if (!mounted) return;
                       setState(() => _allowLocation = value);
-                      if (value) _detectCountryFromLocation();
                     },
                     activeThumbColor: AppColors.darkGreen,
                     activeTrackColor: AppColors.ochre,
