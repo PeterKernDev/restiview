@@ -1,4 +1,4 @@
-
+﻿
 // services/location_restaurant_helper.dart
 //
 // Defensive, timeout-aware helper to locate nearby restaurants and perform location-based utilities.
@@ -6,8 +6,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -38,6 +36,34 @@ String normalizeCountryName(String? geocodedCountry) {
   };
   
   return countryNameMap[geocodedCountry] ?? geocodedCountry;
+}
+
+/// Returns the current city name using reverse geocoding.
+/// Tries locality first, then subAdministrativeArea, then administrativeArea.
+/// Returns null if location or city cannot be determined.
+Future<String?> getCurrentCitySafe({Duration timeout = const Duration(seconds: 10)}) async {
+  final pos = await getCurrentLocationSafe(timeout: timeout);
+  if (pos == null) {
+    return null;
+  }
+  try {
+    final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude)
+        .timeout(timeout);
+    if (placemarks.isNotEmpty) {
+      final Placemark p = placemarks.first;
+      final String? city = (p.locality != null && p.locality!.isNotEmpty)
+          ? p.locality
+          : (p.subAdministrativeArea != null && p.subAdministrativeArea!.isNotEmpty)
+              ? p.subAdministrativeArea
+              : p.administrativeArea;
+      return (city != null && city.isNotEmpty) ? city : null;
+    }
+    return null;
+  } on TimeoutException {
+    return null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Returns the current country name using reverse geocoding.
@@ -84,7 +110,7 @@ class NearbyRestaurant {
 String cleanRestaurantName(String rawName) {
   final split = rawName.split(RegExp(r'[:\-]'));
   final cleaned = split.first.trim();
-  return cleaned.length > 40 ? '${cleaned.substring(0, 40)}…' : cleaned;
+  return cleaned.length > 40 ? '${cleaned.substring(0, 40)}â€¦' : cleaned;
 }
 
 /// Improved heuristic to extract city name from Google Places formatted address.
@@ -124,7 +150,7 @@ String extractCityFromAddress(String address) {
   String extractBeforeStateHyphen(String s) {
     final segments = s.split('-').map((t) => t.trim()).toList();
     if (segments.length >= 2 && looksLikeState(segments.last)) {
-      return segments.first; // Return "São Paulo" from "São Paulo - SP"
+      return segments.first; // Return "SÃ£o Paulo" from "SÃ£o Paulo - SP"
     }
     return s;
   }
@@ -175,7 +201,7 @@ String extractCityFromAddress(String address) {
   // - "Street, Number, ZIP City, Province, Country" (Spain: index 2 has "07810 Ibiza")
   // - "Number Street, City Postcode, Country" (UK: index 1 has "London NW1 6JQ")
   // - "Number Street, City, State ZIP, Country" (USA: index 1 has city)
-  // - "Street, Number - Neighborhood, City - State, ZIP, Country" (Brazil: index 2 has "São Paulo - SP")
+  // - "Street, Number - Neighborhood, City - State, ZIP, Country" (Brazil: index 2 has "SÃ£o Paulo - SP")
 
   if (parts.length >= 4) {
     // Check index 2 for "ZIP City" pattern (Spain style)
@@ -191,7 +217,7 @@ String extractCityFromAddress(String address) {
     // Check index 2 for "City - State" pattern (Brazil style)
     final cleaned2 = extractBeforeStateHyphen(part2);
     if (cleaned2 != part2 && !startsWithNumber(cleaned2)) {
-      // Found "São Paulo - SP" pattern
+      // Found "SÃ£o Paulo - SP" pattern
       return cleaned2;
     }
 
@@ -264,17 +290,17 @@ Future<Position?> getCurrentLocationSafe({Duration timeout = const Duration(seco
     }
 
     try {
-      final last = await Geolocator.getLastKnownPosition();
-      if (last != null) {
-        return last;
-      }
-    } catch (_) {}
-
-    try {
       final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high))
           .timeout(timeout);
       return pos;
     } on TimeoutException {
+      // Fall back to last known position when getCurrentPosition times out
+      try {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null) {
+          return last;
+        }
+      } catch (_) {}
       return null;
     } catch (_) {
       return null;
@@ -290,7 +316,7 @@ Future<Position?> getCurrentLocationSafe({Duration timeout = const Duration(seco
 /// - limits details requests and runs them concurrently
 Future<List<NearbyRestaurant>> findNearbyRestaurants({
   Duration overallTimeout = const Duration(seconds: 14),
-  Duration positionTimeout = const Duration(seconds: 10),
+  Duration positionTimeout = const Duration(seconds: 5),
   Duration httpTimeout = const Duration(seconds: 6),
   int maxPlacesToProcess = 6,
 }) {
@@ -301,26 +327,26 @@ Future<List<NearbyRestaurant>> findNearbyRestaurants({
 Future<List<NearbyRestaurant>> _internalFind(
     Duration positionTimeout, Duration httpTimeout, int maxPlacesToProcess) async {
   if (!SessionCache.allowLocation) {
-    debugPrint('🔍 Restaurant search: Location not allowed');
+    appLog('Restaurant search: Location not allowed');
     return [];
   }
 
   if (googlePlacesApiKey.isEmpty) {
-    debugPrint('🔍 Restaurant search: API key is empty');
+    appLog('Restaurant search: API key is empty');
     return [];
   }
 
   try {
     final pos = await getCurrentLocationSafe(timeout: positionTimeout);
     if (pos == null) {
-      debugPrint('🔍 Restaurant search: Could not get location');
+      appLog('Restaurant search: Could not get location');
       return [];
     }
     final lat = pos.latitude;
     final lng = pos.longitude;
     final radius = SessionCache.searchRadius;
     
-    debugPrint('🔍 Restaurant search: lat=$lat, lng=$lng, radius=$radius meters');
+    appLog('Restaurant search: lat=$lat, lng=$lng, radius=$radius meters');
 
     final nearbyUrl =
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=$radius&type=restaurant&key=$googlePlacesApiKey';
@@ -329,29 +355,28 @@ Future<List<NearbyRestaurant>> _internalFind(
     try {
       nearbyResponse = await http.get(Uri.parse(nearbyUrl)).timeout(httpTimeout);
     } on TimeoutException {
-      debugPrint('🔍 Restaurant search: HTTP request timed out');
+      appLog('Restaurant search: HTTP request timed out');
       return [];
     } catch (e) {
-      debugPrint('🔍 Restaurant search: HTTP request failed: $e');
+      appLog('Restaurant search: HTTP request failed: $e');
       return [];
     }
 
     if (nearbyResponse.statusCode != 200) {
-      debugPrint('🔍 Restaurant search: HTTP status ${nearbyResponse.statusCode}');
-      debugPrint('🔍 Response body: ${nearbyResponse.body}');
+      appLog('Restaurant search: HTTP status ${nearbyResponse.statusCode}');
       return [];
     }
 
     final nearbyData = jsonDecode(nearbyResponse.body) as Map<String, dynamic>? ?? {};
     final status = nearbyData['status'] as String?;
     final errorMessage = nearbyData['error_message'] as String?;
-    debugPrint('🔍 Restaurant search: API status=$status');
+    appLog('Restaurant search: API status=$status');
     if (errorMessage != null) {
-      debugPrint('🔍 Restaurant search: Error message: $errorMessage');
+      appLog('Restaurant search: Error message: $errorMessage');
     }
     
     final results = nearbyData['results'] as List<dynamic>? ?? [];
-    debugPrint('🔍 Restaurant search: Found ${results.length} places');
+    appLog('Restaurant search: Found ${results.length} places');
 
     if (results.isEmpty) {
       return [];
@@ -372,11 +397,10 @@ Future<List<NearbyRestaurant>> _internalFind(
     final details = await Future.wait(detailFutures);
 
     final restaurants = details.whereType<NearbyRestaurant>().toList();
-    debugPrint('🔍 Restaurant search: Returning ${restaurants.length} restaurants');
+    appLog('Restaurant search: Returning ${restaurants.length} restaurants');
     return restaurants;
   } catch (e, stackTrace) {
-    debugPrint('🔍 Restaurant search: Exception: $e');
-    debugPrint('🔍 Stack trace: $stackTrace');
+    appLog('Restaurant search: Exception: $e, trace: $stackTrace');
     return [];
   }
 }
@@ -420,318 +444,88 @@ Future<NearbyRestaurant?> _fetchPlaceDetails(String placeId, Duration timeout) a
   }
 }
 
-/// Cuisine Analysis Tool
-/// Analyzes a list of restaurant names and reports which ones don't match any cuisine.
-/// Returns a map with analysis results for debugging and improving cuisine keywords.
-Map<String, dynamic> analyzeCuisineDetection(List<String> restaurantNames) {
-  final unmatched = <String>[];
-  final matched = <String, List<String>>{};
-  final suggestions = <String, Set<String>>{};
-
-  for (final name in restaurantNames) {
-    final cuisine = guessCuisineFromName(name);
-    
-    if (cuisine == 'Unknown') {
-      unmatched.add(name);
-      
-      // Extract potential cuisine indicators from the name
-      final lower = name.toLowerCase();
-      final words = lower.split(RegExp(r'\s+'));
-      
-      for (final word in words) {
-        // Skip common words that aren't cuisine indicators
-        if (_isCommonWord(word)) continue;
-        
-        // Add to suggestions
-        suggestions.putIfAbsent(word, () => {}).add(name);
-      }
-    } else {
-      matched.putIfAbsent(cuisine, () => []).add(name);
-    }
+/// Search for a restaurant by name using the Places Text Search API.
+/// Optionally biases results toward the user's current location when
+/// [SessionCache.allowLocation] is true.
+/// Returns null on any failure or if no match is found — never throws.
+Future<NearbyRestaurant?> searchRestaurantByName(
+  String name, {
+  Duration overallTimeout = const Duration(seconds: 12),
+  Duration positionTimeout = const Duration(seconds: 5),
+  Duration httpTimeout = const Duration(seconds: 8),
+}) async {
+  if (name.trim().isEmpty) {
+    return null;
+  }
+  if (googlePlacesApiKey.isEmpty) {
+    return null;
   }
 
-  return {
-    'total': restaurantNames.length,
-    'matched': matched.length,
-    'unmatched': unmatched.length,
-    'unmatchedNames': unmatched,
-    'matchedByCuisine': matched,
-    'suggestions': suggestions,
-    'matchRate': restaurantNames.isEmpty 
-        ? 0.0 
-        : (restaurantNames.length - unmatched.length) / restaurantNames.length,
-  };
+  return _internalSearchByName(name.trim(), positionTimeout, httpTimeout)
+      .timeout(overallTimeout, onTimeout: () => null);
 }
 
-/// Helper to identify common words that aren't cuisine indicators
-bool _isCommonWord(String word) {
-  const commonWords = {
-    'the', 'a', 'an', 'and', 'or', 'of', 'at', 'by', 'for', 'in', 'on', 'to',
-    'restaurant', 'cafe', 'bar', 'house', 'kitchen', 'room', 'club', 'place',
-    'new', 'old', 'grand', 'little', 'big', 'great', 'good', 'best', 'fine',
-    'dining', 'eatery', 'bistro', 'inn', 'lodge', 'spot', 'gourmet',
-    '&', '-', "'s", 'de', 'la', 'le', 'del', 'el', 'los', 'las',
-  };
-  return commonWords.contains(word.toLowerCase());
-}
+Future<NearbyRestaurant?> _internalSearchByName(
+  String name,
+  Duration positionTimeout,
+  Duration httpTimeout,
+) async {
+  try {
+    // Build the text search URL; include a location bias when GPS is available.
+    final StringBuffer urlBuffer = StringBuffer(
+      'https://maps.googleapis.com/maps/api/place/textsearch/json'
+      '?query=${Uri.encodeComponent(name)}'
+      '&type=restaurant'
+      '&key=$googlePlacesApiKey',
+    );
 
-/// Prints a formatted analysis report to the console
-void printCuisineAnalysisReport(Map<String, dynamic> analysis) {
-  debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  debugPrint('📊 CUISINE DETECTION ANALYSIS REPORT');
-  debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  debugPrint('');
-  debugPrint('Total restaurants analyzed: ${analysis['total']}');
-  debugPrint('Successfully matched: ${analysis['total'] - analysis['unmatched']}');
-  debugPrint('Unmatched (Unknown): ${analysis['unmatched']}');
-  debugPrint('Match rate: ${(analysis['matchRate'] * 100).toStringAsFixed(1)}%');
-  debugPrint('');
-  
-  if (analysis['unmatched'] > 0) {
-    debugPrint('❌ UNMATCHED RESTAURANTS:');
-    final unmatchedNames = analysis['unmatchedNames'] as List<String>;
-    for (var i = 0; i < unmatchedNames.length; i++) {
-      debugPrint('   ${i + 1}. ${unmatchedNames[i]}');
-    }
-    debugPrint('');
-    
-    debugPrint('💡 SUGGESTED KEYWORDS TO ADD:');
-    final suggestions = analysis['suggestions'] as Map<String, Set<String>>;
-    final sortedSuggestions = suggestions.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    
-    for (var i = 0; i < sortedSuggestions.length && i < 20; i++) {
-      final entry = sortedSuggestions[i];
-      debugPrint('   "${entry.key}" - appears in ${entry.value.length} restaurant(s):');
-      for (final name in entry.value.take(3)) {
-        debugPrint('      • $name');
+    if (SessionCache.allowLocation) {
+      final Position? pos = await getCurrentLocationSafe(timeout: positionTimeout);
+      if (pos != null) {
+        urlBuffer.write('&location=${pos.latitude},${pos.longitude}');
+        urlBuffer.write('&radius=${SessionCache.searchRadius}');
       }
     }
-    debugPrint('');
-  }
-  
-  debugPrint('✅ MATCHED BY CUISINE TYPE:');
-  final matchedByCuisine = analysis['matchedByCuisine'] as Map<String, List<String>>;
-  final sortedCuisines = matchedByCuisine.entries.toList()
-    ..sort((a, b) => b.value.length.compareTo(a.value.length));
-  
-  for (final entry in sortedCuisines) {
-    debugPrint('   ${entry.key}: ${entry.value.length} restaurant(s)');
-    for (final name in entry.value.take(3)) {
-      debugPrint('      • $name');
-    }
-    if (entry.value.length > 3) {
-      debugPrint('      ... and ${entry.value.length - 3} more');
-    }
-  }
-  
-  debugPrint('');
-  debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-}
 
-/// Sample restaurant names for testing cuisine detection
-/// Add real restaurant names you encounter to improve the system
-List<String> getSampleRestaurantNames() {
-  return [
-    // Steakhouses / American Meat
-    'Papi Steak House',
-    'The Capital Grille',
-    "Morton's The Steakhouse",
-    'Texas Roadhouse',
-    'Outback Steakhouse',
-    "Ruth's Chris Steak House",
-    'LongHorn Steakhouse',
-    "Smith & Wollensky",
-    "Del Frisco's Double Eagle",
-    'Fleming\'s Prime Steakhouse',
-    'The Palm',
-    
-    // Italian
-    'Olive Garden',
-    'Carrabba\'s Italian Grill',
-    "Maggiano's Little Italy",
-    'Buca di Beppo',
-    'Romano\'s Macaroni Grill',
-    'Bertucci\'s',
-    'Il Fornaio',
-    'Osteria',
-    'Trattoria Italiana',
-    
-    // Mexican / Tex-Mex
-    'Chipotle Mexican Grill',
-    'Taco Bell',
-    "Chili's Grill & Bar",
-    'El Torito',
-    "Chevys Fresh Mex",
-    'Qdoba Mexican Eats',
-    "Moe's Southwest Grill",
-    'Cafe Rio',
-    'On The Border',
-    'Uncle Julio\'s',
-    'Pappasito\'s Cantina',
-    
-    // Chinese
-    'P.F. Chang\'s',
-    'Panda Express',
-    "Pick Up Stix",
-    'Pei Wei Asian Diner',
-    'China Bistro',
-    'Mandarin House',
-    'Golden Dragon',
-    'Great Wall',
-    
-    // Japanese
-    'Benihana',
-    'Nobu',
-    'Kona Grill',
-    'RA Sushi',
-    'Blue Fin',
-    'Shogun',
-    'Tokyo Joe\'s',
-    'Sakura Japanese',
-    'Sushi Palace',
-    
-    // Thai
-    'Thai Basil',
-    'Siam Garden',
-    'Thai Kitchen',
-    'Lemongrass Grill',
-    'Royal Thai',
-    
-    // Korean
-    'Gen Korean BBQ',
-    'Bulgogi House',
-    'Seoul Garden',
-    'Kang Ho Dong Baekjeong',
-    
-    // Vietnamese
-    'Pho 79',
-    'Saigon Cafe',
-    'Pho Hoa',
-    'Banh Mi Saigon',
-    
-    // Indian
-    'Bombay Palace',
-    'Tandoor House',
-    'India Palace',
-    'Curry House',
-    'Masala Indian Kitchen',
-    
-    // Mediterranean / Middle Eastern
-    'The Kebab Shop',
-    'Pita Jungle',
-    'Cedars Restaurant',
-    'Cafe Beirut',
-    'Falafel King',
-    
-    // American Casual Dining
-    'Applebee\'s',
-    'TGI Fridays',
-    'Red Robin',
-    'The Cheesecake Factory',
-    'BJ\'s Restaurant & Brewhouse',
-    'Claim Jumper',
-    "Chili's",
-    "Denny's",
-    'IHOP',
-    "Coco's Bakery",
-    'Cracker Barrel',
-    
-    // American Fast Casual
-    'Panera Bread',
-    'Corner Bakery Cafe',
-    'Jason\'s Deli',
-    'McAlister\'s Deli',
-    'Potbelly Sandwich Shop',
-    
-    // Burgers
-    'Five Guys',
-    'Shake Shack',
-    'In-N-Out Burger',
-    'The Habit Burger Grill',
-    'Smashburger',
-    'Fatburger',
-    "Carl's Jr.",
-    "Wendy's",
-    
-    // Seafood
-    'Red Lobster',
-    'Joe\'s Crab Shack',
-    'Bonefish Grill',
-    'The Crab House',
-    "Captain D's",
-    "Long John Silver's",
-    'Chart House',
-    'McCormick & Schmick\'s',
-    
-    // BBQ / Smokehouse
-    'Famous Dave\'s',
-    'Dickey\'s Barbecue Pit',
-    'Smokey Bones',
-    "Sonny's BBQ",
-    'Lucille\'s Smokehouse',
-    'Jim \'N Nick\'s Bar-B-Q',
-    'Dinosaur Bar-B-Que',
-    
-    // Brazilian
-    'Fogo de Chão',
-    'Texas de Brazil',
-    'Tucanos Brazilian Grill',
-    
-    // French
-    'La Madeleine',
-    'Cafe Paris',
-    'Chez Pierre',
-    'Le Petit Bistro',
-    
-    // Spanish
-    'Bulla Gastrobar',
-    'Barcelona Wine Bar',
-    'Ibiza Tapas',
-    
-    // Greek
-    'Zoes Kitchen',
-    'Daphne\'s Greek Cafe',
-    'The Great Greek',
-    
-    // Fusion / Contemporary
-    'The Melting Pot',
-    'Yard House',
-    'Buffalo Wild Wings',
-    'Seasons 52',
-    'California Pizza Kitchen',
-    'Earls Kitchen + Bar',
-    
-    // Breakfast / Brunch
-    'First Watch',
-    'Snooze',
-    'The Original Pancake House',
-    'Waffle House',
-    
-    // Pizza
-    'Pizza Hut',
-    "Domino's",
-    "Papa John's",
-    "Round Table Pizza",
-    "Blaze Pizza",
-    "Pieology",
-    
-    // Sandwich / Deli
-    'Subway',
-    'Jersey Mike\'s',
-    'Jimmy John\'s',
-    'Firehouse Subs',
-    
-    // Wings
-    'Wingstop',
-    'Wing Zone',
-    'Hooters',
-    
-    // Chicken
-    'Raising Cane\'s',
-    'Zaxby\'s',
-    'Popeyes',
-    'KFC',
-    'Chick-fil-A',
-  ];
+    late http.Response response;
+    try {
+      response = await http.get(Uri.parse(urlBuffer.toString())).timeout(httpTimeout);
+    } on TimeoutException {
+      appLog('searchRestaurantByName: HTTP request timed out');
+      return null;
+    } catch (e) {
+      appLog('searchRestaurantByName: HTTP request failed: $e');
+      return null;
+    }
+
+    if (response.statusCode != 200) {
+      appLog('searchRestaurantByName: HTTP status ${response.statusCode}');
+      return null;
+    }
+
+    final Map<String, dynamic> body =
+        jsonDecode(response.body) as Map<String, dynamic>? ?? {};
+    final String? status = body['status'] as String?;
+    appLog('searchRestaurantByName: API status=$status');
+
+    final List<dynamic> results = body['results'] as List<dynamic>? ?? [];
+    if (results.isEmpty) {
+      return null;
+    }
+
+    final dynamic topResult = results.first;
+    if (topResult is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final String? placeId = topResult['place_id'] as String?;
+    if (placeId == null || placeId.isEmpty) {
+      return null;
+    }
+
+    return _fetchPlaceDetails(placeId, httpTimeout);
+  } catch (e) {
+    appLog('searchRestaurantByName: Exception: $e');
+    return null;
+  }
 }

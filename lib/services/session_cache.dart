@@ -4,6 +4,7 @@
 // - Allows optional injection of a FlutterSecureStorage instance for unit testing
 // - Exposes helpers used by RequestScreen: getSavedCountry and getCountryList
 
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 
@@ -77,6 +78,41 @@ class SessionCache {
   static List<String> customOccasions = [];
   static List<String> customCountries = [];
   static bool customValsLoaded = false;
+
+  // Restaurant→cuisine cache: keyed by "country|restaurantname_lowercase"
+  static Map<String, String> restaurantCuisineCache = {};
+  static bool restaurantCuisineCacheLoaded = false;
+
+  /// Reads the user's existing reviews and populates restaurantCuisineCache.
+  /// Fire-and-forget: call without await. Silently no-ops on any error.
+  static Future<void> warmUpRestaurantCuisineCache(String userId) async {
+    if (restaurantCuisineCacheLoaded) return;
+    try {
+      final snapshot = await FirebaseDatabase.instance
+          .ref('users/$userId/reviews')
+          .get();
+      if (!snapshot.exists || snapshot.value is! Map) {
+        restaurantCuisineCacheLoaded = true;
+        return;
+      }
+      final data = snapshot.value as Map;
+      for (final entry in data.values) {
+        if (entry is! Map) continue;
+        final name = entry['restname']?.toString().trim() ?? '';
+        final country = entry['restcountry']?.toString().trim() ?? '';
+        final cuisine = entry['restcuisine']?.toString().trim() ?? '';
+        if (name.isNotEmpty && country.isNotEmpty && cuisine.isNotEmpty) {
+          // Only store the first cuisine seen — don't overwrite with later reviews
+          // (a restaurant may have multiple reviews with different cuisines; first wins)
+          final key = '$country|${name.toLowerCase()}';
+          restaurantCuisineCache.putIfAbsent(key, () => cuisine);
+        }
+      }
+      restaurantCuisineCacheLoaded = true;
+    } catch (_) {
+      // Silently fail — keyword fallback will be used instead
+    }
+  }
 
   // Indexed Matrix for filtering: Country → City → Set<Cuisine>
   static Map<String, Map<String, Set<String>>> indexedMatrix = {};

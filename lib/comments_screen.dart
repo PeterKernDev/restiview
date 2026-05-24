@@ -8,19 +8,21 @@
 //  - use Image.file with errorBuilder everywhere so missing/unreadable files don't break layout
 
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
-import 'preview_screen.dart';
+import 'general_screen.dart';
+import 'ratings_screen.dart';
 import 'sub_preview_screen/review_context.dart';
-import 'sub_preview_screen/review_formatter.dart';
 import 'services/session_cache.dart';
-import 'goodfor_screen.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'details_screen.dart';
+import 'sub_preview_screen/review_formatter.dart' as formatter;
+import 'services/draft_cache.dart';
 import 'widgets/full_screen_image.dart';
 import 'widgets/thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
@@ -136,7 +138,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   Future<String> _writeTempFile(Uint8List bytes) async {
-    final dir = await getTemporaryDirectory();
+    final dir = await getApplicationDocumentsDirectory();
     final id = const Uuid().v4();
     final file = File('${dir.path}/restiview_$id.jpg');
     await file.writeAsBytes(bytes, flush: true);
@@ -199,9 +201,12 @@ class _CommentsScreenState extends State<CommentsScreen> {
   void _removePhotoAt(int index) {
     if (!mounted) return;
     setState(() {
-      // remove file if exists (best-effort)
+      // Only delete the physical file if this is a brand-new unsaved review.
+      // For edits of an existing review, the path is still referenced in Firebase
+      // until updateReview() commits successfully. Deleting it immediately would
+      // cause greyed-out photos if the app crashes before the update is written.
       final path = _photoPaths[index];
-      if (path != null) {
+      if (path != null && widget.context.reviewKey == null) {
         try {
           final f = File(path);
           if (f.existsSync()) f.deleteSync();
@@ -233,21 +238,20 @@ class _CommentsScreenState extends State<CommentsScreen> {
   void _goToPreviewScreen() {
     _saveToContext();
 
+    // Persist draft in case the app is killed before the user reaches preview
     final email = SessionCache.userEmail;
     final name = SessionCache.userName;
-
-    final formatted = formatReviewData(widget.context.reviewMap, email, name);
-
-    final previewContext = ReviewContext(
-      reviewMap: formatted,
-      isEditing: widget.context.isEditing,
-      reviewKey: widget.context.reviewKey,
+    final formatted = formatter.formatReviewData(
+      widget.context.reviewMap,
+      email,
+      name,
     );
+    unawaited(DraftCache.save(widget.context.reviewKey, formatted));
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PreviewScreen(context: previewContext, mode: 'preview'),
+        builder: (_) => RatingsScreen(context: widget.context),
       ),
     );
   }
@@ -256,7 +260,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
     _saveToContext();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => GoodForScreen(context: widget.context)),
+      MaterialPageRoute(builder: (_) => GeneralScreen(context: widget.context)),
     );
   }
 

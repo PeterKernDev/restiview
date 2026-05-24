@@ -10,11 +10,13 @@ class ReviewListItem extends StatelessWidget {
   final Map<String, dynamic> review;
   final VoidCallback onTap;
   final bool highlight;
+  final String? friendUsername;
 
   const ReviewListItem({
     required this.review,
     required this.onTap,
     this.highlight = false,
+    this.friendUsername,
     super.key,
   });
 
@@ -40,7 +42,7 @@ class ReviewListItem extends StatelessWidget {
     final highlightColor = AppColors.ochre.withAlpha((0.12 * 255).round());
 
     return Material(
-      color: highlight ? highlightColor : Colors.transparent,
+      color: highlight ? highlightColor : AppColors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -48,7 +50,7 @@ class ReviewListItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Line 1: Restaurant name left, Rating right
+              // Line 1: Restaurant name left, optional friend name, Rating right
               Row(
                 children: [
                   Expanded(
@@ -62,9 +64,21 @@ class ReviewListItem extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  if (friendUsername != null && friendUsername!.isNotEmpty) ...[
+                    Text(
+                      friendUsername!.length > 10
+                          ? '${friendUsername!.substring(0, 10)}\u2026'
+                          : friendUsername!,
+                      style: AppFonts.standard.copyWith(
+                        fontSize: 13,
+                        color: AppColors.purple,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   Text(
                     '${AppStr.ratingLabel} $rating',
-                    style: AppFonts.standard.copyWith(color: Colors.black),
+                    style: AppFonts.standard.copyWith(color: AppColors.black),
                   ),
                 ],
               ),

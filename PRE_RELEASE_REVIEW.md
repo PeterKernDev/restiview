@@ -1,5 +1,6 @@
 # Pre-Release Code Review Report
 **Date:** December 20, 2025  
+**Updated:** March 20, 2026 — All H/M/L issues from TESTING_CHECKLIST.md resolved (see DEV_NOTES.md §March 2026)  
 **Target:** Play Store Testing Release  
 **Reviewer:** AI Code Review
 
@@ -223,14 +224,14 @@ Then replace direct Colors.* usages.
 | Category | Status | Notes |
 |----------|--------|-------|
 | Compilation | ✅ PASS | No errors |
-| Type Safety | ✅ PASS | Proper null safety |
-| Async Handling | ✅ PASS | Good mounted checks |
-| Error Handling | ✅ PASS | Firebase errors caught |
-| UI Consistency | ✅ PASS | AppFonts/AppColors mostly used |
-| Hardcoded Strings | ⚠️ MINOR | 7 strings need migration |
-| Debug Code | ⚠️ MINOR | ~60 debugPrint statements |
+| Type Safety | ✅ PASS | All unsafe casts replaced with `is` guards |
+| Async Handling | ✅ PASS | `mounted` checks added throughout |
+| Error Handling | ✅ PASS | All Firebase catch blocks complete |
+| UI Consistency | ✅ PASS | AppFonts/AppColors/AppStr used consistently |
+| Hardcoded Strings | ✅ PASS | All strings migrated to AppStr |
+| Debug Code | ✅ PASS | All `debugPrint` replaced with `appLog()` |
 | Architecture | ✅ PASS | Clean separation of concerns |
-| Performance | ✅ PASS | No obvious bottlenecks |
+| Performance | ✅ PASS | Atomic DB writes, no serial loops |
 
 ---
 
@@ -247,12 +248,13 @@ Then replace direct Colors.* usages.
 
 Before uploading to Play Store:
 
-- [ ] Remove/wrap all debugPrint statements
-- [ ] Add missing AppStr constants
-- [ ] Update hardcoded strings to use AppStr
-- [ ] Update version in pubspec.yaml
+- [x] Replace all `debugPrint` with `appLog()` (silenced in production mode)
+- [x] Add missing AppStr constants
+- [x] Migrate all hardcoded UI strings to AppStr
+- [ ] Set `appMode = AppMode.production` in `restiview_constants.dart`
+- [ ] Update version in `pubspec.yaml`
 - [ ] Update CHANGELOG or release notes
-- [ ] Build release APK/AAB
+- [ ] Build release AAB: `flutter build appbundle --release --dart-define=PLACES_API_KEY=<key>`
 - [ ] Test release build on physical device
 - [ ] Verify no debug output in release build
 - [ ] Update Firebase production rules if needed

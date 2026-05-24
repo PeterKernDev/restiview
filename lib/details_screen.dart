@@ -15,6 +15,7 @@ import 'sub_preview_screen/review_context.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/strings.dart';
+import 'services/session_cache.dart';
 import 'widgets/full_screen_image.dart';
 import 'widgets/thumbnail.dart';
 
@@ -159,6 +160,12 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
   Future<void> _pickPhoto(int index) async {
     if (_isBusy || !mounted) return;
+    if (!SessionCache.allowPhotos) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.photoDisabled)));
+      return;
+    }
     try {
       setState(() => _isBusy = true);
       final picked = await _picker.pickImage(
@@ -418,14 +425,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
         centerTitle: true,
         title: Text(
           widget.title,
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         actions: <Widget>[
           TextButton(
             onPressed: _isBusy ? null : _saveAndReturn,
             child: Text(
               AppStr.save,
-              style: AppFonts.standard.copyWith(color: Colors.white),
+              style: AppFonts.standard.copyWith(color: AppColors.white),
             ),
           ),
         ],
@@ -496,7 +503,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                                   style: AppFonts.bold.copyWith(
                                     color: canAddMore
                                         ? AppColors.btnText
-                                        : Colors.black45,
+                                        : AppColors.black45,
                                   ),
                                 ),
                               ),
@@ -534,7 +541,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
             ),
             if (_isBusy)
               Container(
-                color: Colors.black.withAlpha(80),
+                color: AppColors.black.withAlpha(80),
                 child: const Center(child: CircularProgressIndicator()),
               ),
           ],

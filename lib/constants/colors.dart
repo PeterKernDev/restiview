@@ -37,11 +37,18 @@ class AppColors {
   static const Color lightGreenAccent = Color(0xFFB2FF59);
 
   static const Color white = Color(0xFFFFFFFF);
+  static const Color white70 = Color(0xB3FFFFFF);
+  static const Color transparent = Color(0x00000000);
   static const Color black = Color(0xFF000000);
   static const Color black12 = Color(0x1F000000);
+  static const Color black26 = Color(0x42000000);
   static const Color black38 = Color(0x61000000);
+  static const Color black45 = Color(0x73000000);
   static const Color black54 = Color(0x8A000000);
   static const Color black87 = Color(0xDD000000);
+  static const Color purple = Color(0xFF9C27B0);
+  static const Color yellowShade100 = Color(0xFFFFF9C4);
+  static const Color lightBlueShade100 = Color(0xFFB3E5FC);
 
   // Standard button colors
   static const Color btnDelete = red; // Red / Black text

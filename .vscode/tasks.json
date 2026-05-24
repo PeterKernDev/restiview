@@ -4,7 +4,7 @@
     {
       "label": "Clean, Get, Run",
       "type": "shell",
-      "command": "flutter clean && flutter pub get && flutter run",
+      "command": "flutter clean && flutter pub get && flutter run --dart-define=PLACES_API_KEY=AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4",
       "group": {
         "kind": "build",
         "isDefault": true

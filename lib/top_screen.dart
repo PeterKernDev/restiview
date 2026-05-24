@@ -21,6 +21,8 @@ import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/restiview_constants.dart';
+import 'services/draft_cache.dart';
+import 'preview_screen.dart';
 
 class TopScreen extends StatefulWidget {
   const TopScreen({super.key});
@@ -31,6 +33,7 @@ class TopScreen extends StatefulWidget {
 
 class _TopScreenState extends State<TopScreen> {
   bool _isLoading = false;
+  bool _isSigningOut = false;
   bool _acceptsFriends =
       true; // whether this user accepts friends (controls button enabled)
   bool _hasRequestedReviews = false; // whether user has any requested reviews
@@ -50,12 +53,80 @@ class _TopScreenState extends State<TopScreen> {
     _checkNewReviewsDelivered(); // Check for new reviews delivered
     _checkMailbox(); // Check mailbox on screen open
     _startMailboxTimer(); // Start periodic mailbox checks
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForDraft());
   }
 
   @override
   void dispose() {
     _mailboxCheckTimer?.cancel();
     super.dispose();
+  }
+
+  // Check for a locally persisted draft and offer to resume editing.
+  Future<void> _checkForDraft() async {
+    if (!mounted) return;
+    final draft = await DraftCache.load();
+    if (draft == null) return;
+    if (!mounted) return;
+
+    final reviewMap = draft['reviewMap'];
+    final reviewKey = draft['reviewKey'] as String?;
+    if (reviewMap is! Map) {
+      await DraftCache.clear();
+      return;
+    }
+
+    final String restName =
+        (reviewMap['restname'] ?? reviewMap['restaurantName'] ?? '')
+            .toString()
+            .trim();
+    final String message = AppStr.draftResumeMessage.replaceFirst(
+      '%s',
+      restName.isNotEmpty ? restName : 'unknown restaurant',
+    );
+
+    final bool? resume = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text(AppStr.draftResumeTitle),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(AppStr.draftDiscard),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(AppStr.draftResume),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (resume != true) {
+      await DraftCache.clear();
+      return;
+    }
+
+    // Restore the draft into a ReviewContext and navigate to PreviewScreen.
+    // hasChanges: true causes auto-save to fire on arrival for existing reviews.
+    final restoredMap = Map<String, dynamic>.from(reviewMap);
+    final ctx = ReviewContext(
+      reviewMap: restoredMap,
+      isEditing: true,
+      reviewKey: reviewKey,
+      hasChanges: reviewKey != null, // trigger auto-save for existing reviews
+    );
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(context: ctx, mode: 'preview'),
+      ),
+    );
   }
 
   void _checkFriends() async {
@@ -117,7 +188,7 @@ class _TopScreenState extends State<TopScreen> {
       }
     } catch (e) {
       // Silent failure with logging
-      debugPrint('Error checking mailbox: $e');
+      appLog('Error checking mailbox: $e');
     }
   }
 
@@ -152,7 +223,7 @@ class _TopScreenState extends State<TopScreen> {
 
       return false;
     } catch (e) {
-      debugPrint('Error checking pending friend actions: $e');
+      appLog('Error checking pending friend actions: $e');
       return false;
     }
   }
@@ -188,7 +259,7 @@ class _TopScreenState extends State<TopScreen> {
 
       return false;
     } catch (e) {
-      debugPrint('Error checking new reviews delivered: $e');
+      appLog('Error checking new reviews delivered: $e');
       return false;
     }
   }
@@ -208,7 +279,7 @@ class _TopScreenState extends State<TopScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error checking new reviews delivered: $e');
+      appLog('Error checking new reviews delivered: $e');
     }
   }
 
@@ -278,46 +349,48 @@ class _TopScreenState extends State<TopScreen> {
       if (!mounted) {
         return;
       }
+      appLog('loadFriends error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppStr.loadFriendsError}: $e')),
+          const SnackBar(content: Text(AppStr.loadFriendsError)),
         );
       }
     }
   }
 
   Future<void> _signOut() async {
-    // Update review_info before signing out (regardless of daily limit)
+    if (_isSigningOut) return;
+    setState(() => _isSigningOut = true);
+
+    // Update review_info before signing out, but don't let it block sign-out
     final userId = FirebaseAuth.instance.currentUser?.uid;
     final userEmail = SessionCache.userEmail;
     if (userId != null && userEmail.isNotEmpty) {
       try {
         final normalizedEmail = normalizeEmailForPath(userEmail);
-        await updateReviewInfo(userId, normalizedEmail);
+        await updateReviewInfo(userId, normalizedEmail)
+            .timeout(const Duration(seconds: 8));
         final today = DateTime.now().toIso8601String().substring(0, 10);
         await SessionCache.setReviewInfoLastUpdate(today);
         await SessionCache.setReviewsAdded(false);
       } catch (e) {
-        debugPrint('Error updating review_info on sign out: \$e');
+        appLog('Error updating review_info on sign out: $e');
+        // Continue with sign-out regardless
       }
     }
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${AppStr.signOutFailed}: $e')));
-      }
+      if (!mounted) return;
+      setState(() => _isSigningOut = false);
+      appLog('signOut error: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStr.signOutFailed)));
       return;
     }
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/');
   }
 
@@ -415,7 +488,13 @@ class _TopScreenState extends State<TopScreen> {
       }
       return null;
     } catch (e) {
-      debugPrint('Error collecting and clearing new reviews flags: $e');
+      appLog('Error collecting and clearing new reviews flags: $e');
+      // Clear stale indicator so UI doesn't stay stuck showing the badge
+      if (mounted) {
+        setState(() {
+          _hasNewReviewsDelivered = false;
+        });
+      }
       return null;
     }
   }
@@ -531,7 +610,7 @@ class _TopScreenState extends State<TopScreen> {
     final Color friendsBg = _acceptsFriends
         ? AppColors.ochre
         : AppColors.greyShade400;
-    final Color friendsFg = _acceptsFriends ? Colors.black87 : Colors.black38;
+    final Color friendsFg = _acceptsFriends ? AppColors.black87 : AppColors.black38;
 
     return Scaffold(
       backgroundColor: AppColors.beige,
@@ -540,7 +619,7 @@ class _TopScreenState extends State<TopScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           '${AppStr.appTitle} : $displayName',
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         centerTitle: true,
       ),
@@ -552,7 +631,7 @@ class _TopScreenState extends State<TopScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 24),
                   Text(
                     AppStr.restaurantReviews,
                     style: AppFonts.bold.copyWith(
@@ -561,11 +640,11 @@ class _TopScreenState extends State<TopScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 24),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ochre,
-                      foregroundColor: Colors.black87,
+                      foregroundColor: AppColors.black87,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -578,7 +657,7 @@ class _TopScreenState extends State<TopScreen> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ochre,
-                      foregroundColor: Colors.black87,
+                      foregroundColor: AppColors.black87,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -600,7 +679,7 @@ class _TopScreenState extends State<TopScreen> {
                         backgroundColor: _hasRequestedReviews
                             ? AppColors.ochre
                             : AppColors.greyShade400,
-                        foregroundColor: Colors.black87,
+                        foregroundColor: AppColors.black87,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -653,14 +732,14 @@ class _TopScreenState extends State<TopScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.settings, color: Colors.white),
+                    icon: const Icon(Icons.settings, color: AppColors.white),
                     label: Text(
                       AppStr.settings,
-                      style: AppFonts.standard.copyWith(color: Colors.white),
+                      style: AppFonts.standard.copyWith(color: AppColors.white),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.grey,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -671,7 +750,7 @@ class _TopScreenState extends State<TopScreen> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -682,24 +761,33 @@ class _TopScreenState extends State<TopScreen> {
                     },
                     child: Text(
                       AppStr.help,
-                      style: AppFonts.standard.copyWith(color: Colors.white),
+                      style: AppFonts.standard.copyWith(color: AppColors.white),
                     ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.red,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: _signOut,
-                    child: Text(
-                      AppStr.signOut,
-                      style: AppFonts.standard.copyWith(color: Colors.white),
-                    ),
+                    onPressed: _isSigningOut ? null : _signOut,
+                    child: _isSigningOut
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : Text(
+                            AppStr.signOut,
+                            style: AppFonts.standard.copyWith(color: AppColors.white),
+                          ),
                   ),
                 ],
               ),

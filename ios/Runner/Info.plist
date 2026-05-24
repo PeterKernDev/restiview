@@ -45,5 +45,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Restiview uses your camera to add photos to your restaurant reviews.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Restiview accesses your photo library so you can add existing photos to your restaurant reviews.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Restiview saves review photos to your photo library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Restiview uses your location to find nearby restaurants when creating a review.</string>
 </dict>
 </plist>

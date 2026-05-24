@@ -22,9 +22,11 @@ import 'services/startup_tasks.dart';
 import 'services/db_utils.dart'; // normalizeEmailForPath helper
 import 'services/user_setup.dart'; // ensureUserSetup helper
 import 'services/mailbox_helper.dart'; // Mailbox processing service
+import 'services/network_utils.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'constants/restiview_constants.dart';
 
 List<String> getSystemCountryNames([BuildContext? context]) {
   String? code;
@@ -164,6 +166,14 @@ class _SignInScreenState extends State<SignInScreen> {
     final String email = _emailController.text.trim();
     final String password = _passwordController.text.trim();
 
+    if (!await hasInternetConnection()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStr.networkError)),
+      );
+      return;
+    }
+
     _toggleLoading(true);
     try {
       try {
@@ -185,13 +195,10 @@ class _SignInScreenState extends State<SignInScreen> {
             await _onSignedIn(retryCredential, email, password);
             return;
           } catch (retryErr) {
+            appLog('Sign-in retry error: $retryErr');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${AppStr.signInFailed}: ${retryErr.toString()}',
-                  ),
-                ),
+                SnackBar(content: Text(AppStr.signInFailed)),
               );
             }
           }
@@ -206,7 +213,8 @@ class _SignInScreenState extends State<SignInScreen> {
             message = AppStr.emailNotFound;
             break;
           default:
-            message = '${AppStr.signInFailed}: ${e.message ?? e.code}';
+            appLog('Sign-in error [${e.code}]: ${e.message}');
+            message = AppStr.signInFailed;
         }
 
         if (!mounted) {
@@ -224,19 +232,19 @@ class _SignInScreenState extends State<SignInScreen> {
         await SessionCache.clearCredentials();
         return;
       } on FirebaseException catch (fe) {
+        appLog('Sign-in FirebaseException [${fe.code}]: ${fe.message}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${AppStr.signInFailed}: ${fe.message ?? fe.code}'),
-            ),
+            SnackBar(content: Text(AppStr.signInFailed)),
           );
         }
         return;
       } catch (e) {
+        appLog('Sign-in unexpected error: $e');
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('${AppStr.signInFailed}: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppStr.signInFailed)),
+          );
         }
         return;
       }
@@ -441,7 +449,7 @@ class _SignInScreenState extends State<SignInScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           AppStr.signInTitle,
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         centerTitle: true,
       ),
@@ -544,12 +552,9 @@ class _SignInScreenState extends State<SignInScreen> {
                                 ),
                               );
                             } catch (e) {
+                              appLog('Password reset error: $e');
                               messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${AppStr.resetLinkError}: ${e.toString()}',
-                                  ),
-                                ),
+                                SnackBar(content: Text(AppStr.resetLinkError)),
                               );
                             }
                           }
@@ -599,7 +604,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.darkGreen,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -612,14 +617,14 @@ class _SignInScreenState extends State<SignInScreen> {
                           },
                     child: Text(
                       AppStr.signInButton,
-                      style: AppFonts.standard.copyWith(color: Colors.white),
+                      style: AppFonts.standard.copyWith(color: AppColors.white),
                     ),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ochre,
-                      foregroundColor: Colors.black,
+                      foregroundColor: AppColors.black,
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -632,7 +637,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           },
                     child: Text(
                       AppStr.back,
-                      style: AppFonts.standard.copyWith(color: Colors.black),
+                      style: AppFonts.standard.copyWith(color: AppColors.black),
                     ),
                   ),
                 ],

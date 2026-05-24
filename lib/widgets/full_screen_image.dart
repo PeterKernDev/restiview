@@ -4,6 +4,8 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../constants/colors.dart';
+import '../constants/fonts.dart';
 import '../constants/strings.dart';
 
 class FullScreenImage extends StatelessWidget {
@@ -14,16 +16,16 @@ class FullScreenImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.black,
       body: GestureDetector(
         onTap: () => Navigator.pop(context),
         child: Center(
           child: Image.file(
             File(path),
             fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Text(
+            errorBuilder: (context, error, stackTrace) => Text(
               AppStr.photoError,
-              style: TextStyle(color: Colors.white),
+              style: AppFonts.standard.copyWith(color: AppColors.white),
               textAlign: TextAlign.center,
             ),
           ),

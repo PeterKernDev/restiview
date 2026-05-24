@@ -4,7 +4,7 @@ name: restiview
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.6.4+25
+version: 2.0.1+40
 
 environment:
   sdk: ^3.9.2
@@ -40,18 +40,11 @@ dependencies:
 
 
 
-fonts:
-  - family: Gelica
-    fonts:
-      - asset: fonts/Gelica-Regular.ttf
-      - asset: fonts/Gelica-Bold.ttf
-        weight: 700
-
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  googleapis_auth: ^2.0.0
   
 
 flutter:
@@ -59,4 +52,26 @@ flutter:
 
   assets:
     - assets/restiview_icon_V4_yg.png
+
+  fonts:
+    - family: Literata
+      fonts:
+        - asset: fonts/Literata-Regular.ttf
+        - asset: fonts/Literata-Italic.ttf
+          style: italic
+        - asset: fonts/Literata-Medium.ttf
+          weight: 500
+        - asset: fonts/Literata-MediumItalic.ttf
+          weight: 500
+          style: italic
+        - asset: fonts/Literata-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Literata-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+        - asset: fonts/Literata-Bold.ttf
+          weight: 700
+        - asset: fonts/Literata-BoldItalic.ttf
+          weight: 700
+          style: italic
     

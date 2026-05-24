@@ -193,11 +193,9 @@ Future<AcceptProvidedReviewsResult> acceptProvidedReviews({
       }
     }
 
-    // 4. Write reviews individually (avoid permission issues with atomic update)
-    for (final MapEntry<String, dynamic> entry in updates.entries) {
-      final String path = entry.key;
-      final dynamic value = entry.value;
-      await FirebaseDatabase.instance.ref(path).set(value);
+    // 4. Write all reviews atomically (single DB call — no partial state on mid-write failure)
+    if (updates.isNotEmpty) {
+      await FirebaseDatabase.instance.ref().update(updates);
     }
 
     // 5. Update friend record back to FRIEND status (statusCode=1)

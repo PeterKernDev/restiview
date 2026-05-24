@@ -9,15 +9,20 @@ import 'package:firebase_database/firebase_database.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/strings.dart';
+import 'constants/restiview_constants.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'preview_screen.dart';
+import 'services/ube_provider.dart';
+import 'services/friend_event_audit.dart';
+import 'services/db_utils.dart';
 
 class ReviewReviewsScreen extends StatefulWidget {
   const ReviewReviewsScreen({
     super.key,
     required this.friendUid,
     required this.friendEntryUid,
-    required this.filters, // expected map: {country, cuisine, city} — legacy; we will prefer friend review node
+    required this.filters, // legacy single-filter fallback map: {country, city}
+    this.filtersList, // preferred multi-filter fallback; used when DB read fails
     this.initialExKeys,
   });
 
@@ -26,6 +31,7 @@ class ReviewReviewsScreen extends StatefulWidget {
   final String friendUid;
   final String friendEntryUid;
   final Map<String, String?> filters;
+  final List<Map<String, String?>>? filtersList;
   final List<String>? initialExKeys;
 
   @override
@@ -41,6 +47,8 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
   String? _selectedKey;
   bool _loading = true;
   bool _saving = false;
+  bool _accepting = false;
+  bool _declining = false;
 
   String get myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -72,6 +80,24 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
       }
     }
     return null;
+  }
+
+  // Build fallback filters from passed widget params.
+  // Prefers widget.filtersList (multi-filter) over the legacy widget.filters (single map).
+  List<Map<String, String?>> _buildFallbackFilters() {
+    if (widget.filtersList != null && widget.filtersList!.isNotEmpty) {
+      return List<Map<String, String?>>.from(widget.filtersList!);
+    }
+    final String? country = (widget.filters['country'] ?? '').trim().isEmpty
+        ? null
+        : widget.filters['country']?.trim();
+    final String? city = (widget.filters['city'] ?? '').trim().isEmpty
+        ? null
+        : widget.filters['city']?.trim();
+    if (country != null && country.isNotEmpty) {
+      return <Map<String, String?>>[<String, String?>{'country': country, 'city': city}];
+    }
+    return <Map<String, String?>>[];
   }
 
   // Load friend review filters (from users/<myUid>/friends/<friendUid>/review) then
@@ -141,35 +167,13 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
         }
       }
       
-      // Fallback to widget.filters if still empty
+      // Fallback to passed filter params if still empty
       if (filters.isEmpty) {
-        final String? countryFilter = (widget.filters['country'] ?? '').trim().isEmpty
-            ? null
-            : widget.filters['country']?.trim();
-        final String? cityFilter = (widget.filters['city'] ?? '').trim().isEmpty
-            ? null
-            : widget.filters['city']?.trim();
-        if (countryFilter != null && countryFilter.isNotEmpty) {
-          filters.add(<String, String?>{
-            'country': countryFilter,
-            'city': cityFilter,
-          });
-        }
+        filters = _buildFallbackFilters();
       }
     } catch (e) {
-      // On error reading friend review node, fall back to widget.filters
-      final String? countryFilter = (widget.filters['country'] ?? '').trim().isEmpty
-          ? null
-          : widget.filters['country']?.trim();
-      final String? cityFilter = (widget.filters['city'] ?? '').trim().isEmpty
-          ? null
-          : widget.filters['city']?.trim();
-      if (countryFilter != null && countryFilter.isNotEmpty) {
-        filters.add(<String, String?>{
-          'country': countryFilter,
-          'city': cityFilter,
-        });
-      }
+      // On error reading friend review node, fall back to passed filter params
+      filters = _buildFallbackFilters();
     }
 
     try {
@@ -280,34 +284,260 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     });
   }
 
-  void _excludeSelected() {
-    if (_selectedKey == null) {
-      return;
-    }
-    if (_excludedKeys.contains(_selectedKey)) {
-      return;
-    }
+  void _toggleExclusion(String key) {
     if (!mounted) {
       return;
     }
     setState(() {
-      _excludedKeys.add(_selectedKey!);
+      if (_excludedKeys.contains(key)) {
+        _excludedKeys.remove(key);
+      } else {
+        _excludedKeys.add(key);
+      }
     });
   }
 
-  void _includeSelected() {
-    if (_selectedKey == null) {
-      return;
-    }
-    if (!_excludedKeys.contains(_selectedKey)) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
+  Future<void> _onAccept() async {
+    if (_loading || _saving || _accepting || _declining) return;
+
+    final int total = _reviews.length;
+    final int excluded = _excludedKeys.length;
+    final int approvedCount = total - excluded;
+
+    if (!mounted) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: Text(AppStr.accept),
+          content: Text(AppStr.sendNReviews(approvedCount)),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text(AppStr.noLabel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(AppStr.yes),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
     setState(() {
-      _excludedKeys.remove(_selectedKey);
+      _accepting = true;
     });
+
+    // Build the list of reviews to provide (in-memory, already filtered)
+    final List<Map<dynamic, dynamic>> toProvide = _reviews
+        .where((r) => !_excludedKeys.contains(r['key'] as String))
+        .take(50)
+        .map((r) {
+          final Map<dynamic, dynamic> item = Map<dynamic, dynamic>.from(
+            r['data'] is Map ? r['data'] as Map : <dynamic, dynamic>{},
+          );
+          item['key'] = r['key'];
+          return item;
+        })
+        .toList();
+
+    if (toProvide.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _accepting = false;
+        });
+        showDialog<void>(
+          context: context,
+          builder: (BuildContext ctx) {
+            return AlertDialog(
+              title: const Text(AppStr.reviewReviewsTitle),
+              content: const Text(AppStr.noMatchingReviewsCannotAccept),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text(AppStr.ok),
+                ),
+              ],
+            );
+          },
+        );
+      }
+      return;
+    }
+
+    // First persist the current exclusion state
+    try {
+      final String reviewPath =
+          'users/$myUid/friends/${widget.friendUid}/review_request';
+      await FirebaseDatabase.instance.ref().update(<String, dynamic>{
+        '$reviewPath/exCount': _excludedKeys.length,
+        '$reviewPath/exKeys': _excludedKeys.isNotEmpty
+            ? _excludedKeys.toList()
+            : <String>[],
+        '$reviewPath/updatedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+
+    try {
+      final DatabaseReference rootRef = FirebaseDatabase.instance.ref();
+      final Map<String, dynamic> updates = await buildProvideUpdate(
+        rootRef: rootRef,
+        providerUid: myUid,
+        requesterUid: widget.friendUid,
+        reviews: toProvide,
+      );
+
+      await performProvide(rootRef: rootRef, updates: updates);
+
+      await writeFriendEvent(
+        eventType: 'review_request_accepted',
+        actorUid: myUid,
+        targetUid: widget.friendUid,
+        metadata: <String, dynamic>{'reviewCount': toProvide.length},
+      );
+
+      final String nowIso = DateTime.now().toUtc().toIso8601String();
+      await FirebaseDatabase.instance.ref().update(<String, dynamic>{
+        'users/$myUid/friends/${widget.friendUid}/statusCode': 1,
+        'users/$myUid/friends/${widget.friendUid}/review_request': null,
+        'users/$myUid/friends/${widget.friendUid}/updatedAt': nowIso,
+      });
+
+      if (!mounted) return;
+      final String infoMsg =
+          'Request accepted - ${toProvide.length} reviews provided';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(infoMsg)));
+      Navigator.of(context).pop('done');
+    } catch (e) {
+      appLog('Error performing accept: $e');
+      if (mounted) {
+        setState(() {
+          _accepting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.requestSendFailed)),
+        );
+      }
+    }
+  }
+
+  Future<void> _onDecline() async {
+    if (_loading || _saving || _accepting || _declining) return;
+
+    if (!mounted) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: Text(AppStr.declineReviewRequestTitle),
+          content: const Text(AppStr.declineReviewRequestConfirm),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text(AppStr.noLabel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(AppStr.yes),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() {
+      _declining = true;
+    });
+
+    try {
+      // Look up requester email from their public profile
+      String requesterEmail = '';
+      try {
+        final DataSnapshot pubSnap = await FirebaseDatabase.instance
+            .ref('public_profiles/${widget.friendUid}/email')
+            .get();
+        if (pubSnap.exists &&
+            pubSnap.value is String &&
+            (pubSnap.value as String).trim().isNotEmpty) {
+          requesterEmail = (pubSnap.value as String).trim();
+        }
+      } catch (_) {}
+      if (requesterEmail.isEmpty) {
+        try {
+          final DataSnapshot userSnap = await FirebaseDatabase.instance
+              .ref('users/${widget.friendUid}/email')
+              .get();
+          if (userSnap.exists &&
+              userSnap.value is String &&
+              (userSnap.value as String).trim().isNotEmpty) {
+            requesterEmail = (userSnap.value as String).trim();
+          }
+        } catch (_) {}
+      }
+
+      if (requesterEmail.isEmpty) {
+        throw Exception('Requester email not available');
+      }
+
+      final String normalizedMailbox =
+          normalizeEmailForPath(requesterEmail.toLowerCase());
+      final String requestId =
+          DateTime.now().millisecondsSinceEpoch.toString();
+      final String nowIso = DateTime.now().toUtc().toIso8601String();
+
+      final Map<String, dynamic> updates = <String, dynamic>{};
+
+      final String requestBasePath =
+          'users_by_email/$normalizedMailbox/requests/$requestId';
+      updates['$requestBasePath/fromUid'] = myUid;
+      updates['$requestBasePath/statusCode'] = 6;
+      updates['$requestBasePath/createdAt'] = nowIso;
+      updates['$requestBasePath/clientRequestId'] = requestId;
+      updates['$requestBasePath/type'] = 'review_declined';
+      updates['$requestBasePath/meta'] = <String, dynamic>{
+        'provider-message': '',
+        'providerUid': myUid,
+        'declinedAt': nowIso,
+      };
+
+      updates['users/$myUid/friends/${widget.friendUid}/statusCode'] = 1;
+      updates['users/$myUid/friends/${widget.friendUid}/review_request'] = null;
+      updates['users/$myUid/friends/${widget.friendUid}/comment'] = null;
+      updates['users/$myUid/friends/${widget.friendUid}/updatedAt'] = nowIso;
+
+      await FirebaseDatabase.instance.ref().update(updates);
+
+      await writeFriendEvent(
+        eventType: 'review_request_declined',
+        actorUid: myUid,
+        targetUid: widget.friendUid,
+        metadata: <String, dynamic>{'providerMessage': ''},
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStr.reviewRequestDeclined)),
+      );
+      Navigator.of(context).pop('done');
+    } catch (e) {
+      appLog('Error declining review request: $e');
+      if (mounted) {
+        setState(() {
+          _declining = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.requestSendFailed)),
+        );
+      }
+    }
   }
 
   Future<void> _previewSelected() async {
@@ -347,15 +577,6 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
         _excludedKeys.add(_selectedKey!);
       });
     }
-  }
-
-  // Public/well-named wrappers to match button semantics
-  void onExclude() {
-    _excludeSelected();
-  }
-
-  void onInclude() {
-    _includeSelected();
   }
 
   Future<void> onPreview() async {
@@ -457,10 +678,9 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
 
     // Use withValues(alpha: double) to avoid withOpacity; selected background uses AppColors.ochre
     final Color selectedBg = AppColors.ochre.withValues(alpha: 0.15);
-    final Color excludedCircleBg = AppColors.red.withValues(alpha: 0.15);
 
     return Material(
-      color: selected ? selectedBg : Colors.transparent,
+      color: selected ? selectedBg : AppColors.transparent,
       child: InkWell(
         onTap: () {
           _selectReview(key);
@@ -470,7 +690,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              // Line 1: Restaurant name left, Rating right
+              // Line 1: Restaurant name left, Rating, IN/OUT toggle right
               Row(
                 children: <Widget>[
                   Expanded(
@@ -486,7 +706,29 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                   const SizedBox(width: 8),
                   Text(
                     '${AppStr.ratingLabel} $rating',
-                    style: AppFonts.standard.copyWith(color: Colors.black),
+                    style: AppFonts.standard.copyWith(color: AppColors.black),
+                  ),
+                  const SizedBox(width: 10),
+                  // IN / OUT toggle badge
+                  GestureDetector(
+                    onTap: () => _toggleExclusion(key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: excluded ? AppColors.red : AppColors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        excluded ? 'OUT' : 'IN',
+                        style: AppFonts.bold.copyWith(
+                          color: AppColors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -529,23 +771,6 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: <Widget>[
-                  if (excluded)
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: excludedCircleBg,
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.close, color: AppColors.red, size: 18),
-                      ),
-                    ),
-                ],
-              ),
               const SizedBox(height: 6),
               const Divider(height: 1),
             ],
@@ -561,12 +786,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     final int excluded = _excludedKeys.length;
     final int included = total - excluded;
 
-    final bool canExclude =
-        _selectedKey != null && !_excludedKeys.contains(_selectedKey);
-    final bool canInclude =
-        _selectedKey != null && _excludedKeys.contains(_selectedKey);
-    final bool canPreview =
-        _selectedKey != null && !_excludedKeys.contains(_selectedKey);
+    final bool canPreview = _selectedKey != null;
 
     // Base button style created with styleFrom to avoid deprecated MaterialStateProperty usage
     final ButtonStyle baseBtn = ElevatedButton.styleFrom(
@@ -579,7 +799,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
       appBar: AppBar(
         title: Text(
           AppStr.reviewReviewsTitle,
-          style: AppFonts.title.copyWith(color: Colors.white),
+            style: AppFonts.title.copyWith(color: AppColors.white),
         ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
@@ -646,100 +866,103 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
                         ),
                 ),
 
-                // Two rows of buttons at bottom
+                // Top row: Accept | Decline
+                Container(
+                  color: AppColors.beige,
+                  padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 0.0),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: ElevatedButton(
+                            onPressed: (_saving || _accepting || _declining)
+                                ? null
+                                : _onAccept,
+                            style: baseBtn.merge(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.green,
+                                foregroundColor: AppColors.white,
+                              ),
+                            ),
+                            child: Text(AppStr.accept),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: ElevatedButton(
+                            onPressed: (_saving || _accepting || _declining)
+                                ? null
+                                : _onDecline,
+                            style: baseBtn.merge(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.red,
+                                foregroundColor: AppColors.white,
+                              ),
+                            ),
+                            child: Text(AppStr.declineLabel),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom row: Back | Clear | Preview
                 Container(
                   color: AppColors.beige,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12.0,
                     vertical: 8.0,
                   ),
-                  child: Column(
+                  child: Row(
                     children: <Widget>[
-                      // Row 1: Back (LJ) and Clear (RJ)
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: ElevatedButton(
-                                onPressed: _saveStateAndPop,
-                                style: baseBtn.merge(
-                                  ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.btnBack,
-                                    foregroundColor: AppColors.btnText,
-                                  ),
-                                ),
-                                child: Text(AppStr.backButtonLabel),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ElevatedButton(
+                            onPressed: _saveStateAndPop,
+                            style: baseBtn.merge(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.btnBack,
+                                foregroundColor: AppColors.btnText,
                               ),
                             ),
+                            child: Text(AppStr.backButtonLabel),
                           ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: ElevatedButton(
-                                onPressed: _clearExclusions,
-                                style: baseBtn.merge(
-                                  ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.btnClear,
-                                    foregroundColor: AppColors.btnText,
-                                  ),
-                                ),
-                                child: Text(AppStr.clear),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      // Row 2: Exclude (LJ), Include (CJ), Preview (RJ)
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: ElevatedButton(
-                                onPressed: canExclude ? onExclude : null,
-                                style: baseBtn.merge(
-                                  ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.red,
-                                  ),
-                                ),
-                                child: Text(AppStr.exclude),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ElevatedButton(
+                            onPressed: _clearExclusions,
+                            style: baseBtn.merge(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.btnClear,
+                                foregroundColor: AppColors.btnText,
                               ),
                             ),
+                            child: Text(AppStr.clear),
                           ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.center,
-                              child: ElevatedButton(
-                                onPressed: canInclude ? onInclude : null,
-                                style: baseBtn.merge(
-                                  ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.green,
-                                  ),
-                                ),
-                                child: Text(AppStr.include),
+                        ),
+                      ),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton(
+                            onPressed: canPreview ? () => onPreview() : null,
+                            style: baseBtn.merge(
+                              ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.btnPreview,
+                                foregroundColor: AppColors.btnText,
                               ),
                             ),
+                            child: Text(AppStr.preview),
                           ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: ElevatedButton(
-                                onPressed: canPreview
-                                    ? () => onPreview()
-                                    : null,
-                                style: baseBtn.merge(
-                                  ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.btnPreview,
-                                    foregroundColor: AppColors.btnText,
-                                  ),
-                                ),
-                                child: Text(AppStr.preview),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
@@ -747,7 +970,7 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
               ],
             ),
 
-            if (_saving)
+            if (_saving || _accepting || _declining)
               Container(
                 color: AppColors.overlayDefault,
                 child: const Center(child: CircularProgressIndicator()),

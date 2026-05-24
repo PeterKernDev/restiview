@@ -18,7 +18,9 @@ Future<void> runStartupTasks({
 
   // 2. Load user settings
   final userSnapshot = await FirebaseDatabase.instance.ref('users/$uid').get();
-  final userMap = userSnapshot.value as Map<dynamic, dynamic>? ?? {};
+  final userMap = userSnapshot.value is Map
+      ? Map<dynamic, dynamic>.from(userSnapshot.value as Map)
+      : <dynamic, dynamic>{};
 
   SessionCache.sortOption = ((userMap['userSettings1'] as String?) ?? 'date').toLowerCase();
   SessionCache.allowLocation = (userMap['userSettings3'] as bool?) ?? false;
@@ -29,13 +31,17 @@ Future<void> runStartupTasks({
   // 3. Load reviews and build Indexed Matrix
   final reviewsRef = FirebaseDatabase.instance.ref('users/$uid/reviews');
   final reviewsSnapshot = await reviewsRef.get();
-  final rawReviews = reviewsSnapshot.value as Map<dynamic, dynamic>? ?? {};
+  final rawReviews = reviewsSnapshot.value is Map
+      ? Map<dynamic, dynamic>.from(reviewsSnapshot.value as Map)
+      : <dynamic, dynamic>{};
 
-  final List<Map<String, dynamic>> reviews = rawReviews.entries.map((e) {
-    final review = Map<String, dynamic>.from(e.value as Map);
-    review['key'] = e.key;
-    return review;
-  }).toList();
+  final List<Map<String, dynamic>> reviews = rawReviews.entries
+      .where((e) => e.value is Map)
+      .map((e) {
+        final review = Map<String, dynamic>.from(e.value as Map);
+        review['key'] = e.key;
+        return review;
+      }).toList();
 
   final Map<String, Map<String, Set<String>>> matrix = {};
   for (var review in reviews) {
@@ -57,8 +63,8 @@ Future<void> runStartupTasks({
 
   // 4. Load custom values
   final customSnap = await FirebaseDatabase.instance.ref('users/$uid/customvals').get();
-  if (customSnap.exists) {
-    final customData = customSnap.value as Map<dynamic, dynamic>;
+  if (customSnap.exists && customSnap.value is Map) {
+    final customData = Map<dynamic, dynamic>.from(customSnap.value as Map);
     _appendCustomValuesFromFirebase(customData);
   } else {
     _initializeDefaultCustomValues();

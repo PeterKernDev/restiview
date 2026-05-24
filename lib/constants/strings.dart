@@ -18,6 +18,7 @@ class AppStr {
   static const String addReview = 'ADD REVIEW';
   static const String addressLabel = 'Address';
   static const String allFieldsRequired = 'All fields are required';
+  static const String copiedToClipboard = 'Copied to clipboard';
   static const String ambianceLabel = 'Ambiance';
   static const String amountLabel = 'Amount';
   static const String appendedCustomValues =
@@ -27,6 +28,8 @@ class AppStr {
   static const String autoFillNone =
       'No restaurants found. Try searching again.';
   static const String autoFillSuccess = 'Auto-filled with nearby restaurant:';
+  static const String restDetailsFound = 'Restaurant details found and filled in.';
+  static const String restDetailsNotFound = 'Could not find restaurant details — please fill in manually.';
   static const String back = 'BACK';
   static const String bypassLogin = 'Bypass Login';
   static const String cancel = 'Cancel';
@@ -111,7 +114,7 @@ class AppStr {
       'MB of free space remaining. Saving this review may fail if storage runs out.';
   static const String continueAnyway = 'Continue Anyway';
   static const String preview = 'PREVIEW';
-  static const String previewTitle = 'Restiview – Preview';
+  static const String previewTitle = 'RestiView – Preview';
   static const String proceed = 'Proceed';
   static const String quit = 'QUIT';
   static const String rateSubtitle = 'Rate Each Category';
@@ -120,6 +123,10 @@ class AppStr {
   static const String registerButton = ' - REGISTER -';
   static const String registerTitle = 'Register';
   static const String registrationFailed = 'Registration Failed';
+  static const String registrationDbError = 'Registration could not be completed. Please try again.';
+  static const String networkError = 'No internet connection. Please check your network and try again.';
+  static const String emailAlreadyInUse = 'An account already exists for that email address. Please sign in instead.';
+  static const String weakPassword = 'Password is too weak. Please choose a stronger password (at least 6 characters).';
   static const String removePhoto = 'Remove';
   static const String removeButton = 'REMOVE';
   static const String restaurantLabel = 'Restaurant';
@@ -173,6 +180,8 @@ class AppStr {
   static const String customValuesButton = 'CUSTOM VALUES';
   static const String saveChangesButton = 'SAVE';
   static const String resetButton = 'RESET';
+  static const String resetSettingsTitle = 'Reset Settings';
+  static const String resetSettingsMessage = 'Are you sure you want to reset the settings values?';
   static const String sortOptionCity = 'City';
   static const String sortOptionCuisine = 'Cuisine';
   static const String customValuesTitle = 'Custom Values';
@@ -189,6 +198,8 @@ class AppStr {
       'is a built-in value and cannot be removed';
   static const String usedInReview =
       'is used in a review and cannot be removed';
+  static const String valueUsedInReview =
+      'Value cannot be changed or removed — it is used in a review';
   static const String hasBeenRemoved = 'has been removed';
   static const String backToSettings = 'BACK TO SETTINGS';
   static const String goToTop = 'GO TO TOP';
@@ -270,6 +281,7 @@ class AppStr {
       'Please select a country before adding';
   static const String sortFilter = 'Sort/Filter';
   static const String loadFailed = 'Failed to load reviews';
+  static const String reviewLoadError = 'Unable to load review data';
   static const String autoFillSkipped =
       'Location search skipped — allowLocation is false.';
   static const String locationDisabled =
@@ -373,8 +385,12 @@ class AppStr {
   static const String requestingEmail = 'Req Email';
   static const String requestingUsername = 'Req User';
   static const String requestingComment = 'Comment';
-  static const String filtersLabel = 'Filters:';
-  static const String reviewMatchingCountLabel = 'Review matching count';
+  static const String filtersLabel = 'Request Breakdown:';
+  static const String reviewMatchingCountLabel = 'Reviews matching criteria';
+  static const String reviewsApprovedLabel = 'Reviews approved';
+  static const String reviewsExcludedLabel = 'Reviews excluded';
+  static const String filterColReviews = 'Reviews';
+  static const String filterAllCities = '<all>';
   static const String includePhotosLabel = 'Include photos?';
   static const String providerCommentLabel = 'Provider comment (optional)';
   static const String providerCommentHint = 'Optional message to requester';
@@ -425,12 +441,22 @@ class AppStr {
       'Are you sure you want to decline this review request? You can optionally provide a message to the requester:';
   static const String optionalDeclineMessageHint =
       'Optional decline message (max 30 characters)';
+
+  // Auto-save / draft
+  static const String autoSaved = 'Review auto-saved';
+  static const String draftResumeTitle = 'Unsaved Draft Found';
+  static const String draftResumeMessage =
+      'You have an unsaved draft for "%s". Would you like to resume editing it?';
+  static const String draftResume = 'Resume';
+  static const String draftDiscard = 'Discard';
   static const String deleteFriendTitle = 'Delete Friend';
   static const String friendReviewsButton = 'FRIEND REVIEWS';
   static const String selectLocationRequired =
       'Please select at least one country or city';
   
   // Friend deletion and decline confirmations (Phase 1-4)
+  static const String retractFriendRequest =
+      'Retract this friend request? The other user will be notified that it was declined.';
   static const String deleteDeclinedFriendInstigator =
       'You declined this friend relationship. If you delete this record, this user will be able to send you a new friend request. Confirm deletion?';
   static const String deleteDeclinedFriendRecipient =
@@ -481,4 +507,126 @@ class AppStr {
   static const String errorGatheringReviews = 'Error gathering reviews';
   static const String featureNotAvailable = 'This feature is not available';
   static const String reviewRequestDeclined = 'Review request declined';
+  static const String rvRequestLabel = 'RV-REQUEST';
+  static const String addReviewsLabel = '+Reviews';
+  static const String deleteRelationshipFallback =
+      'Are you sure you want to delete this friend relationship?';
+
+  // Review request screen
+  static const String requestBtnLabel = 'REQUEST';
+
+  // Help screen — user guide
+  static const String userGuideTitle = 'User Guide';
+  static const String userGuideLinkPrompt = 'For the full guide and support, visit:';
+
+  static const String helpGettingStartedTitle = 'Getting Started';
+  static const String helpGettingStartedBody =
+      'Create a free account by tapping REGISTER on the home screen. '
+      'Enter your email, password, name, and home country, then accept '
+      'the Terms & Conditions.\n\n'
+      'On subsequent visits tap SIGN IN. Tick "Stay Signed In" to have '
+      'your credentials remembered automatically.\n\n'
+      'If you forget your password, tap "Forgot Password?" on the sign-in '
+      'screen and a reset link will be sent to your email address.';
+
+  static const String helpAddingReviewTitle = 'Adding a Review';
+  static const String helpAddingReviewBody =
+      'Tap ADD REVIEW on the home screen to start a new review. '
+      'The wizard has four steps:\n\n'
+      '1. General Info — Enter the restaurant name, city, country, cuisine, '
+      'occasion, date, number of diners, and cost. If location services are '
+      'enabled the app can auto-fill restaurant details from nearby places.\n\n'
+      '2. Comments — Add free-text notes and optional meal details '
+      '(starters, mains, desserts, drinks). You can attach a photo to each item.\n\n'
+      '3. Ratings — Rate the restaurant 0–5 stars across Food, Service, '
+      'Ambiance, Drinks, and Value For Money. You can also record Michelin stars.\n\n'
+      '4. Good For — Tag the restaurant with categories like "Date Night", '
+      '"Business Lunch", or "Large Groups" to make it easier to find later.\n\n'
+      'Tap PREVIEW at any point to review your entry, then SAVE on the '
+      'preview screen to store it permanently.';
+
+  static const String helpViewingReviewsTitle = 'Viewing & Searching Reviews';
+  static const String helpViewingReviewsBody =
+      'Tap VIEW REVIEWS on the home screen to see all your saved reviews.\n\n'
+      'Use the Sort/Filter button to:\n'
+      '• Sort by Date, Rating, Name, or City\n'
+      '• Filter by Country, City, or Cuisine\n'
+      '• Set a minimum star rating\n\n'
+      'Tap the Good For chip to filter by occasion tags (e.g. show only '
+      '"Brunch" restaurants).\n\n'
+      'Tap any review card to open the full preview. From there you can '
+      'EDIT the review or DELETE it.';
+
+  static const String helpFriendsTitle = 'Friends';
+  static const String helpFriendsBody =
+      'The Friends feature lets you connect with other RestiView users '
+      'and share reviews.\n\n'
+      'To add a friend, tap FRIENDS on the home screen, then tap +FRIEND '
+      'and enter their email address. They will receive a notification the '
+      'next time they open the app.\n\n'
+      'When you have an incoming friend request, the FRIENDS button shows '
+      'a (!) badge. Open Friends, select the request row, and tap ACCEPT '
+      'or DECLINE.\n\n'
+      'Note: A user must have "Allow Friends" enabled in their Settings '
+      'before you can send them a request.';
+
+  static const String helpReviewRequestsTitle = 'Review Requests';
+  static const String helpReviewRequestsBody =
+      'Once you are friends with another user you can request copies of '
+      'their reviews — useful when visiting a city they know well.\n\n'
+      'To send a request:\n'
+      '1. Open Friends and select a friend.\n'
+      '2. Their review countries and cities are shown — tick the ones you '
+      'want and tap REQUEST.\n\n'
+      'To provide reviews when you receive a request:\n'
+      '1. A (!) badge appears on FRIENDS — tap it to see the request.\n'
+      '2. Tap the request row to see the details and how many of your '
+      'reviews are in scope.\n'
+      '3. Tap REVIEW to go through each one and choose to include or exclude it.\n'
+      '4. Tap ACCEPT to deliver the approved reviews.\n\n'
+      'Delivered reviews appear under REQUESTED REVIEWS on the '
+      'requester\'s home screen.';
+
+  static const String helpSettingsTitle = 'Settings';
+  static const String helpSettingsBody =
+      '• Sort By — The default sort order for your review list (Rating, Date, Name, City, or Cuisine).\n\n'
+      '• Home Country — Your default country when creating reviews. The app '
+      'will alert you if your GPS location differs from this setting.\n\n'
+      '• Allow Location Services — Enables the app to auto-fill restaurant '
+      'details and detect nearby restaurants when adding a new review.\n\n'
+      '• Search Radius — How far (in metres) the location search looks for '
+      'nearby restaurants when auto-filling details (10–200 m).\n\n'
+      '• Allow Photos — Enables photo attachments on review detail cards.\n\n'
+      '• Allow Friends — Controls whether other users can send you friend '
+      'or review requests. You cannot turn this off while you have active '
+      'friends — declined relationships must be cleared first.\n\n'
+      '• Allow Auto Capture — Automatic location-based review capture '
+      '(coming soon — currently inactive).\n\n'
+      '• Custom Values — Opens a separate screen where you can define your '
+      'own Cuisine types, Occasion tags, and Countries to appear in dropdowns '
+      'throughout the app.\n\n'
+      '• Reset Settings — Returns all settings to their default values.\n\n'
+      '• Save Changes — Persists all changes to the server. '
+      'Settings are not saved until this button is tapped.\n\n'
+      '• Delete Account — Permanently removes your account and all associated '
+      'data. This action cannot be undone.';
+
+  // Dynamic strings (methods for interpolated values)
+  static String sendNReviews(int count) => 'Send $count reviews?';
+  static String reviewsDeletedSuccess(int count) =>
+      '$count review(s) deleted successfully';
+
+  // Sort/filter UI
+  static const String filterAllFriends = 'ALL';
+  static const String clearIcon = '<C>';
+
+  // Confirm/decline dialogs
+  static const String declineReviewRequestConfirm = 'Decline review request?';
+  static const String friendDeclined = 'Friend declined';
+
+  // Multi-restaurant selector warning
+  static const String multiOverwriteTitle = 'Replace Entered Data?';
+  static const String multiOverwriteBody =
+      'You have already entered data in this form. Selecting a restaurant from the list will overwrite it. Continue?';
+  static const String multiOverwriteConfirm = 'Yes, Replace';
 }

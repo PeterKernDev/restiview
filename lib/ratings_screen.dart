@@ -1,7 +1,8 @@
 // ratings_screen.dart
 //
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'general_screen.dart';
+import 'comments_screen.dart';
 import 'goodfor_screen.dart';
 import 'preview_screen.dart';
 import 'services/session_cache.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'services/draft_cache.dart';
 
 class RatingsScreen extends StatefulWidget {
   final ReviewContext context;
@@ -28,6 +30,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
   late int drinksRating;
   late int vfmsRating;
   late int michelinStars;
+  late TextEditingController _costController;
 
   late double foodRatingDisplay;
   late double serviceRatingDisplay;
@@ -47,11 +50,23 @@ class _RatingsScreenState extends State<RatingsScreen> {
     vfmsRating = reviewMap['vfmsRating'] ?? 0;
     michelinStars = reviewMap['michelinStars'] ?? 0;
 
+    final costValue = reviewMap['cost'];
+    _costController = TextEditingController(
+      text: (costValue == null || costValue == '0') ? '' : costValue.toString(),
+    );
+    _costController.addListener(() => widget.context.hasChanges = true);
+
     foodRatingDisplay = (foodRating / 4).clamp(0.0, 5.0);
     serviceRatingDisplay = (serviceRating / 4).clamp(0.0, 5.0);
     ambianceRatingDisplay = (ambianceRating / 4).clamp(0.0, 5.0);
     drinksRatingDisplay = (drinksRating / 4).clamp(0.0, 5.0);
     vfmsRatingDisplay = (vfmsRating / 4).clamp(0.0, 5.0);
+  }
+
+@override
+  void dispose() {
+    _costController.dispose();
+    super.dispose();
   }
 
   void _clearRatings() {
@@ -69,6 +84,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
       ambianceRatingDisplay = 0;
       drinksRatingDisplay = 0;
       vfmsRatingDisplay = 0;
+      _costController.clear();
     });
   }
 
@@ -81,6 +97,10 @@ class _RatingsScreenState extends State<RatingsScreen> {
     reviewMap['drinksRating'] = drinksRating;
     reviewMap['vfmsRating'] = vfmsRating;
     reviewMap['michelinStars'] = michelinStars;
+
+    final String costText = _costController.text.trim();
+    reviewMap['cost'] = costText.isEmpty ? '' : costText;
+    reviewMap['currency'] = SessionCache.currency;
 
     final totalRating =
         foodRating + serviceRating + ambianceRating + drinksRating + vfmsRating;
@@ -107,10 +127,14 @@ class _RatingsScreenState extends State<RatingsScreen> {
       name,
     );
 
+    // Persist draft so a crash before auto-save cannot lose data
+    unawaited(DraftCache.save(widget.context.reviewKey, formatted));
+
     final previewContext = ReviewContext(
       reviewMap: formatted,
       isEditing: widget.context.isEditing,
       reviewKey: widget.context.reviewKey,
+      hasChanges: widget.context.hasChanges,
     );
 
     Navigator.push(
@@ -125,7 +149,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
     _saveToContext();
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => GeneralScreen(context: widget.context)),
+      MaterialPageRoute(builder: (_) => CommentsScreen(context: widget.context)),
     );
   }
 
@@ -136,7 +160,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
     void Function(int) updateStored,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           SizedBox(
@@ -171,7 +195,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
           const SizedBox(width: 12),
           Text(
             '${(displayValue * 4).round()}',
-            style: AppFonts.bold.copyWith(fontSize: 18, color: Colors.black),
+            style: AppFonts.bold.copyWith(fontSize: 18, color: AppColors.black),
           ),
         ],
       ),
@@ -197,20 +221,20 @@ class _RatingsScreenState extends State<RatingsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.black26),
+                      border: Border.all(color: AppColors.black26),
                       color: selected
                           ? AppColors.darkGreen
-                          : Colors.transparent,
+                          : AppColors.transparent,
                     ),
                     child: Center(
                       child: Icon(
                         Icons.radio_button_checked,
-                        size: 20,
-                        color: selected ? Colors.white : Colors.black38,
+                        size: 14,
+                        color: selected ? AppColors.white : AppColors.black38,
                       ),
                     ),
                   ),
@@ -246,7 +270,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
         automaticallyImplyLeading: false,
         title: Text(
           AppStr.rateTitle,
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
@@ -266,35 +290,35 @@ class _RatingsScreenState extends State<RatingsScreen> {
                       style: AppFonts.bold.copyWith(fontSize: 18),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildStarRatingRow(
                     AppStr.foodLabel,
                     foodRatingDisplay,
                     (val) => foodRatingDisplay = val,
                     (val) => foodRating = val,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildStarRatingRow(
                     AppStr.serviceLabel,
                     serviceRatingDisplay,
                     (val) => serviceRatingDisplay = val,
                     (val) => serviceRating = val,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildStarRatingRow(
                     AppStr.ambianceLabel,
                     ambianceRatingDisplay,
                     (val) => ambianceRatingDisplay = val,
                     (val) => ambianceRating = val,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildStarRatingRow(
                     AppStr.drinksLabel,
                     drinksRatingDisplay,
                     (val) => drinksRatingDisplay = val,
                     (val) => drinksRating = val,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   _buildStarRatingRow(
                     AppStr.vfmsLabel,
                     vfmsRatingDisplay,
@@ -308,13 +332,32 @@ class _RatingsScreenState extends State<RatingsScreen> {
                       AppStr.vfmText,
                       style: AppFonts.standard.copyWith(
                         fontSize: 16,
-                        color: Colors.black54,
+                        color: AppColors.black54,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(AppStr.costLabel, style: AppFonts.standard.copyWith(fontSize: 18, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 12),
+                      Text(SessionCache.currency, style: AppFonts.standard.copyWith(fontSize: 18)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _costController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: AppStr.amountLabel,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -360,7 +403,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
                             AppColors.ochre,
                           ),
                           foregroundColor: WidgetStateProperty.all(
-                            Colors.black,
+                            AppColors.black,
                           ),
                         ),
                         child: Text(
@@ -420,10 +463,10 @@ class _RatingsScreenState extends State<RatingsScreen> {
                         onPressed: _goToNextScreen,
                         style: actionBtnBase.copyWith(
                           backgroundColor: WidgetStateProperty.all(
-                            Colors.yellow,
+                            AppColors.yellow,
                           ),
                           foregroundColor: WidgetStateProperty.all(
-                            Colors.black,
+                            AppColors.black,
                           ),
                         ),
                         child: Text(

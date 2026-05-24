@@ -8,36 +8,36 @@ import 'package:flutter/material.dart';
 import 'colors.dart';
 
 class AppFonts {
-  static const String gelica = 'Gelica';
+  static const String systemFont = 'Literata';
 
   static final TextStyle standard = TextStyle(
-    fontFamily: gelica,
-    fontSize: 14,
+    fontFamily: systemFont,
+    fontSize: 13,
     color: AppColors.black87,
   );
 
   static final TextStyle bold = TextStyle(
-    fontFamily: gelica,
+    fontFamily: systemFont,
     fontWeight: FontWeight.bold,
-    fontSize: 14,
+    fontSize: 13,
     color: AppColors.black87,
   );
 
   static final TextStyle title = TextStyle(
-    fontFamily: gelica,
+    fontFamily: systemFont,
     fontWeight: FontWeight.bold,
     fontSize: 22,
     color: AppColors.black87,
   );
 
   static final TextStyle smallHint = TextStyle(
-    fontFamily: gelica,
+    fontFamily: systemFont,
     fontSize: 12,
     color: AppColors.mutedText,
   );
 
   static final TextStyle small = TextStyle(
-    fontFamily: gelica,
+    fontFamily: systemFont,
     fontSize: 11,
     color: AppColors.mutedText,
   );

@@ -17,6 +17,7 @@ import 'services/db_utils.dart'; // normalizeEmailForPath helper
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'constants/restiview_constants.dart';
 import 'friends_screen.dart'; // for status constants
 
 class FriendRequestScreen extends StatefulWidget {
@@ -97,6 +98,8 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
       return;
     }
 
+    if (!mounted) return;
+
     if (!mappingSnap.exists || mappingSnap.value == null) {
       messenger.showSnackBar(SnackBar(content: Text(AppStr.userNotFound)));
       return;
@@ -149,6 +152,7 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
         // Only check our own friend stub - no need to read the other user's data
         final DataSnapshot myFriendSnap =
             await FirebaseDatabase.instance.ref('users/$myUid/friends/$mappedUid').get();
+        if (!mounted) return;
         if (myFriendSnap.exists && myFriendSnap.value != null) {
           final int? code = _extractStatusCode(myFriendSnap.value);
           if (code == 8 || code == 9) {
@@ -400,13 +404,15 @@ class _FriendRequestScreenState extends State<FriendRequestScreen> {
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text('${AppStr.requestSendFailed}: ${fe.message ?? fe.code}')));
+      appLog('sendFriendRequest FirebaseException: ${fe.message ?? fe.code}');
+      messenger.showSnackBar(SnackBar(content: Text(AppStr.requestSendFailed)));
       return;
     } catch (e) {
       if (!mounted) {
         return;
       }
-      messenger.showSnackBar(SnackBar(content: Text('${AppStr.requestSendFailed}: $e')));
+      appLog('sendFriendRequest error: $e');
+      messenger.showSnackBar(SnackBar(content: Text(AppStr.requestSendFailed)));
       return;
     } finally {
       if (mounted) {

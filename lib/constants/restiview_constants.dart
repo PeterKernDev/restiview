@@ -3,11 +3,38 @@
 // These values are fixed and only modifiable by the program owner.
 //
 
-const String googlePlacesApiKey = 'AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4';
+import 'package:flutter/foundation.dart';
 
-// Mailbox check interval in seconds
-// Set to 30 seconds for testing, change to 600 (10 minutes) for production
-const int mailboxCheckIntervalSeconds = 30;
+// ---------------------------------------------------------------------------
+// APP MODE
+// Change this ONE line before building a production release.
+// ---------------------------------------------------------------------------
+enum AppMode { test, production }
+const AppMode appMode = AppMode.test;
+
+// ---------------------------------------------------------------------------
+// MODE-DEPENDENT SETTINGS
+// Add any value here that differs between test and production.
+// ---------------------------------------------------------------------------
+
+// Mailbox polling interval
+const int mailboxCheckIntervalSeconds =
+    appMode == AppMode.production ? 600 : 30;
+
+// API key is supplied at build time via --dart-define=PLACES_API_KEY=<key>
+// Never hardcode the key here. Pass it in run_RV.bat or the VS Code task.
+const String googlePlacesApiKey = String.fromEnvironment('PLACES_API_KEY');
+
+// ---------------------------------------------------------------------------
+// LOGGING
+// Use appLog() instead of debugPrint() throughout the app.
+// Messages are suppressed in production mode.
+// ---------------------------------------------------------------------------
+void appLog(String message) {
+  if (appMode == AppMode.test) {
+    debugPrint(message);
+  }
+}
 
 const List<Map<String, String>> systemCountries = [
   {'code': 'US', 'name': 'USA', 'curr': 'US\$'},
@@ -30,6 +57,7 @@ const List<Map<String, String>> systemCountries = [
   {'code': 'SE', 'name': 'Sweden', 'curr': 'kr'},
   {'code': 'ZA', 'name': 'South Africa', 'curr': 'R'},
   {'code': 'AR', 'name': 'Argentina', 'curr': 'ARS'},
+  {'code': 'RO', 'name': 'Romania', 'curr': 'RON'},
 ];
 
 // Utility methods
@@ -357,6 +385,18 @@ const Map<String, List<String>> systemCitiesByCountry = {
     'Salta',
     'Santa Fe',
     'San Juan',
+  ],
+  'Romania': [
+    'Bucharest',
+    'Cluj-Napoca',
+    'Timișoara',
+    'Iași',
+    'Constanța',
+    'Craiova',
+    'Brașov',
+    'Galați',
+    'Ploiești',
+    'Oradea',
   ],
 };
 const List<String> allCountries = [

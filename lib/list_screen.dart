@@ -45,6 +45,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
   String localSortOption = '';
   final ScrollController _scrollController = ScrollController();
   String? _highlightedKey;
+  bool _newReviewCheckDone = false;
 
   StreamSubscription<DatabaseEvent>? _reviewSubscription;
   Map<String, String> _friendsMap = {}; // email -> username
@@ -127,11 +128,12 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
 
             _applyFiltersAndSort();
 
-            if (widget.newReviewKey != null) {
+            if (widget.newReviewKey != null && !_newReviewCheckDone) {
               final index = _filteredReviews.indexWhere(
                 (r) => r['key'] == widget.newReviewKey,
               );
               if (index >= 0) {
+                _newReviewCheckDone = true;
                 _highlightedKey = widget.newReviewKey;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
@@ -147,7 +149,10 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                     curve: Curves.easeInOut,
                   );
                 });
-              } else {
+              } else if (_allReviews.isNotEmpty) {
+                // Only toast if we actually have data — avoids false positive
+                // on an initial snapshot that arrives before the write is confirmed.
+                _newReviewCheckDone = true;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -321,11 +326,19 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     final String previewMode = widget.mode == 'requested'
         ? 'requested'
         : 'preview';
+    String? friendUsername;
+    if (widget.mode == 'requested') {
+      final ownerEmail = review['owner_email']?.toString() ?? '';
+      friendUsername = ownerEmail.isNotEmpty ? _friendsMap[ownerEmail] : null;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            PreviewScreen(context: reviewContext, mode: previewMode),
+        builder: (_) => PreviewScreen(
+          context: reviewContext,
+          mode: previewMode,
+          friendUsername: friendUsername,
+        ),
       ),
     );
   }
@@ -607,14 +620,16 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     try {
       final deletedCount = _filteredReviews.length;
 
-      // Delete each review from Firebase
+      // Delete all reviews atomically (single DB call — no partial deletions on failure)
+      final Map<String, dynamic> deletions = <String, dynamic>{};
       for (final review in _filteredReviews) {
-        final key = review['key'] as String?;
+        final String? key = review['key'] as String?;
         if (key != null) {
-          await FirebaseDatabase.instance
-              .ref('users/$userId/reviews_requested/$key')
-              .remove();
+          deletions['users/$userId/reviews_requested/$key'] = null;
         }
+      }
+      if (deletions.isNotEmpty) {
+        await FirebaseDatabase.instance.ref().update(deletions);
       }
 
       // Write audit record after deletions
@@ -627,7 +642,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
           details: {'deletedCount': deletedCount},
         );
       } catch (e) {
-        debugPrint('Failed to write audit info: $e');
+        appLog('Failed to write audit info: $e');
       }
 
       if (!mounted) return;
@@ -642,13 +657,14 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$deletedCount review(s) deleted successfully')),
+        SnackBar(content: Text(AppStr.reviewsDeletedSuccess(deletedCount))),
       );
     } catch (e) {
       if (!mounted) return;
+      appLog('Error deleting reviews: $e');
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('${AppStr.errorDeletingReviews}: $e')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.errorDeletingReviews)));
     }
   }
 
@@ -709,10 +725,17 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                         final review = _filteredReviews[index];
                         final isHighlighted = review['key'] == _highlightedKey;
 
+                        String? friendUsername;
+                        if (widget.mode == 'requested') {
+                          final ownerEmail = review['owner_email']?.toString() ?? '';
+                          friendUsername = ownerEmail.isNotEmpty ? _friendsMap[ownerEmail] : null;
+                        }
+
                         return ReviewListItem(
                           review: review,
                           onTap: () => _openReview(review),
                           highlight: isHighlighted,
+                          friendUsername: friendUsername,
                         );
                       },
                     ),
@@ -729,12 +752,13 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         ElevatedButton(
                           onPressed: _openFilterDialog,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.lightBlue.shade100,
-                            foregroundColor: Colors.black,
+                            backgroundColor: AppColors.lightBlueShade100,
+                            foregroundColor: AppColors.black,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 12,
@@ -746,6 +770,15 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                           ),
                           child: Text(AppStr.sortFilter, style: AppFonts.bold),
                         ),
+                        if (localSortOption.isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          Text(
+                            'Sort: $localSortOption',
+                            style: AppFonts.smallHint.copyWith(
+                              color: AppColors.mutedText,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 12),

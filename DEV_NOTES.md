@@ -259,6 +259,48 @@ flutter run
 There's a workspace `task` labelled "Clean, Get, Run" in the VS Code tasks that runs the above.
 
 
+## DBIC — Database Integrity Checker
+
+A standalone Dart CLI tool (`tool/dbic.dart`) that scans the live Firebase Realtime Database via a service account and reports structural errors, orphan records, and data corruption.
+
+**Full documentation:** [tool/DBIC_README.md](tool/DBIC_README.md)
+
+### Usage
+
+```powershell
+.\DBIC check    # read-only — reports errors and warnings
+.\DBIC fix      # same scan, then prompts y/n to apply auto-fixes
+```
+
+### Setup summary
+
+- Requires a Firebase service account JSON in the project root (gitignored, matches `firebase-adminsdk*.json`).
+- `googleapis_auth: ^2.0.0` is in `dev_dependencies` — run `dart pub get` after a fresh clone.
+- `DBIC.bat` in the project root wraps the `dart run tool/dbic.dart` invocation (gitignored).
+
+### Check sections
+
+| Section | Nodes | Key checks |
+|---|---|---|
+| A | `users_by_email` | Load user registry |
+| B | `public_profiles` | Orphan detection, required fields, UID/email consistency |
+| C | `users_by_email/<n>/requests` | Status code validity, stale entries |
+| D | `audit_info/request_events` | Required event fields |
+| E | `audit_info/friend_*` | Required fields on 4 audit nodes |
+| F | `users/<uid>/…` | Reviews (fields, ratings, dates, goodfor), friends, received reviews, customvals |
+
+### Auto-fixable categories
+
+`PUBLIC_PROFILES` (orphan delete), `REVIEWS` (rating/date field patches), `REVIEWS_CORRUPT` (delete review with missing required fields), `REVIEWS_REQUESTED` (strip cost/photo fields).
+
+### Database state after 2026-04-09 run
+
+- **0 errors** — 3 orphan public_profiles and 1 corrupt review deleted.
+- **163 warnings** — all benign legacy data (reviews written before `createdAt`/`updatedAt` and before goodfor expanded from 16 → 18 tags). No action needed.
+
+> Run `.\DBIC check` before every release to confirm 0 errors.
+
+
 ## Next steps and TODOs
 
 - Finish reading the remaining lib Dart files (I will continue batched reads until all files are parsed).
@@ -285,6 +327,7 @@ This section documents how friend requests and friend records are created, deliv
     - Recipient's stub (on the recipient's `users/<recipientUid>/friends/<senderUid>`) with `statusCode: 2` (FR-WANTED) and the same metadata.
   - On acceptance, both stubs are updated to `statusCode: 1` (FR-ACCEPTED) and `accepted: true` (plus `updatedAt` and `processedAt` fields), and mailbox entry is either removed or marked processed depending on ownership/claim rules.
   - On decline/reject, stubs are updated to `statusCode: 8` (FR-DECLINED) and mailbox may be marked processed or removed.
+  - On **retraction** (sender pk3 deletes their own FR-ASKED stub before recipient acts): pk3's stub is deleted, a statusCode=8 mailbox notification is sent to pk1 so pk1's FR-WANTED stub becomes declined. pk1 can then only Delete that stub. The retraction flow is implemented in `_handleDelete()` in `friends_screen.dart` (the `statusRequesterSent` branch).
 
 - Atomic updates & mailbox removal
   - The client composes a single multi-path `.update()` map to create mailbox + both friend stubs atomically. This avoids partial state where a mailbox exists but stubs don't.
@@ -297,19 +340,27 @@ This section documents how friend requests and friend records are created, deliv
   - Review requests are a superset of friend requests and include a `review` object in the mailbox and in the recipient's friend stub (under `.review`) containing `rvCount: -1` to signal the recipient's client to recalculate matching review counts.
 
 - Status codes (canonical meanings seen in code)
-  - 0: requester-sent (FR-ASKED)
+  - 0: requester-sent (FR-ASKED) — sender's stub while waiting for recipient to act
   - 1: accepted (FR-ACCEPTED)
-  - 2: requested (FR-WANTED)
+  - 2: requested (FR-WANTED) — recipient's stub while waiting for them to act
   - 3: rv-wants (recipient side of review-request)
   - 4: rv-asked (requester side of review-request)
-  - 8: declined (FR-DECLINED)
-  - 9: unknown / placeholder
+  - 5: rv-provided (requester's stub after provider publishes reviews)
+  - 6: rv-declined (review request declined by provider)
+  - 8: declined (FR-DECLINED) — recipient of a decline/retraction
+  - 9: friend-deleted-instigator — the user who initiated the deletion/decline of an established friend
 
 - Client responsibilities on receive
   - The recipient client listens to `users/<myUid>/friends` and will:
     - Use the `statusCode` to decide which UI actions to surface (Accept / Decline / Delete / Open request details).
     - For review-requests, recalculate `rvCount` by scanning local `users/<myUid>/reviews` (or via `review_counter`) and update the stub's `review.rvCount` atomically.
     - When accepting/declining, build an atomic accept/reject update map (helpers exist in `db_utils.dart`) to modify both user stubs and to mark/remove the mailbox entry.
+
+- Mailbox handler guards (in `mailbox_helper.dart` → `processUserMailbox()`)
+  - **statusCode=1 (accept notification)**: if the local stub no longer exists (retracted), discard notification and clean mailbox entry — do not recreate stub.
+  - **statusCode=8 (decline notification)**: if the local stub no longer exists (retracted), discard notification. If local stub is statusCode=9 (instigator), skip (9 takes precedence).
+  - **statusCode=9 (deletion notification)**: if the local stub no longer exists (already deleted), discard. If local stub has an active status (0, 1, or 2), skip as stale — the relationship moved on.
+  - These guards prevent ghost rows and phantom relationships from out-of-order or delayed mailbox deliveries.
 
 Notes and recommendations
 - The current design relies on client-side atomic `.update()` maps to maintain mailbox + stub consistency. This is simple and efficient but relies on clients following rules. Consider server-side validation or Firebase Cloud Functions to enforce mailbox-stub invariants if you need stronger guarantees.
@@ -918,3 +969,75 @@ Improve accuracy of city name extraction from Google Places formatted addresses.
 ---
 
 End of Stage 7 documentation (2025-12-20).
+
+---
+
+## Stage 8: Pre-Release Stabilisation (2026-03-20)
+
+Two-day code review and hardening session targeting Play Store release readiness.
+All items from TESTING_CHECKLIST.md resolved (H-01→H-12, M-01→M-11, L-01→L-10 except L-04 which was deferred post-release).
+
+### Key Changes By Category
+
+**Crash Prevention (HIGH)**
+- `preview_screen.dart`: catch blocks on `saveReview()`/`updateReview()`; `_loadFailed` state with `.catchError` on `initState` fetch; `is Map` guards replacing all unsafe casts
+- `settings_screen.dart`: `mounted` check after `await showDialog` in `_confirmDeleteAccount()`; try/catch in `_saveSettings()`
+- `startup_tasks.dart`: 4 unsafe `Map` casts → `is Map` guards
+- `review_info_builder.dart`: 2 unsafe casts fixed; `debugPrint` → `appLog`
+- `mailbox_helper.dart`: `push().key!` → null-safe with early return; all `debugPrint` → `appLog`
+- `ube_provider.dart`: empty-email guard prevents silent data loss to push-key path
+
+**User-Facing Error Messages (MEDIUM)**
+- All raw `$e` / `${fe.message}` / `${fe.code}` removed from every `SnackBar` across: `top_screen`, `friend_request_screen`, `review_request_screen`, `friends_screen`, `general_screen`, `list_screen`
+- All replaced with `AppStr` constants + `appLog()` for dev logging
+- `top_screen`: stale `_hasNewReviewsDelivered` indicator cleared in catch block
+- `friend_request_screen`: `mounted` checks added after both `await` calls in `_checkRecipientPreview()`
+
+**Data Integrity (MEDIUM)**
+- `accept_provided_reviews.dart`: serial per-review `set()` loop → single atomic `ref().update(updates)` call
+- `list_screen.dart`: serial `.remove()` loop → single atomic multi-path `null` update
+- `custom_values_screen.dart`: 7 unsafe `as Map` casts → `is Map` guards throughout
+
+**Dead Code & Debug Cleanup (LOW)**
+- `goodfor_screen.dart`: removed duplicate `_goToNext()` method (identical to `_goToPreviewScreen()`)
+- `location_restaurant_helper.dart`: removed 3 debug analysis functions (`analyzeCuisineDetection`, `printCuisineAnalysisReport`, `getSampleRestaurantNames`) + `_isCommonWord` (~320 lines); all `debugPrint` → `appLog`
+- `preview_screen.dart`: removed deprecated `_modalRoute`/`_onWillPop`/`addScopedWillPopCallback`/`removeScopedWillPopCallback` (back-press handled by `PopScope(canPop:false)`)
+- All remaining `debugPrint` calls across the codebase → `appLog()`
+
+**String Constants (LOW)**
+- `settings_screen.dart`: `'OK'`/`'No'`/`'Yes'` → `AppStr.ok`/`AppStr.noLabel`/`AppStr.yes`
+- `friends_screen.dart`: `'+Friend'`/`'RV-REQUEST'`/`'+Reviews'` → `AppStr` constants
+- `review_request_screen.dart`: `'REQUEST'` → `AppStr.requestBtnLabel`
+- `preview_screen.dart`: `'Back'`/`'Exclude'` → `AppStr.backButtonLabel`/`AppStr.exclude`
+- New `AppStr` entries added: `reviewLoadError`, `rvRequestLabel`, `addReviewsLabel`, `deleteRelationshipFallback`, `requestBtnLabel`
+
+### appLog() Convention
+
+All debug logging now uses `appLog()` (defined in `restiview_constants.dart`) instead of `debugPrint()`.
+`appLog()` is a no-op when `appMode == AppMode.production` — zero debug output in release builds.
+
+### Release Readiness
+
+1. Set `appMode = AppMode.production` in `lib/constants/restiview_constants.dart`
+2. Bump version in `pubspec.yaml`
+3. Run: `flutter build appbundle --release --dart-define=PLACES_API_KEY=AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4`
+
+---
+
+End of Stage 8 documentation (2026-03-20).
+
+---
+
+## Release: v1.7.9+35 (2026-04-10)
+
+- Built with `flutter build appbundle --release --dart-define=PLACES_API_KEY=...`
+- Published to Play Store Internal Testing track on 2026-04-10
+- `appMode` set to `AppMode.production` for build — **change back to `AppMode.test` before next dev session**
+- Changes since v1.7.0+26: help screen expansion, connectivity checks, registration error handling, country label, save→list navigation, sign-out reliability, accept/decline dialog unification, GPS stale location fix, GPS timeout reduction, sort indicator, photo storage bug fix, general screen loading overlay, list screen false-toast fix, `mounted` guard, DBIC tool, cuisine cache fix, multi-select cuisine cache, custom values used-flag greying
+
+## Release: v1.7.0+26 (2026-03-21)
+
+- Built with `flutter build appbundle --release --dart-define=PLACES_API_KEY=...`
+- Published to Play Store Internal Testing track on 2026-03-21
+- Required fix: install Android SDK Command-line Tools (cmdline-tools/latest) — was missing, caused Flutter's post-build symbol-strip verification to fail
+- `appMode` is currently set to `AppMode.production` — **change back to `AppMode.test` before next dev session**

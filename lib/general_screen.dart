@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'ratings_screen.dart';
+import 'comments_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/colors.dart';
@@ -34,12 +34,13 @@ class _GeneralScreenState extends State<GeneralScreen> {
   late TextEditingController _restaurantController;
   late TextEditingController _cityController;
   late TextEditingController _dinersController;
-  late TextEditingController _costController;
   final TextEditingController _newCuisineController = TextEditingController();
   final TextEditingController _newOccasionController = TextEditingController();
+  final FocusNode _restaurantFocusNode = FocusNode();
 
   int _restaurantSearchAttempts = 0;
   bool _isSearching = false;
+  bool _isLookingUpName = false;
   bool _showAddCuisineField = false;
   bool _showAddOccasionField = false;
 
@@ -85,6 +86,19 @@ class _GeneralScreenState extends State<GeneralScreen> {
     }
   }
 
+  /// Sequences the post-frame initialisation for new reviews: country mismatch
+  /// check first (may show a dialog and awaits user response), then location
+  /// search. Running them concurrently caused Geolocator to hang because
+  /// checkCountryMismatch uses getCurrentLocationSafe() at the same time as
+  /// _autoFillRestaurantFromLocation calls requestPermission().
+  Future<void> _initAfterFirstFrame() async {
+    await checkCountryMismatch();
+    if (!mounted) {
+      return;
+    }
+    _autoFillRestaurantFromLocation();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -106,12 +120,17 @@ class _GeneralScreenState extends State<GeneralScreen> {
       });
       widget.context.isEditing = true;
 
+      // Warm up cuisine cache in background (fire-and-forget)
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null && !SessionCache.restaurantCuisineCacheLoaded) {
+        SessionCache.warmUpRestaurantCuisineCache(userId);
+      }
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
         }
-        _autoFillRestaurantFromLocation();
-        checkCountryMismatch();
+        _initAfterFirstFrame();
       });
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -129,16 +148,19 @@ class _GeneralScreenState extends State<GeneralScreen> {
     _dinersController = TextEditingController(
       text: reviewMap['numberOfDiners']?.toString() ?? '',
     );
-    final costValue = reviewMap['cost'];
-    _costController = TextEditingController(
-      text: (costValue == null || costValue == '0') ? '' : costValue.toString(),
-    );
 
     // Add listeners to track changes
     _restaurantController.addListener(() => widget.context.hasChanges = true);
     _cityController.addListener(() => widget.context.hasChanges = true);
     _dinersController.addListener(() => widget.context.hasChanges = true);
-    _costController.addListener(() => widget.context.hasChanges = true);
+
+    // When the user manually types a restaurant name and moves focus away,
+    // attempt a name-based lookup to fill city, cuisine, address and phone.
+    _restaurantFocusNode.addListener(() {
+      if (!_restaurantFocusNode.hasFocus) {
+        _lookUpRestaurantByName();
+      }
+    });
 
     final cuisine = reviewMap['cuisine'] as String?;
     _selectedCuisine =
@@ -160,10 +182,96 @@ class _GeneralScreenState extends State<GeneralScreen> {
     _restaurantController.dispose();
     _cityController.dispose();
     _dinersController.dispose();
-    _costController.dispose();
     _newCuisineController.dispose();
     _newOccasionController.dispose();
+    _restaurantFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Fires a Places Text Search for the manually typed restaurant name.
+  /// Only runs when:
+  ///   • the name field has at least 3 characters
+  ///   • restaddress is currently empty (not already filled by geo search)
+  ///   • a lookup is not already in progress
+  /// Fills city (if blank), cuisine (if blank/unknown), restaddress and
+  /// restphone silently. Shows a brief snackbar on success.
+  Future<void> _lookUpRestaurantByName() async {
+    final String name = _restaurantController.text.trim();
+    if (name.length < 3) {
+      return;
+    }
+    final String existingAddress =
+        (widget.context.reviewMap['restaddress'] as String?)?.trim() ?? '';
+    if (existingAddress.isNotEmpty) {
+      return;
+    }
+    if (_isLookingUpName || _isSearching) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLookingUpName = true;
+      });
+    }
+
+    try {
+      final NearbyRestaurant? found = await searchRestaurantByName(name);
+      if (!mounted) {
+        return;
+      }
+
+      if (found != null) {
+        // Resolve cuisine — prefer history cache, then API guess, don't
+        // overwrite a choice the user already made.
+        final String existingCuisine =
+            (widget.context.reviewMap['cuisine'] as String?)?.trim() ?? '';
+        final bool cuisineBlank =
+            existingCuisine.isEmpty || existingCuisine == 'Unknown';
+        final String cacheKey =
+            '${SessionCache.defaultCountry}|${name.toLowerCase()}';
+        final String? cachedCuisine =
+            SessionCache.restaurantCuisineCache[cacheKey];
+        final String resolvedCuisine;
+        if (!cuisineBlank) {
+          resolvedCuisine = existingCuisine;
+        } else if (cachedCuisine != null &&
+            SessionCache.customCuisines.contains(cachedCuisine)) {
+          resolvedCuisine = cachedCuisine;
+        } else if (SessionCache.customCuisines.contains(found.cuisine)) {
+          resolvedCuisine = found.cuisine;
+        } else {
+          resolvedCuisine = existingCuisine;
+        }
+
+        setState(() {
+          widget.context.reviewMap['restaddress'] = found.address;
+          widget.context.reviewMap['restphone'] = found.phone ?? '';
+
+          if (_cityController.text.trim().isEmpty && found.city.isNotEmpty) {
+            _cityController.text = found.city;
+            widget.context.reviewMap['city'] = found.city;
+          }
+
+          if (cuisineBlank && resolvedCuisine.isNotEmpty) {
+            _selectedCuisine = resolvedCuisine;
+            widget.context.reviewMap['cuisine'] = resolvedCuisine;
+          }
+
+          widget.context.hasChanges = true;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.restDetailsFound)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLookingUpName = false;
+        });
+      }
+    }
   }
 
   Future<bool> getLocationPermissionStatus() async {
@@ -295,12 +403,13 @@ class _GeneralScreenState extends State<GeneralScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text(AppStr.cuisineAdded)));
     } catch (e) {
+      appLog('Error adding custom cuisine: $e');
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.saveError)));
     }
   }
 
@@ -409,12 +518,13 @@ class _GeneralScreenState extends State<GeneralScreen> {
         SnackBar(content: Text('"$newOccasion" ${AppStr.addedToOccasions}')),
       );
     } catch (e) {
+      appLog('Error adding custom occasion: $e');
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('${AppStr.saveError}: $e')));
+      ).showSnackBar(const SnackBar(content: Text(AppStr.saveError)));
     }
   }
 
@@ -426,7 +536,6 @@ class _GeneralScreenState extends State<GeneralScreen> {
       _restaurantController.clear();
       _cityController.clear();
       _dinersController.clear();
-      _costController.clear();
       _selectedCuisine = '';
       _selectedOccasion = AppStr.defaultOccasion;
       _selectedDate = DateTime.now();
@@ -452,7 +561,43 @@ class _GeneralScreenState extends State<GeneralScreen> {
     });
   }
 
+  bool _hasUserEnteredData() {
+    return _restaurantController.text.trim().isNotEmpty ||
+        _cityController.text.trim().isNotEmpty ||
+        _dinersController.text.trim().isNotEmpty ||
+        _selectedCuisine.isNotEmpty;
+  }
+
   void _showRestaurantSelector() async {
+    if (_hasUserEnteredData()) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext ctx) {
+          return AlertDialog(
+            title: const Text(AppStr.multiOverwriteTitle),
+            content: const Text(AppStr.multiOverwriteBody),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text(AppStr.cancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text(AppStr.multiOverwriteConfirm),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) {
+        return;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     final NearbyRestaurant? selected = await showDialog<NearbyRestaurant>(
       context: context,
       builder: (BuildContext ctx) {
@@ -475,18 +620,27 @@ class _GeneralScreenState extends State<GeneralScreen> {
         selected.cuisine,
       );
 
+      // Check history cache first; fall back to keyword guess
+      final String cacheKey =
+          '${SessionCache.defaultCountry}|${selected.name.toLowerCase()}';
+      final String? cachedCuisine =
+          SessionCache.restaurantCuisineCache[cacheKey];
+      final String resolvedCuisine =
+          (cachedCuisine != null &&
+              SessionCache.customCuisines.contains(cachedCuisine))
+          ? cachedCuisine
+          : (isValidCuisine ? selected.cuisine : '');
+
       setState(() {
         widget.context.reviewMap['restaurantName'] = selected.name;
         widget.context.reviewMap['restaddress'] = selected.address;
         widget.context.reviewMap['restphone'] = selected.phone ?? '';
         widget.context.reviewMap['city'] = selected.city;
-        widget.context.reviewMap['cuisine'] = isValidCuisine
-            ? selected.cuisine
-            : '';
+        widget.context.reviewMap['cuisine'] = resolvedCuisine;
 
         _restaurantController.text = selected.name;
         _cityController.text = selected.city;
-        _selectedCuisine = isValidCuisine ? selected.cuisine : '';
+        _selectedCuisine = resolvedCuisine;
       });
     }
   }
@@ -566,6 +720,16 @@ class _GeneralScreenState extends State<GeneralScreen> {
           selected.cuisine,
         );
 
+        // Check history cache first; fall back to keyword guess
+        final String cacheKey =
+            '${SessionCache.defaultCountry}|${selected.name.toLowerCase()}';
+        final String? cachedCuisine =
+            SessionCache.restaurantCuisineCache[cacheKey];
+        final String resolvedCuisine =
+            (cachedCuisine != null &&
+                SessionCache.customCuisines.contains(cachedCuisine))
+            ? cachedCuisine
+            : (isValidCuisine ? selected.cuisine : '');
         if (!mounted) {
           return;
         }
@@ -574,13 +738,11 @@ class _GeneralScreenState extends State<GeneralScreen> {
           widget.context.reviewMap['restaddress'] = selected.address;
           widget.context.reviewMap['restphone'] = selected.phone ?? '';
           widget.context.reviewMap['city'] = selected.city;
-          widget.context.reviewMap['cuisine'] = isValidCuisine
-              ? selected.cuisine
-              : '';
+          widget.context.reviewMap['cuisine'] = resolvedCuisine;
 
           _restaurantController.text = selected.name;
           _cityController.text = selected.city;
-          _selectedCuisine = isValidCuisine ? selected.cuisine : '';
+          _selectedCuisine = resolvedCuisine;
         });
 
         if (!mounted) {
@@ -593,7 +755,26 @@ class _GeneralScreenState extends State<GeneralScreen> {
         if (!mounted) {
           return;
         }
-        _clearForm();
+        // Only reset the form if the user hasn't manually entered anything.
+        // If they have data, leave it intact and just fall through to show
+        // the city and the "none found" snackbar.
+        if (!_hasUserEnteredData()) {
+          _clearForm();
+        }
+        // No restaurants found, but we still have a location fix — use it to
+        // back-fill the city field so the user doesn't have to type it manually.
+        try {
+          final String? detectedCity = await getCurrentCitySafe()
+              .timeout(const Duration(seconds: 8));
+          if (detectedCity != null && detectedCity.isNotEmpty && mounted) {
+            setState(() {
+              _cityController.text = detectedCity;
+              widget.context.reviewMap['city'] = detectedCity;
+              widget.context.hasChanges = true;
+            });
+          }
+        } catch (_) {}
+        if (!mounted) return;
         final String message = _restaurantSearchAttempts >= 2
             ? AppStr.autoFillFailed
             : AppStr.autoFillNone;
@@ -612,9 +793,10 @@ class _GeneralScreenState extends State<GeneralScreen> {
       if (!mounted) {
         return;
       }
+      appLog('Auto-fill search failed: $e');
       final String message = _restaurantSearchAttempts >= 2
           ? AppStr.autoFillFailed
-          : '${AppStr.searchFailed}: $e';
+          : AppStr.searchFailed;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -642,8 +824,6 @@ class _GeneralScreenState extends State<GeneralScreen> {
     reviewMap['numberOfDiners'] = dinersText.isEmpty
         ? ''
         : int.tryParse(dinersText);
-    final String costText = _costController.text.trim();
-    reviewMap['cost'] = costText.isEmpty ? '' : costText;
     reviewMap['currency'] = SessionCache.currency;
     reviewMap['dateOfReview'] = _selectedDate.toIso8601String();
   }
@@ -657,7 +837,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => RatingsScreen(context: widget.context),
+          builder: (_) => CommentsScreen(context: widget.context),
         ),
       );
     }
@@ -734,7 +914,14 @@ class _GeneralScreenState extends State<GeneralScreen> {
       );
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (!didPop) {
+          _goBackToTop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -761,8 +948,19 @@ class _GeneralScreenState extends State<GeneralScreen> {
                         children: <Widget>[
                           TextFormField(
                             controller: _restaurantController,
-                            decoration: const InputDecoration(
+                            focusNode: _restaurantFocusNode,
+                            decoration: InputDecoration(
                               labelText: AppStr.restaurantLabel,
+                              suffixIcon: _isLookingUpName
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    )
+                                  : null,
                             ),
                             validator: (String? value) {
                               if (value == null || value.trim().isEmpty) {
@@ -771,7 +969,18 @@ class _GeneralScreenState extends State<GeneralScreen> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Text(
+                              'Country: ${widget.context.reviewMap['country'] ?? SessionCache.defaultCountry}',
+                              style: AppFonts.standard.copyWith(
+                                fontSize: 12,
+                                color: AppColors.mutedText,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           Autocomplete<String>(
                             optionsBuilder:
                                 (TextEditingValue textEditingValue) {
@@ -874,7 +1083,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                       const SizedBox(width: 8),
                                       IconButton(
                                         tooltip: AppStr.confirm,
-                                        color: Colors.green,
+                                        color: AppColors.green,
                                         icon: const Icon(Icons.check),
                                         onPressed: () async {
                                           await _addInlineCustomCuisine();
@@ -969,7 +1178,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                       const SizedBox(width: 8),
                                       IconButton(
                                         tooltip: AppStr.confirm,
-                                        color: Colors.green,
+                                        color: AppColors.green,
                                         icon: const Icon(Icons.check),
                                         onPressed: () async {
                                           await _addInlineCustomOccasion();
@@ -1001,27 +1210,6 @@ class _GeneralScreenState extends State<GeneralScreen> {
                             decoration: const InputDecoration(
                               labelText: AppStr.dinersLabel,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Text(AppStr.costLabel, style: AppFonts.standard),
-                              const SizedBox(width: 12),
-                              Text(
-                                SessionCache.currency,
-                                style: AppFonts.standard,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _costController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText: AppStr.amountLabel,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 16),
                           Row(
@@ -1113,7 +1301,19 @@ class _GeneralScreenState extends State<GeneralScreen> {
               if (_isSearching)
                 Container(
                   color: Colors.black.withAlpha(77),
-                  child: const Center(child: CircularProgressIndicator()),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Searching for restaurants\u2026',
+                          style: AppFonts.smallHint.copyWith(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
             ],
           );
@@ -1173,6 +1373,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
           ),
         ),
       ),
-    );
+    ),  // child: Scaffold
+    );  // PopScope
   }
 }

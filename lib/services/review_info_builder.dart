@@ -2,7 +2,7 @@
 // Builds and updates aggregated review information for user discovery
 
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
+import '../constants/restiview_constants.dart';
 
 /// Updates the review_info record in users_by_email mailbox
 /// This provides aggregated stats about a user's reviews (countries, cities, counts)
@@ -20,6 +20,10 @@ Future<void> updateReviewInfo(String uid, String normalizedEmail) async {
     }
 
     // 2. Process reviews to build country → city → count structure
+    if (snapshot.value is! Map) {
+      await _writeReviewInfo(normalizedEmail, 0, {});
+      return;
+    }
     final data = snapshot.value as Map<dynamic, dynamic>;
     final Map<String, Map<String, int>> countryData = {};
     int totalReviews = 0;
@@ -30,6 +34,7 @@ Future<void> updateReviewInfo(String uid, String normalizedEmail) async {
         continue;
       }
 
+      if (entry.value is! Map) continue;
       final review = entry.value as Map<dynamic, dynamic>;
       String country = review['restcountry']?.toString().trim() ?? '';
       String city = review['restcity']?.toString().trim() ?? '';
@@ -55,11 +60,11 @@ Future<void> updateReviewInfo(String uid, String normalizedEmail) async {
     // 3. Write the aggregated data
     await _writeReviewInfo(normalizedEmail, totalReviews, countryData);
 
-    debugPrint(
+    appLog(
       'Updated review_info for $normalizedEmail: $totalReviews reviews across ${countryData.length} countries',
     );
   } catch (e) {
-    debugPrint('Error updating review_info: $e');
+    appLog('Error updating review_info: $e');
     // Non-fatal - don't throw, just log
   }
 }

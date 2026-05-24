@@ -2,16 +2,18 @@
 // Allows the user to select tags describing what the restaurant is good for (e.g., brunch, date night).
 // Saves selections to ReviewContext and navigates to the comments screen.
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'ratings_screen.dart';
-import 'comments_screen.dart';
 import 'preview_screen.dart';
 import 'sub_preview_screen/review_context.dart';
 import 'sub_preview_screen/review_formatter.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 import 'constants/strings.dart'; // ✅ Centralized strings
 import 'services/session_cache.dart';
+import 'services/draft_cache.dart';
 
 class GoodForScreen extends StatefulWidget {
   final ReviewContext context;
@@ -58,16 +60,6 @@ class _GoodForScreenState extends State<GoodForScreen> {
     );
   }
 
-  void _goToNext() {
-    _saveToContext();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CommentsScreen(context: widget.context),
-      ),
-    );
-  }
-
   void _goToPreviewScreen() {
     _saveToContext();
 
@@ -76,10 +68,14 @@ class _GoodForScreenState extends State<GoodForScreen> {
 
     final formatted = formatReviewData(widget.context.reviewMap, email, name);
 
+    // Persist draft so a crash before auto-save cannot lose data
+    unawaited(DraftCache.save(widget.context.reviewKey, formatted));
+
     final previewContext = ReviewContext(
       reviewMap: formatted,
       isEditing: widget.context.isEditing,
       reviewKey: widget.context.reviewKey,
+      hasChanges: widget.context.hasChanges,
     );
 
     Navigator.push(
@@ -105,12 +101,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
 
     // Shared button style for consistent label sizes
     final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
-      textStyle: const TextStyle(
-        fontFamily: 'Gelica',
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 0.4,
-      ),
+      textStyle: AppFonts.bold.copyWith(letterSpacing: 0.4),
       padding: const EdgeInsets.symmetric(vertical: 12),
       minimumSize: const Size(0, 44),
     );
@@ -119,18 +110,14 @@ class _GoodForScreenState extends State<GoodForScreen> {
     const double tileHeight = 56.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0E6),
+      backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
+        title: Text(
           AppStr.goodForTitle,
-          style: TextStyle(
-            fontFamily: 'Gelica',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
-        backgroundColor: const Color(0xFF2E4F3E),
+        backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
       body: Column(
@@ -141,13 +128,9 @@ class _GoodForScreenState extends State<GoodForScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     AppStr.goodForPrompt,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
-                    ),
+                    style: AppFonts.bold.copyWith(fontSize: 18),
                   ),
                   const SizedBox(height: 24),
 
@@ -184,17 +167,17 @@ class _GoodForScreenState extends State<GoodForScreen> {
                                 height: tileHeight,
                                 decoration: BoxDecoration(
                                   color: checked
-                                      ? Colors.yellow.shade100
-                                      : Colors.white,
+                                      ? AppColors.yellowShade100
+                                      : AppColors.white,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: checked
-                                        ? Colors.black54
+                                        ? AppColors.black54
                                         : AppColors.greyShade300,
                                   ),
                                   boxShadow: const [
                                     BoxShadow(
-                                      color: Colors.black12,
+                                      color: AppColors.black12,
                                       blurRadius: 2,
                                       offset: Offset(0, 1),
                                     ),
@@ -208,10 +191,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
                                     Expanded(
                                       child: Text(
                                         label,
-                                        style: const TextStyle(
-                                          fontFamily: 'Gelica',
-                                          fontSize: 14,
-                                        ),
+                                        style: AppFonts.standard,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -222,7 +202,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
                                           : Icons.check_box_outline_blank,
                                       size: 18,
                                       color: checked
-                                          ? Colors.black87
+                                          ? AppColors.black87
                                           : AppColors.grey,
                                     ),
                                   ],
@@ -257,7 +237,7 @@ class _GoodForScreenState extends State<GoodForScreen> {
                             AppColors.ochre,
                           ),
                           foregroundColor: WidgetStateProperty.all(
-                            Colors.black,
+                            AppColors.black,
                           ),
                         ),
                         child: const Text(
@@ -311,13 +291,13 @@ class _GoodForScreenState extends State<GoodForScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6.0),
                       child: ElevatedButton(
-                        onPressed: _goToNext,
+                        onPressed: _goToPreviewScreen,
                         style: actionBtnBase.copyWith(
                           backgroundColor: WidgetStateProperty.all(
-                            Colors.yellow,
+                            AppColors.yellow,
                           ),
                           foregroundColor: WidgetStateProperty.all(
-                            Colors.black,
+                            AppColors.black,
                           ),
                         ),
                         child: const Text(

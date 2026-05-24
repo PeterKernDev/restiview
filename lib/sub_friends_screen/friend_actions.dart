@@ -104,7 +104,7 @@ class FriendActions extends StatelessWidget {
       onPressed: acceptEnabled ? onAccept : null,
       activeColor: AppColors.darkGreen,
       loading: accepting,
-      textColor: Colors.white,
+      textColor: AppColors.white,
     );
 
     final Widget declineBtn = _actionButton(
@@ -112,7 +112,7 @@ class FriendActions extends StatelessWidget {
       onPressed: declineEnabled ? onDecline : null,
       activeColor: AppColors.red,
       loading: declining,
-      textColor: Colors.white,
+      textColor: AppColors.white,
     );
 
     final Widget deleteBtn = _actionButton(
@@ -130,11 +130,11 @@ class FriendActions extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
         child: ElevatedButton(
           onPressed: onBack,
-          style: _actionBtnBaseStyle(AppColors.ochre, Colors.black),
+          style: _actionBtnBaseStyle(AppColors.ochre, AppColors.black),
           child: Text(
             AppStr.backLabel,
             overflow: TextOverflow.ellipsis,
-            style: AppFonts.bold.copyWith(color: Colors.black),
+            style: AppFonts.bold.copyWith(color: AppColors.black),
           ),
         ),
       ),
@@ -145,11 +145,11 @@ class FriendActions extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
         child: ElevatedButton(
           onPressed: onAddFriend,
-          style: _actionBtnBaseStyle(AppColors.yellow, Colors.black),
+          style: _actionBtnBaseStyle(AppColors.yellow, AppColors.black),
           child: Text(
             addFriendLabel,
             overflow: TextOverflow.ellipsis,
-            style: AppFonts.bold.copyWith(color: Colors.black),
+            style: AppFonts.bold.copyWith(color: AppColors.black),
           ),
         ),
       ),
@@ -157,7 +157,7 @@ class FriendActions extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: Colors.transparent,
+      color: AppColors.transparent,
       child: Column(
         children: <Widget>[
           Row(children: <Widget>[acceptBtn, declineBtn, deleteBtn]),

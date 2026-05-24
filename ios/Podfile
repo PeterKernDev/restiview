@@ -1,0 +1,49 @@
+platform :ios, '13.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  # Look for Generated.xcconfig relative to the ios folder
+  generated_xcode_build_settings_path = File.expand_path(File.join(__dir__, 'Flutter', 'Generated.xcconfig'))
+  unless File.exist?(generated_xcode_build_settings_path)
+    # Fallback: look for Generated.xcconfig at project root Flutter folder
+    alt_path = File.expand_path(File.join(__dir__, '..', 'Flutter', 'Generated.xcconfig'))
+    if File.exist?(alt_path)
+      generated_xcode_build_settings_path = alt_path
+    else
+      raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first."
+    end
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try running flutter pub get."
+end
+
+require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper.rb'))
+
+flutter_application_path = __dir__
+
+target 'Runner' do
+  flutter_install_all_ios_pods(flutter_application_path)
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'leveldb-library', :modular_headers => true
+  pod 'PromisesObjC', :modular_headers => true
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'FirebaseAppCheckInterop', :modular_headers => true
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end

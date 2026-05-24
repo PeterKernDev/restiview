@@ -2,8 +2,10 @@
 //
 // Preview screen for showing a formatted review and allowing save/edit/delete actions.
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:disk_space_2/disk_space_2.dart';
@@ -19,15 +21,18 @@ import 'sub_preview_screen/review_transform.dart';
 import 'top_screen.dart';
 import 'general_screen.dart';
 import 'services/audit_info.dart';
+import 'services/draft_cache.dart';
 
 class PreviewScreen extends StatefulWidget {
   final ReviewContext context;
   final String mode;
+  final String? friendUsername;
 
   const PreviewScreen({
     super.key,
     required this.context,
     this.mode = 'preview',
+    this.friendUsername,
   });
 
   @override
@@ -75,12 +80,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
   String? reviewKey;
   final Set<String> expandedCategories = <String>{};
   bool _isSaving = false;
-
-  // Cached ModalRoute reference to avoid ancestor lookups in dispose
-  ModalRoute<dynamic>? _modalRoute;
-
-  // route-scoped will-pop callback for SDK 3.9.x
-  Future<bool> _onWillPop() async => false;
+  bool _loadFailed = false;
 
   void _showSaveConfirmation() {
     if (!mounted) return;
@@ -106,6 +106,22 @@ class _PreviewScreenState extends State<PreviewScreen> {
       final rawMap = reverseFormatReviewData(widget.context.reviewMap);
       widget.context.reviewMap = rawMap;
       reviewData = formatter.formatReviewData(rawMap, email, name);
+
+      // Auto-save: when returning to preview after editing an existing review,
+      // persist the changes to Firebase immediately so the user never loses work.
+      if (widget.context.reviewKey != null && widget.context.hasChanges) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await updateReview();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(AppStr.autoSaved),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        });
+      }
     } else if (widget.context.reviewKey != null) {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId != null) {
@@ -125,19 +141,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   );
                 });
               }
+            })
+            .catchError((Object e) {
+              appLog('initState review fetch error: $e');
+              if (mounted) setState(() => _loadFailed = true);
             });
       }
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Capture ModalRoute while element is active and register the scoped will-pop callback.
-    // ignore: deprecated_member_use
-    _modalRoute ??= ModalRoute.of(context);
-    // ignore: deprecated_member_use
-    _modalRoute?.addScopedWillPopCallback(_onWillPop);
   }
 
   // Helpers to keep SessionCache.indexedMatrix consistent
@@ -207,11 +217,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return true;
     final reviewsRef = FirebaseDatabase.instance.ref('users/$userId/reviews');
-    final snapshot = await reviewsRef.get();
+    final DataSnapshot snapshot;
+    try {
+      snapshot = await reviewsRef.get().timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      return true; // timeout — proceed without duplicate check
+    }
     if (!snapshot.exists) return true;
-    final data = snapshot.value as Map<dynamic, dynamic>;
+    final rawValue = snapshot.value;
+    if (rawValue is! Map) return true;
+    final data = rawValue;
     final duplicates = data.values.where((review) {
-      final reviewMap = Map<String, dynamic>.from(review as Map);
+      if (review is! Map) return false;
+      final reviewMap = Map<String, dynamic>.from(review);
       return reviewMap['restname']?.toString().trim().toLowerCase() ==
               name.trim().toLowerCase() &&
           reviewMap['reviewdate']?.toString().trim() == date.trim();
@@ -242,7 +260,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<bool> _checkStorageSpace() async {
     try {
-      final freeDiskSpace = await DiskSpace.getFreeDiskSpace;
+      final freeDiskSpace = await DiskSpace.getFreeDiskSpace
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
       if (freeDiskSpace == null) return true; // If we can't check, proceed
       
       // Check if less than 100 MB (convert MB to appropriate comparison)
@@ -272,7 +291,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
       return true; // Enough space available
     } catch (e) {
-      debugPrint('Storage check failed: $e');
+      appLog('Storage check failed: $e');
       return true; // If check fails, allow save to proceed
     }
   }
@@ -377,64 +396,109 @@ class _PreviewScreenState extends State<PreviewScreen> {
           .push();
       await newRef.set(payload);
 
-      // update custom values as before
-      final cuisine = payload['restcuisine'];
-      final occasion = payload['coccasion'];
-      final customRef = FirebaseDatabase.instance.ref(
-        'users/$userId/customvals',
-      );
-      final snapshot = await customRef.get();
-      if (snapshot.exists) {
-        final data = snapshot.value as Map;
-        final updates = <String, dynamic>{};
-        if (cuisine != null &&
-            !systemCuisines.contains(cuisine) &&
-            data['cuisine'] is List) {
-          final List<dynamic> cuisines = List.from(data['cuisine']);
-          for (int i = 0; i < cuisines.length; i++) {
-            if (cuisines[i] is List &&
-                cuisines[i][0] == cuisine &&
-                cuisines[i][1] == 0) {
-              cuisines[i][1] = 1;
-              updates['cuisine'] = cuisines;
-              break;
+      // Update restaurant cuisine cache so future auto-fills pick it up
+      final String cacheName =
+          (payload['restname'] as String?)?.trim().toLowerCase() ?? '';
+      final String cacheCountry =
+          (payload['restcountry'] as String?)?.trim() ?? '';
+      final String cacheCuisine =
+          (payload['restcuisine'] as String?)?.trim() ?? '';
+      if (cacheName.isNotEmpty &&
+          cacheCountry.isNotEmpty &&
+          cacheCuisine.isNotEmpty) {
+        SessionCache.restaurantCuisineCache[
+            '$cacheCountry|$cacheName'] = cacheCuisine;
+      }
+
+      // update custom values as before (best-effort; skip silently on timeout/error)
+      try {
+        final cuisine = payload['restcuisine'];
+        final occasion = payload['coccasion'];
+        final customRef = FirebaseDatabase.instance.ref(
+          'users/$userId/customvals',
+        );
+        final snapshot = await customRef.get().timeout(const Duration(seconds: 10));
+        if (snapshot.exists) {
+          final data = snapshot.value as Map;
+          final updates = <String, dynamic>{};
+          if (cuisine != null &&
+              !systemCuisines.contains(cuisine) &&
+              data['cuisine'] is List) {
+            final List<dynamic> cuisines = List.from(data['cuisine']);
+            for (int i = 0; i < cuisines.length; i++) {
+              if (cuisines[i] is List &&
+                  cuisines[i][0] == cuisine &&
+                  cuisines[i][1] == 0) {
+                cuisines[i][1] = 1;
+                updates['cuisine'] = cuisines;
+                break;
+              }
             }
           }
-        }
-        if (occasion != null &&
-            !systemOccasions.contains(occasion) &&
-            occasion != AppStr.defaultOccasion &&
-            data['occasion'] is List) {
-          final List<dynamic> occasions = List.from(data['occasion']);
-          for (int i = 0; i < occasions.length; i++) {
-            if (occasions[i] is List &&
-                occasions[i][0] == occasion &&
-                occasions[i][1] == 0) {
-              occasions[i][1] = 1;
-              updates['occasion'] = occasions;
-              break;
+          if (occasion != null &&
+              !systemOccasions.contains(occasion) &&
+              occasion != AppStr.defaultOccasion &&
+              data['occasion'] is List) {
+            final List<dynamic> occasions = List.from(data['occasion']);
+            for (int i = 0; i < occasions.length; i++) {
+              if (occasions[i] is List &&
+                  occasions[i][0] == occasion &&
+                  occasions[i][1] == 0) {
+                occasions[i][1] = 1;
+                updates['occasion'] = occasions;
+                break;
+              }
             }
           }
+          if (updates.isNotEmpty) {
+            await customRef.update(updates);
+          }
         }
-        if (updates.isNotEmpty) {
-          await customRef.update(updates);
-        }
+      } on TimeoutException {
+        appLog('saveReview: customRef.get timed out — skipping custom vals update');
+      } catch (e) {
+        appLog('saveReview: custom vals update failed: $e');
       }
 
       _addToIndexedMatrix(payload);
 
       // Mark that a new review was added (for review_info update)
       await SessionCache.setReviewsAdded(true);
+      unawaited(DraftCache.clear());
 
       if (!mounted) return;
+      final savedKey = newRef.key;
       setState(() {
-        reviewKey = newRef.key;
-        widget.context.reviewKey = newRef.key;
+        reviewKey = savedKey;
+        widget.context.reviewKey = savedKey;
         widget.context.hasChanges = false; // Reset after successful save
         try {
           widget.context.reviewMap = reverseFormatReviewData(payload);
         } catch (_) {}
       });
+      final savedCountry = (payload['restcountry'] as String?)?.trim();
+      SessionCache.countryFilter = (savedCountry != null && savedCountry.isNotEmpty) ? savedCountry : 'ALL';
+      SessionCache.cityFilter = null;
+      SessionCache.cuisineFilter = null;
+      SessionCache.clearGoodForFilter();
+      await SessionCache.setSortOption('date');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStr.reviewSaved)),
+      );
+      widget.context.reviewMap.clear();
+      Navigator.pushReplacementNamed(
+        context,
+        '/list',
+        arguments: {'newReviewKey': savedKey},
+      );
+    } catch (e) {
+      appLog('saveReview error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.saveError)),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -508,48 +572,54 @@ class _PreviewScreenState extends State<PreviewScreen> {
           .ref('users/$userId/reviews/$reviewKey')
           .update(payload);
 
-      // update custom values as before
-      final cuisine = payload['restcuisine'];
-      final occasion = payload['coccasion'];
-      final customRef = FirebaseDatabase.instance.ref(
-        'users/$userId/customvals',
-      );
-      final snapshot = await customRef.get();
-      if (snapshot.exists) {
-        final data = snapshot.value as Map;
-        final updates = <String, dynamic>{};
-        if (cuisine != null &&
-            !systemCuisines.contains(cuisine) &&
-            data['cuisine'] is List) {
-          final List<dynamic> cuisines = List.from(data['cuisine']);
-          for (int i = 0; i < cuisines.length; i++) {
-            if (cuisines[i] is List &&
-                cuisines[i][0] == cuisine &&
-                cuisines[i][1] == 0) {
-              cuisines[i][1] = 1;
-              updates['cuisine'] = cuisines;
-              break;
+      // update custom values as before (best-effort; skip silently on timeout/error)
+      try {
+        final cuisine = payload['restcuisine'];
+        final occasion = payload['coccasion'];
+        final customRef = FirebaseDatabase.instance.ref(
+          'users/$userId/customvals',
+        );
+        final snapshot = await customRef.get().timeout(const Duration(seconds: 10));
+        if (snapshot.exists) {
+          final data = snapshot.value as Map;
+          final updates = <String, dynamic>{};
+          if (cuisine != null &&
+              !systemCuisines.contains(cuisine) &&
+              data['cuisine'] is List) {
+            final List<dynamic> cuisines = List.from(data['cuisine']);
+            for (int i = 0; i < cuisines.length; i++) {
+              if (cuisines[i] is List &&
+                  cuisines[i][0] == cuisine &&
+                  cuisines[i][1] == 0) {
+                cuisines[i][1] = 1;
+                updates['cuisine'] = cuisines;
+                break;
+              }
             }
           }
-        }
-        if (occasion != null &&
-            !systemOccasions.contains(occasion) &&
-            occasion != AppStr.defaultOccasion &&
-            data['occasion'] is List) {
-          final List<dynamic> occasions = List.from(data['occasion']);
-          for (int i = 0; i < occasions.length; i++) {
-            if (occasions[i] is List &&
-                occasions[i][0] == occasion &&
-                occasions[i][1] == 0) {
-              occasions[i][1] = 1;
-              updates['occasion'] = occasions;
-              break;
+          if (occasion != null &&
+              !systemOccasions.contains(occasion) &&
+              occasion != AppStr.defaultOccasion &&
+              data['occasion'] is List) {
+            final List<dynamic> occasions = List.from(data['occasion']);
+            for (int i = 0; i < occasions.length; i++) {
+              if (occasions[i] is List &&
+                  occasions[i][0] == occasion &&
+                  occasions[i][1] == 0) {
+                occasions[i][1] = 1;
+                updates['occasion'] = occasions;
+                break;
+              }
             }
           }
+          if (updates.isNotEmpty) {
+            await customRef.update(updates);
+          }
         }
-        if (updates.isNotEmpty) {
-          await customRef.update(updates);
-        }
+      } on TimeoutException {
+        appLog('updateReview: customRef.get timed out — skipping custom vals update');
+      } catch (e) {
+        appLog('updateReview: custom vals update failed: $e');
       }
 
       try {
@@ -560,11 +630,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
       } catch (_) {}
 
       _addToIndexedMatrix(payload);
+      unawaited(DraftCache.clear());
 
       widget.context.hasChanges = false; // Reset after successful update
       try {
         widget.context.reviewMap = reverseFormatReviewData(payload);
       } catch (_) {}
+    } catch (e) {
+      appLog('updateReview error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.saveError)),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -852,7 +930,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 color: AppColors.ochre,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: Colors.white, size: 20),
+              child: Icon(icon, color: AppColors.white, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -908,7 +986,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                     textAlign: TextAlign.left,
                     style: AppFonts.standard.copyWith(
                       fontSize: 14,
-                      color: Colors.black54,
+                      color: AppColors.black54,
                       fontWeight: FontWeight.w700,
                     ),
                     maxLines: 1,
@@ -923,12 +1001,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
                     ),
                     minimumSize: const Size(0, 36),
                   ),
-                  child: const Text(
+                  child: Text(
                     '<->',
-                    style: TextStyle(
-                      color: Color(0xFFB00020),
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppFonts.bold.copyWith(color: AppColors.ratingHighlight),
                   ),
                   onPressed: () {
                     setState(() {
@@ -999,7 +1074,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           horizontal: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.white,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: AppColors.greyShade200),
                         ),
@@ -1098,6 +1173,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
   }
 
+  void _copyToClipboard(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(AppStr.copiedToClipboard)),
+    );
+  }
+
   Widget _buildAddressSection(String addressText) {
     // Estimate if address will wrap to multiple lines
     // Rough estimate: if longer than ~50 characters, it will likely wrap
@@ -1115,16 +1200,51 @@ class _PreviewScreenState extends State<PreviewScreen> {
               style: AppFonts.bold,
             ),
             const SizedBox(height: 4),
-            Text(
-              addressText,
-              style: AppFonts.standard,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    addressText,
+                    style: AppFonts.standard,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: AppStr.copiedToClipboard,
+                  onPressed: () => _copyToClipboard(addressText),
+                ),
+              ],
             ),
           ],
         ),
       );
     } else {
-      // For short addresses: use standard row format
-      return formatter.reviewRow(AppStr.addressLabel, addressText);
+      // For short addresses: label + value in a row with copy button at end
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 120,
+              child: Text('${AppStr.addressLabel}:', style: AppFonts.bold),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(addressText, style: AppFonts.standard),
+            ),
+            IconButton(
+              icon: const Icon(Icons.copy, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: AppStr.copiedToClipboard,
+              onPressed: () => _copyToClipboard(addressText),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -1161,6 +1281,12 @@ class _PreviewScreenState extends State<PreviewScreen> {
   @override
   Widget build(BuildContext context) {
     if (reviewData == null) {
+      if (_loadFailed) {
+        return Scaffold(
+          appBar: AppBar(),
+          body: const Center(child: Text(AppStr.reviewLoadError)),
+        );
+      }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -1253,14 +1379,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F0E6),
+        backgroundColor: AppColors.beige,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           title: Text(
-            AppStr.previewTitle,
-            style: AppFonts.bold.copyWith(color: Colors.white),
+            widget.mode == 'requested' && widget.friendUsername != null && widget.friendUsername!.isNotEmpty
+                ? 'RestiView \u2013 Review from ${widget.friendUsername}'
+                : AppStr.previewTitle,
+            style: AppFonts.bold.copyWith(color: AppColors.white),
           ),
-          backgroundColor: const Color(0xFF2E4F3E),
+          backgroundColor: AppColors.darkGreen,
           centerTitle: true,
         ),
         body: Stack(
@@ -1516,7 +1644,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 child: const Center(
                                   child: Icon(
                                     Icons.close,
-                                    color: Colors.white70,
+                                    color: AppColors.white70,
                                   ),
                                 ),
                               );
@@ -1601,7 +1729,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   border: Border.all(color: AppColors.greyShade400),
                                 ),
                                 child: const Center(
-                                  child: Icon(Icons.close, color: Colors.white70),
+                                  child: Icon(Icons.close, color: AppColors.white70),
                                 ),
                               ),
                             );
@@ -1631,7 +1759,28 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   if (addressValue != null && addressValue.isNotEmpty)
                     _buildAddressSection(addressValue),
                   if (phoneValue != null && phoneValue.isNotEmpty)
-                    formatter.reviewRow(AppStr.phoneLabel, phoneValue),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 120,
+                            child: Text('${AppStr.phoneLabel}:', style: AppFonts.bold),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(phoneValue, style: AppFonts.standard),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 18),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: AppStr.copiedToClipboard,
+                            onPressed: () => _copyToClipboard(phoneValue),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   const Divider(thickness: 1),
                   const SizedBox(height: 36),
@@ -1653,7 +1802,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.grey,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: AppColors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,
                                     letterSpacing: 0.4,
@@ -1682,7 +1831,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.orange,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: AppColors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,
                                     letterSpacing: 0.4,
@@ -1711,8 +1860,8 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                     await saveReview();
                                   } else {
                                     await updateReview();
+                                    _showSaveConfirmation();
                                   }
-                                  _showSaveConfirmation();
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.btnSave,
@@ -1794,7 +1943,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   minimumSize: const Size(0, 44),
                                 ),
                                 child: const Text(
-                                  'Back',
+                                  AppStr.backButtonLabel,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -1812,7 +1961,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.red,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: AppColors.white,
                                   textStyle: AppFonts.bold.copyWith(
                                     fontSize: 14,
                                     letterSpacing: 0.4,
@@ -1823,7 +1972,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   minimumSize: const Size(0, 44),
                                 ),
                                 child: const Text(
-                                  'Exclude',
+                                  AppStr.exclude,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -1854,7 +2003,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                               minimumSize: const Size(0, 44),
                             ),
                             child: const Text(
-                              'Back',
+                              AppStr.backButtonLabel,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -1877,10 +2026,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   @override
   void dispose() {
-    // Unregister the scoped will-pop callback using the cached ModalRoute reference.
-    // ignore: deprecated_member_use
-    _modalRoute?.removeScopedWillPopCallback(_onWillPop);
-
     super.dispose();
   }
 }

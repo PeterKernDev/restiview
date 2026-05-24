@@ -26,17 +26,23 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
   final TextEditingController _cuisineEditController = TextEditingController();
   bool _isEditingCuisine = false;
   String _selectedCuisine = '';
+  bool _selectedCuisineUsed = false;
 
   // Occasion controllers (mirrors cuisine)
   final TextEditingController _occasionController = TextEditingController();
   final TextEditingController _occasionEditController = TextEditingController();
   bool _isEditingOccasion = false;
   String _selectedOccasion = '';
+  bool _selectedOccasionUsed = false;
 
   // Country
   String _selectedCountry = '';
 
   bool _isBusy = false;
+
+  // Cached pairs [name, usedFlag] loaded once from Firebase
+  List<List<dynamic>> _cuisinePairs = [];
+  List<List<dynamic>> _occasionPairs = [];
 
   Future<T?> _withBusy<T>(Future<T> Function() action) async {
     if (_isBusy || !mounted) {
@@ -151,7 +157,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       return;
     }
 
-    final data = snapshot.value as Map<dynamic, dynamic>;
+    if (snapshot.value is! Map) return;
+    final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
     final cuisineList = _parsePairList(data['cuisine']);
     final index = cuisineList.indexWhere((pair) => pair[0] == _selectedCuisine);
     if (index == -1) {
@@ -242,7 +249,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     List<List<dynamic>> updatedCustoms = [];
     if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
+      if (snapshot.value is! Map) return;
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
       updatedCustoms = _parsePairList(data['cuisine']);
       updatedCustoms.add([newCuisine, 0]);
       await ref.update({'cuisine': updatedCustoms});
@@ -300,7 +308,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) return;
 
-    final data = snapshot.value as Map<dynamic, dynamic>;
+    if (snapshot.value is! Map) return;
+    final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
     final cuisineList = _parsePairList(data['cuisine']);
     final index = cuisineList.indexWhere((pair) => pair[0] == selected);
     if (index == -1) {
@@ -403,7 +412,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       return;
     }
 
-    final data = snapshot.value as Map<dynamic, dynamic>;
+    if (snapshot.value is! Map) return;
+    final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
     final occasionList = _parsePairList(data['occasion']);
     final index = occasionList.indexWhere(
       (pair) => pair[0] == _selectedOccasion,
@@ -496,7 +506,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
 
     List<List<dynamic>> updatedOccasions = [];
     if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
+      if (snapshot.value is! Map) return;
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
       updatedOccasions = _parsePairList(data['occasion']);
       updatedOccasions.add([newOccasion, 0]);
       await ref.update({'occasion': updatedOccasions});
@@ -558,7 +569,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     if (!snapshot.exists) return;
 
-    final data = snapshot.value as Map<dynamic, dynamic>;
+    if (snapshot.value is! Map) return;
+    final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
     final occasionList = _parsePairList(data['occasion']);
     final index = occasionList.indexWhere((pair) => pair[0] == selected);
     if (index == -1) {
@@ -635,7 +647,8 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     if (!mounted) return;
     List<String> updatedCountries = [];
     if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
+      if (snapshot.value is! Map) return;
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
       updatedCountries = List<String>.from(data['country'] ?? []);
       updatedCountries.add(newCountry);
       await ref.update({'country': updatedCountries});
@@ -662,12 +675,30 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
     );
   }
 
+  Future<void> _loadCustomValPairs() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snapshot = await FirebaseDatabase.instance
+          .ref('users/$uid/customvals')
+          .get();
+      if (!mounted || !snapshot.exists || snapshot.value is! Map) return;
+      final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+      if (!mounted) return;
+      setState(() {
+        _cuisinePairs = _parsePairList(data['cuisine']);
+        _occasionPairs = _parsePairList(data['occasion']);
+      });
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
     _selectedCuisine = '';
     _selectedOccasion = '';
     _selectedCountry = '';
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomValPairs());
   }
 
   @override
@@ -714,7 +745,10 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
       systemOccasions,
       SessionCache.customOccasions,
     );
-    final countryList = allCountries; // show full country list in dropdown
+    // Only offer countries not already in the user's list
+    final countryList = allCountries
+        .where((c) => !SessionCache.customCountries.contains(c))
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.beige,
@@ -754,19 +788,46 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     : null,
                 hint: Text(AppStr.selectCuisineHint, style: AppFonts.standard),
                 items: extendedCuisines.map((c) {
+                  final bool isCustom = !systemCuisines.contains(c);
                   return DropdownMenuItem<String>(
                     value: c,
-                    child: Text(c, style: AppFonts.standard),
+                    child: Text(
+                      isCustom ? '$c (custom)' : c,
+                      style: AppFonts.standard,
+                    ),
                   );
                 }).toList(),
+                selectedItemBuilder: (BuildContext context) {
+                  return extendedCuisines.map((c) {
+                    return Text(c, style: AppFonts.standard);
+                  }).toList();
+                },
                 onChanged: (value) {
                   if (!mounted) return;
+                  final rawValue = (value ?? '').replaceAll(' (custom)', '').trim();
+                  final bool isCustom = !systemCuisines.contains(rawValue);
+                  bool usedInReview = false;
+                  if (isCustom && rawValue.isNotEmpty) {
+                    final pair = _cuisinePairs.firstWhere(
+                      (p) => p[0] == rawValue,
+                      orElse: () => [rawValue, 0],
+                    );
+                    usedInReview = pair[1] == 1;
+                  }
                   setState(() {
-                    _selectedCuisine = value ?? '';
+                    _selectedCuisine = rawValue;
+                    _selectedCuisineUsed = usedInReview;
                     if (_isEditingCuisine) {
                       _cuisineEditController.text = _selectedCuisine;
                     }
                   });
+                  if (isCustom && usedInReview) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(AppStr.valueUsedInReview),
+                      ),
+                    );
+                  }
                 },
                 decoration: InputDecoration(
                   labelText: AppStr.currentCuisinesLabel,
@@ -806,7 +867,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     width: 64,
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: _isBusy
+                      onPressed: (_isBusy || systemCuisines.contains(_selectedCuisine) || _selectedCuisineUsed)
                           ? null
                           : () {
                               _withBusy(() async {
@@ -832,7 +893,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     width: 64,
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: _isBusy
+                      onPressed: (_isBusy || systemCuisines.contains(_selectedCuisine) || _selectedCuisineUsed)
                           ? null
                           : () {
                               if (_selectedCuisine.isEmpty) {
@@ -909,6 +970,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                           _cuisineEditController.clear();
                           _cuisineController.clear();
                           _selectedCuisine = '';
+                          _selectedCuisineUsed = false;
                         });
                       },
                       style: ElevatedButton.styleFrom(
@@ -950,19 +1012,46 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     : null,
                 hint: Text(AppStr.selectOccasionHint, style: AppFonts.standard),
                 items: extendedOccasions.map((c) {
+                  final bool isCustom = !systemOccasions.contains(c);
                   return DropdownMenuItem<String>(
                     value: c,
-                    child: Text(c, style: AppFonts.standard),
+                    child: Text(
+                      isCustom ? '$c (custom)' : c,
+                      style: AppFonts.standard,
+                    ),
                   );
                 }).toList(),
+                selectedItemBuilder: (BuildContext context) {
+                  return extendedOccasions.map((c) {
+                    return Text(c, style: AppFonts.standard);
+                  }).toList();
+                },
                 onChanged: (value) {
                   if (!mounted) return;
+                  final rawValue = (value ?? '').replaceAll(' (custom)', '').trim();
+                  final bool isCustom = !systemOccasions.contains(rawValue);
+                  bool usedInReview = false;
+                  if (isCustom && rawValue.isNotEmpty) {
+                    final pair = _occasionPairs.firstWhere(
+                      (p) => p[0] == rawValue,
+                      orElse: () => [rawValue, 0],
+                    );
+                    usedInReview = pair[1] == 1;
+                  }
                   setState(() {
-                    _selectedOccasion = value ?? '';
+                    _selectedOccasion = rawValue;
+                    _selectedOccasionUsed = usedInReview;
                     if (_isEditingOccasion) {
                       _occasionEditController.text = _selectedOccasion;
                     }
                   });
+                  if (isCustom && usedInReview) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(AppStr.valueUsedInReview),
+                      ),
+                    );
+                  }
                 },
                 decoration: InputDecoration(
                   labelText: AppStr.currentOccasionsLabel,
@@ -1002,7 +1091,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     width: 64,
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: _isBusy
+                      onPressed: (_isBusy || systemOccasions.contains(_selectedOccasion) || _selectedOccasionUsed)
                           ? null
                           : () {
                               _withBusy(() async {
@@ -1028,7 +1117,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                     width: 64,
                     height: 36,
                     child: ElevatedButton(
-                      onPressed: _isBusy
+                      onPressed: (_isBusy || systemOccasions.contains(_selectedOccasion) || _selectedOccasionUsed)
                           ? null
                           : () {
                               if (_selectedOccasion.isEmpty) {
@@ -1106,6 +1195,7 @@ class _CustomValuesScreenState extends State<CustomValuesScreen> {
                           _occasionEditController.clear();
                           _occasionController.clear();
                           _selectedOccasion = '';
+                          _selectedOccasionUsed = false;
                         });
                       },
                       style: ElevatedButton.styleFrom(

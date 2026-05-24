@@ -46,7 +46,7 @@ class Thumbnail extends StatelessWidget {
                 width: 28,
                 height: 28,
                 child: Material(
-                  color: Colors.black38,
+                  color: AppColors.black38,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -55,7 +55,7 @@ class Thumbnail extends StatelessWidget {
                     child: const Icon(
                       Icons.close,
                       size: 18,
-                      color: Colors.white,
+                      color: AppColors.white,
                     ),
                   ),
                 ),
@@ -98,7 +98,7 @@ class Thumbnail extends StatelessWidget {
           color: AppColors.greyShade300,
           width: size,
           height: size,
-          child: const Center(child: Icon(Icons.close, color: Colors.white70)),
+          child: const Center(child: Icon(Icons.close, color: AppColors.white70)),
         );
       }
 

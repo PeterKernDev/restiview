@@ -52,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       String? reason;
       if (mounted) {
@@ -84,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             : null,
       );
     } catch (e) {
-      debugPrint('Failed to write audit info: $e');
+      appLog('Failed to write audit info: $e');
     }
 
     try {
@@ -247,7 +248,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _resetSettings() {
+  Future<void> _resetSettings() async {
+    if (!mounted) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: Text(AppStr.resetSettingsTitle, style: AppFonts.bold),
+          content: Text(AppStr.resetSettingsMessage, style: AppFonts.standard),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppStr.cancel, style: AppFonts.standard),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(AppStr.confirm, style: AppFonts.standard),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
     if (!mounted) return;
     setState(() {
       _selectedSort = AppStr.sortOptionRating;
@@ -317,7 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('OK', style: AppFonts.standard),
+                child: Text(AppStr.ok, style: AppFonts.standard),
               ),
             ],
           ),
@@ -338,11 +360,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text('No', style: AppFonts.standard),
+                child: Text(AppStr.noLabel, style: AppFonts.standard),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: Text('Yes', style: AppFonts.standard),
+                child: Text(AppStr.yes, style: AppFonts.standard),
               ),
             ],
           ),
@@ -419,27 +441,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveSettings() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      await FirebaseDatabase.instance.ref('users/$uid').update({
-        'userSettings1': _selectedSort,
-        'userSettings2': _selectedCountry,
-        'userSettings3': _allowLocation,
-        'userSettings4': _allowPhotos,
-        'userSettings5': _searchRadius,
-        'userSettings6': _allowAutoCapture,
-        'userSettings7': _allowFriends,
-      });
+      try {
+        await FirebaseDatabase.instance.ref('users/$uid').update({
+          'userSettings1': _selectedSort,
+          'userSettings2': _selectedCountry,
+          'userSettings3': _allowLocation,
+          'userSettings4': _allowPhotos,
+          'userSettings5': _searchRadius,
+          'userSettings6': _allowAutoCapture,
+          'userSettings7': _allowFriends,
+        });
 
-      SessionCache.sortOption = _selectedSort;
-      SessionCache.defaultCountry = _selectedCountry;
-      SessionCache.allowLocation = _allowLocation;
-      SessionCache.allowPhotos = _allowPhotos;
-      SessionCache.searchRadius = _searchRadius;
-      SessionCache.allowAutoCapture = _allowAutoCapture;
+        SessionCache.sortOption = _selectedSort;
+        SessionCache.defaultCountry = _selectedCountry;
+        SessionCache.allowLocation = _allowLocation;
+        SessionCache.allowPhotos = _allowPhotos;
+        SessionCache.searchRadius = _searchRadius;
+        SessionCache.allowAutoCapture = _allowAutoCapture;
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text(AppStr.settingsSaved)));
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(AppStr.settingsSaved)));
+      } catch (e) {
+        appLog('_saveSettings error: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text(AppStr.saveError)));
+      }
     }
   }
 
@@ -486,7 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           AppStr.settingsTitle,
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         centerTitle: true,
       ),
@@ -645,7 +675,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           AppColors.orange,
                         ),
                         foregroundColor: WidgetStateProperty.all(
-                          Colors.black87,
+                          AppColors.black87,
                         ),
                         minimumSize: WidgetStateProperty.all(const Size(0, 48)),
                       ),
@@ -691,7 +721,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onPressed: _goBack,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.ochre,
-                          foregroundColor: Colors.black,
+                          foregroundColor: AppColors.black,
                           minimumSize: const Size(0, 48),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -735,7 +765,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onPressed: _resetSettings,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.grey,
-                          foregroundColor: Colors.black87,
+                          foregroundColor: AppColors.black87,
                           minimumSize: const Size(0, 48),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -755,6 +785,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 12),
+
             ],
           ),
         ),

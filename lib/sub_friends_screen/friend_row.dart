@@ -261,7 +261,7 @@ class FriendRow extends StatelessWidget {
     const int borderAlpha = 51;
 
     return Container(
-      color: selected ? AppColors.selectedRow : Colors.transparent,
+      color: selected ? AppColors.selectedRow : AppColors.transparent,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: InkWell(
         onTap: onTap,

@@ -4,10 +4,10 @@
 //
 
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
 import 'review_counter.dart'; // For countMatchingReviews
 import 'friend_event_audit.dart'; // For audit logging
 import 'db_utils.dart'; // For normalizeEmailForPath
+import '../constants/restiview_constants.dart';
 
 /// Result of mailbox processing operation
 class MailboxProcessResult {
@@ -41,7 +41,7 @@ Future<bool> hasMailboxRequests(String normalizedMailbox) async {
     final DataSnapshot snap = await ref.get();
     return snap.exists && snap.value != null;
   } catch (e) {
-    debugPrint('Error checking mailbox requests: $e');
+    appLog('Error checking mailbox requests: $e');
     return false;
   }
 }
@@ -94,7 +94,7 @@ Future<Map<String, String>> resolveCanonicalProfile(
       }
     } catch (e) {
       // Non-fatal, continue
-      debugPrint('Error reading public_profiles: $e');
+      appLog('Error reading public_profiles: $e');
     }
   }
 
@@ -111,10 +111,15 @@ Future<void> _writeRequestAuditEvent({
   String? details,
 }) async {
   try {
-    final String eventId = FirebaseDatabase.instance
+    final String? eventId = FirebaseDatabase.instance
         .ref('audit_info/request_events')
         .push()
-        .key!;
+        .key;
+
+    if (eventId == null) {
+      appLog('_writeRequestAuditEvent: push() returned null key, skipping audit write');
+      return;
+    }
 
     final Map<String, dynamic> auditData = <String, dynamic>{
       'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -132,7 +137,7 @@ Future<void> _writeRequestAuditEvent({
         .set(auditData);
   } catch (e) {
     // Best-effort audit logging, don't fail on audit errors
-    debugPrint('Error writing audit event: $e');
+    appLog('Error writing audit event: $e');
   }
 }
 
@@ -270,7 +275,24 @@ Future<MailboxProcessResult> processUserMailbox(
         // - statusCode=6: review request declined notification
 
         if (statusCode == 1) {
-          // This is a friend acceptance notification
+          // This is a friend acceptance notification.
+          // Guard: if our stub was deleted (e.g. we retracted the request just before
+          // they accepted), do not recreate it — just clean the mailbox entry.
+          final DataSnapshot existingStubForAccept = await FirebaseDatabase
+              .instance
+              .ref('users/$myUid/friends/$fromUid/statusCode')
+              .get();
+          if (!existingStubForAccept.exists) {
+            appLog(
+              'Skipping acceptance notification - stub already deleted (retracted)',
+            );
+            await FirebaseDatabase.instance
+                .ref('users_by_email/$normalizedMailbox/requests/$reqId')
+                .remove();
+            notificationsProcessed++;
+            continue;
+          }
+
           // Update my existing friend stub to accepted status
           final Map<String, dynamic> atomic = <String, dynamic>{
             'users/$myUid/friends/$fromUid/statusCode': 1,
@@ -290,9 +312,20 @@ Future<MailboxProcessResult> processUserMailbox(
               .ref('users/$myUid/friends/$fromUid/statusCode')
               .get();
           
+          if (!existingStub.exists) {
+            // Stub already deleted (e.g. we retracted the request just before they declined).
+            // Do not recreate it — just clean the mailbox entry.
+            appLog('Skipping decline notification - stub already deleted (retracted)');
+            await FirebaseDatabase.instance
+                .ref('users_by_email/$normalizedMailbox/requests/$reqId')
+                .remove();
+            notificationsProcessed++;
+            continue;
+          }
+
           if (existingStub.exists && existingStub.value == 9) {
             // I was the instigator of decline, don't overwrite with statusCode=8
-            debugPrint('SKIP: Ignoring statusCode=8 mailbox - I have statusCode=9 (instigator)');
+            appLog('SKIP: Ignoring statusCode=8 mailbox - I have statusCode=9 (instigator)');
             await FirebaseDatabase.instance
                 .ref('users_by_email/$normalizedMailbox/requests/$reqId')
                 .remove();
@@ -329,7 +362,14 @@ Future<MailboxProcessResult> processUserMailbox(
             final DataSnapshot existingStub = await FirebaseDatabase.instance
                 .ref('users/$myUid/friends/$fromUid/statusCode')
                 .get();
-            if (existingStub.exists) {
+            if (!existingStub.exists) {
+              // No stub exists — user already deleted this relationship intentionally.
+              // Do not recreate it.
+              shouldProcess = false;
+              appLog(
+                'Skipping deletion notification - no friend stub exists (already deleted)',
+              );
+            } else {
               final int existingStatus = existingStub.value is int
                   ? existingStub.value as int
                   : int.tryParse(existingStub.value?.toString() ?? '') ?? -1;
@@ -339,13 +379,13 @@ Future<MailboxProcessResult> processUserMailbox(
                   existingStatus == 1 ||
                   existingStatus == 2) {
                 shouldProcess = false;
-                debugPrint(
+                appLog(
                   'Skipping stale deletion notification - newer friend stub exists (status=$existingStatus)',
                 );
               }
             }
           } catch (e) {
-            debugPrint('Error checking existing friend stub: $e');
+            appLog('Error checking existing friend stub: $e');
           }
 
           if (shouldProcess) {
@@ -356,7 +396,7 @@ Future<MailboxProcessResult> processUserMailbox(
                 auditEventId = m['auditEventId'] as String;
               }
             } catch (e) {
-              debugPrint('Error extracting auditEventId: $e');
+              appLog('Error extracting auditEventId: $e');
             }
 
             final Map<String, dynamic> atomic = <String, dynamic>{
@@ -508,7 +548,7 @@ Future<MailboxProcessResult> processUserMailbox(
                   // Skip if review already exists
                   if (existingKeys.contains(reviewKey)) {
                     skippedCount++;
-                    debugPrint(
+                    appLog(
                       'Skipping duplicate review: $reviewKey (already in reviews_requested)',
                     );
                     continue;
@@ -607,7 +647,7 @@ Future<MailboxProcessResult> processUserMailbox(
             if (existingStatusCode == 9) {
               // Recipient has declined this user previously (statusCode=9)
               // Auto-decline: create statusCode=8 mailbox entry for sender, delete incoming request
-              debugPrint('AUTO-DECLINE: Recipient $myUid has statusCode=9 for sender $fromUid');
+              appLog('AUTO-DECLINE: Recipient $myUid has statusCode=9 for sender $fromUid');
               
               final String nowIso = DateTime.now().toUtc().toIso8601String();
               final String autoDeclineReqId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -643,7 +683,7 @@ Future<MailboxProcessResult> processUserMailbox(
             
             // If any other friend stub exists (not statusCode=9), just delete the mailbox entry
             // and don't overwrite the existing stub
-            debugPrint('SKIP: Friend stub already exists with statusCode=$existingStatusCode for $fromUid');
+            appLog('SKIP: Friend stub already exists with statusCode=$existingStatusCode for $fromUid');
             await FirebaseDatabase.instance
                 .ref('users_by_email/$normalizedMailbox/requests/$reqId')
                 .remove();

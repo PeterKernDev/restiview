@@ -1,9 +1,8 @@
 // lib/services/ube_provider.dart
 // Helper service to build and perform provider-side "heavy copy" (UBE).
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
-// import 'package:flutter/rendering.dart';
 import 'db_utils.dart';
+import '../constants/restiview_constants.dart';
 
 /// Maximum number of reviews to include in a single provide operation (strictly enforced).
 const int kProvideMaxReviews = 50;
@@ -62,8 +61,11 @@ Future<Map<String, dynamic>> buildProvideUpdate({
   if (requesterEmail.isNotEmpty) {
     norm = normalizeEmailForPath(requesterEmail);
   } else {
-    // Fallback: use safeKey of the uid when email not available (not ideal but prevents crash)
-    norm = safePushKey(rootRef.child('users_by_email')).toString();
+    // Email could not be resolved — abort to prevent writing reviews to a garbage path.
+    appLog(
+      'buildProvideUpdate: requesterEmail empty for uid=$requesterUid, aborting provide operation',
+    );
+    return <String, dynamic>{};
   }
 
   // Use a client request ID based on timestamp for the requests collection
@@ -88,8 +90,8 @@ Future<Map<String, dynamic>> buildProvideUpdate({
     }
   } catch (_) {}
 
-  debugPrint(
-    'DEBUG buildProvideUpdate: providerUid=$providerUid, providerEmail=$providerEmail, requesterUid=$requesterUid',
+  appLog(
+    'buildProvideUpdate: providerUid=$providerUid, providerEmail=$providerEmail, requesterUid=$requesterUid',
   );
 
   // Copy each review (strip photos) to mailbox
@@ -118,8 +120,8 @@ Future<Map<String, dynamic>> buildProvideUpdate({
     if (providerEmail.isNotEmpty && !clean.containsKey('owner_email')) {
       clean['owner_email'] = providerEmail;
     }
-    debugPrint(
-      'DEBUG: Review $destKey has owner_email: ${clean.containsKey('owner_email')}, value: ${clean['owner_email']}',
+    appLog(
+      'buildProvideUpdate: Review $destKey has owner_email: ${clean.containsKey('owner_email')}, value: ${clean['owner_email']}',
     );
     // Remove financial information: set cost to empty/blank
     clean['cost'] = '';

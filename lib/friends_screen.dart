@@ -10,6 +10,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/strings.dart';
+import 'constants/restiview_constants.dart';
 import 'top_screen.dart';
 import 'services/session_cache.dart';
 import 'services/mailbox_helper.dart';
@@ -54,6 +55,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   final Map<String, bool> _loadingProfileFor = <String, bool>{};
   StreamSubscription<DatabaseEvent>? _sub;
   bool _loading = true;
+  Timer? _loadTimeout;
 
   String? _selectedUid;
   bool _accepting = false;
@@ -65,10 +67,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
     super.initState();
     _checkMailbox(); // Check mailbox for pending requests
     _subscribeToFriends();
+    // Safety net: if Firebase onValue is slow or unavailable, clear the spinner
+    _loadTimeout = Timer(const Duration(seconds: 10), () {
+      if (mounted && _loading) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _loadTimeout?.cancel();
     _sub?.cancel();
     super.dispose();
   }
@@ -90,7 +101,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // pick up the updated friend stubs and refresh the UI
     } catch (e) {
       // Silent failure with logging
-      debugPrint('Error processing mailbox in friends screen: $e');
+      appLog('Error processing mailbox in friends screen: $e');
     }
   }
 
@@ -156,10 +167,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     vmap['status'] ?? vmap['statusCode'] ?? vmap['state'];
                 if (statusField is int) {
                   fsc = statusField;
-                  debugPrint('LISTENER DEBUG: Friend $friendUid has statusCode=$fsc');
+                  appLog('LISTENER DEBUG: Friend $friendUid has statusCode=$fsc');
                 } else if (statusField is String) {
                   fsc = FriendEntry.mapStringStatusToFsc(statusField);
-                  debugPrint('LISTENER DEBUG: Friend $friendUid has string status=$statusField mapped to fsc=$fsc');
+                  appLog('LISTENER DEBUG: Friend $friendUid has string status=$statusField mapped to fsc=$fsc');
                 }
 
                 if (vmap['email'] is String &&
@@ -352,28 +363,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   // ignore review parse errors
                 }
               }
+              nextMap[friendUid] = FriendEntry(
+                uid: friendUid,
+                email: email,
+                username: username,
+                fsc: fsc,
+                sharedReviewsCount: sharedCount,
+                comment: comment,
+                mailboxReqId: reqId,
+                mailboxNormalized: normalized,
+                accepted: acceptedFlag,
+                rvCount: rvCount,
+                rvCountLastCheckedAt: rvCountLastCheckedAt,
+                reviewRequest: reviewRequestData,
+                review: reviewData,
+                providedRequestId: providedRequestId,
+                providedRqCount: providedRqCount,
+                providedAt: providedAt,
+              );
             } catch (_) {
               // ignore parsing errors
             }
-
-            nextMap[friendUid] = FriendEntry(
-              uid: friendUid,
-              email: email,
-              username: username,
-              fsc: fsc,
-              sharedReviewsCount: sharedCount,
-              comment: comment,
-              mailboxReqId: reqId,
-              mailboxNormalized: normalized,
-              accepted: acceptedFlag,
-              rvCount: rvCount,
-              rvCountLastCheckedAt: rvCountLastCheckedAt,
-              reviewRequest: reviewRequestData,
-              review: reviewData,
-              providedRequestId: providedRequestId,
-              providedRqCount: providedRqCount,
-              providedAt: providedAt,
-            );
           });
         }
 
@@ -663,7 +673,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   // Decline button logic: active for incoming requests AND established friends (statusCode=1)
-  // Also includes retraction placeholders (statusCode=0, 4)
+  // NOT for statusCode=0 (FR-ASKED retraction) or statusCode=4 (RV-ASKED retraction) — those use Delete
   bool _selectedIsDeclinable() {
     if (_selectedUid == null) {
       return false;
@@ -677,12 +687,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
     // - Incoming friend requests: statusCode=2 (FR-WANTED)
     // - Incoming review requests: statusCode=3 (RV-WANTS)
     // - Established friends: statusCode=1 (FRIEND)
-    // - Retraction placeholders: statusCode=0 (FR-ASKED), statusCode=4 (RV-ASKED)
+    // - Outgoing review request placeholder: statusCode=4 (RV-ASKED)
+    // NOT for statusCode=0 (FR-ASKED) — that is a retraction, handled by Delete
     // NOT for statusCode=6 (RV-DECLINED) - no concept of declining a decline
     return f.fsc == statusRequested ||
            f.fsc == statusRvWants ||
            f.fsc == statusAccepted ||
-           f.fsc == statusRequesterSent ||
            f.fsc == statusRvAsked;
   }
 
@@ -694,8 +704,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (f == null) {
       return false;
     }
-    // Delete button only active for declined friend stubs (statusCode 8 or 9)
-    return f.fsc == statusDeclined || f.fsc == statusFriendDeleted;
+    // Delete button active for declined friend stubs (statusCode 8 or 9)
+    // and for outgoing friend requests (statusCode=0, FR-ASKED) — retraction
+    return f.fsc == statusDeclined || f.fsc == statusFriendDeleted || f.fsc == statusRequesterSent;
   }
 
   Future<void> _fetchAndPatchProfile(String friendUid) async {
@@ -855,7 +866,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             _accepting = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppStr.requestSendFailed}: $e')),
+            const SnackBar(content: Text(AppStr.requestSendFailed)),
           );
         }
       }
@@ -907,8 +918,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
             }
           }
         } catch (e) {
-          debugPrint('Error parsing filters: $e');
-        }
+        appLog('Error parsing filters: $e');
+      }
 
         if (filters.isEmpty) {
           throw Exception('No valid filters found in review request');
@@ -1004,13 +1015,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
           }
         }
       } catch (e) {
-        debugPrint('Error gathering reviews to provide: $e');
+        appLog('Error gathering reviews to provide: $e');
         if (mounted) {
           setState(() {
             _accepting = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${AppStr.errorGatheringReviews}: $e')),
+            const SnackBar(content: Text(AppStr.errorGatheringReviews)),
           );
         }
         return;
@@ -1072,6 +1083,36 @@ class _FriendsScreenState extends State<FriendsScreen> {
       // If no stored comment is present, use an empty provider comment
       // (do not prompt the user here — the review-request-details screen is the place to edit it).
       dialogResult ??= '';
+
+      // Confirm sending with user
+      if (mounted) {
+        final bool? confirmSend = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext ctx) {
+            return AlertDialog(
+              title: Text(AppStr.accept),
+              content: Text(AppStr.sendNReviews(toProvide.length)),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text(AppStr.noLabel),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: Text(AppStr.yes),
+                ),
+              ],
+            );
+          },
+        );
+        if (confirmSend != true) {
+          setState(() {
+            _accepting = false;
+          });
+          return;
+        }
+      }
+
       // Build and perform update
       try {
         final DatabaseReference rootRef = FirebaseDatabase.instance.ref();
@@ -1266,78 +1307,40 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     // If this is a review request (recipient wants reviews), decline it
     if (selected.fsc == statusRvWants) {
-      debugPrint('DEBUG: Declining review request from ${selected.uid}');
+      appLog('DEBUG: Declining review request from ${selected.uid}');
 
-      // Show dialog to collect optional decline message
-      final TextEditingController declineController = TextEditingController();
-      String? declineMessage;
-
-      if (mounted) {
-        final bool? confirmed = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext ctx) {
-            return AlertDialog(
-              title: Text(AppStr.declineReviewRequestTitle),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      AppStr.declineReviewRequestMessage,
-                      style: AppFonts.standard,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: declineController,
-                      maxLines: 2,
-                      maxLength: 30,
-                      decoration: InputDecoration(
-                        hintText: AppStr.optionalDeclineMessageHint,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6.0),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12.0,
-                          horizontal: 12.0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: Text(AppStr.cancel),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop(true);
-                  },
-                  child: Text(AppStr.decline),
-                ),
-              ],
-            );
-          },
-        );
-
-        if (confirmed != true) {
-          // Delay disposal to avoid controller-in-use errors during dialog animation
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            declineController.dispose();
-          });
-          setState(() {
-            _declining = false;
-          });
-          return;
-        }
-
-        declineMessage = declineController.text.trim();
-        // Delay disposal to avoid controller-in-use errors during dialog animation
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          declineController.dispose();
+      if (!mounted) {
+        setState(() {
+          _declining = false;
         });
+        return;
+      }
+
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext ctx) {
+          return AlertDialog(
+            title: Text(AppStr.declineReviewRequestTitle),
+            content: const Text('Decline review request?'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text(AppStr.noLabel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(AppStr.yes),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true) {
+        setState(() {
+          _declining = false;
+        });
+        return;
       }
 
       bool success = false;
@@ -1358,8 +1361,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             .toString();
         final String nowIso = DateTime.now().toUtc().toIso8601String();
 
-        // Use the decline message from the dialog
-        final String providerMessage = declineMessage ?? '';
+        final String providerMessage = '';
 
         // Build atomic update
         final Map<String, dynamic> updates = <String, dynamic>{};
@@ -1396,12 +1398,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           },
         );
         
-        debugPrint('DEBUG: Review request declined successfully');
+        appLog('DEBUG: Review request declined successfully');
         success = true;
         snackbarMsg = AppStr.reviewRequestDeclined;
       } catch (e) {
-        debugPrint('DEBUG: Error declining review request: $e');
-        snackbarMsg = '${AppStr.requestSendFailed}: $e';
+        appLog('Error declining review request: $e');
+        snackbarMsg = AppStr.requestSendFailed;
       }
 
       if (!mounted) {
@@ -1432,7 +1434,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     // PHASE 4: Handle decline for established friends (statusCode=1)
     if (selected.fsc == statusAccepted) {
-      debugPrint('DEBUG: Declining established friend ${selected.uid}');
+      appLog('DEBUG: Declining established friend ${selected.uid}');
 
       // Show confirmation dialog for established friend decline
       if (mounted) {
@@ -1478,7 +1480,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         final String normalizedMailbox = normalizeEmailForPath(friendEmail);
         final String requestId = DateTime.now().millisecondsSinceEpoch.toString();
         
-        debugPrint('DECLINE DEBUG: Instigator=$me declining friend=${selected.uid}');
+        appLog('DECLINE DEBUG: Instigator=$me declining friend=${selected.uid}');
         
         // Build atomic update
         final Map<String, dynamic> updates = <String, dynamic>{};
@@ -1487,7 +1489,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
         updates['users/$me/friends/${selected.uid}/statusCode'] = 9;
         updates['users/$me/friends/${selected.uid}/updatedAt'] = nowIso;
         
-        debugPrint('DECLINE DEBUG: Setting users/$me/friends/${selected.uid}/statusCode = 9');
+        // Directly update the friend's stub to statusCode=8 so they see it immediately
+        // (Firebase rules allow this: auth.uid === $friendUid for their entry)
+        updates['users/${selected.uid}/friends/$me/statusCode'] = 8;
+        updates['users/${selected.uid}/friends/$me/accepted'] = false;
+        updates['users/${selected.uid}/friends/$me/updatedAt'] = nowIso;
+        
+        appLog('DECLINE DEBUG: Setting users/$me/friends/${selected.uid}/statusCode = 9');
         
         // Create statusCode=8 mailbox entry for friend (recipient of decline)
         final String requestBasePath = 'users_by_email/$normalizedMailbox/requests/$requestId';
@@ -1497,11 +1505,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
         updates['$requestBasePath/clientRequestId'] = requestId;
         updates['$requestBasePath/type'] = 'established_friend_declined';
         
-        debugPrint('DECLINE DEBUG: Creating statusCode=8 mailbox for friend at $normalizedMailbox');
+        appLog('DECLINE DEBUG: Creating statusCode=8 mailbox for friend at $normalizedMailbox');
         
         await FirebaseDatabase.instance.ref().update(updates);
         
-        debugPrint('DECLINE DEBUG: Database update completed successfully');
+        appLog('DECLINE DEBUG: Database update completed successfully');
         
         // Write audit event
         await writeFriendEvent(
@@ -1511,10 +1519,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
         );
         
         success = true;
-        snackbarMsg = 'Friend declined';
+        snackbarMsg = AppStr.friendDeclined;
       } catch (e) {
-        debugPrint('DEBUG: Error declining established friend: $e');
-        snackbarMsg = '${AppStr.requestSendFailed}: $e';
+        appLog('Error declining established friend: $e');
+        snackbarMsg = AppStr.requestSendFailed;
       }
 
       if (!mounted) {
@@ -1601,7 +1609,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       final FriendEntry? reloaded = _friendByUid[_selectedUid];
       if (reloaded != null) {
         setState(() {
-          reloaded.fsc = statusDeclined; // Actor declines, sets to declined
+          reloaded.fsc = statusFriendDeleted; // Actor declines: they are the instigator (statusCode=9)
           reloaded.review = null;
           _selectedUid = null;
         });
@@ -1625,23 +1633,161 @@ class _FriendsScreenState extends State<FriendsScreen> {
       return;
     }
 
+    // RETRACTION: pk3 deletes their own outgoing FR-ASKED (statusCode=0)
+    // Sends statusCode=8 to pk1's mailbox so pk1's stub becomes "declined"
+    if (selected.fsc == statusRequesterSent) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text(AppStr.deleteFriendTitle, style: AppFonts.bold),
+            content: Text(AppStr.retractFriendRequest, style: AppFonts.standard),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+child: Text(AppStr.noLabel, style: AppFonts.standard),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(AppStr.yes, style: AppFonts.standard),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+
+      final User? currentUser = FirebaseAuth.instance.currentUser;
+      final String me = currentUser?.uid ?? '';
+      if (me.isEmpty) return;
+
+      setState(() { _deleting = true; });
+
+      final String friendUid = selected.uid;
+      try {
+        final String nowIso = DateTime.now().toUtc().toIso8601String();
+        final String? friendNormalized = selected.email.isNotEmpty
+            ? normalizeEmailForPath(selected.email.toLowerCase())
+            : null;
+
+        // Delete own stub
+        await FirebaseDatabase.instance.ref('users/$me/friends/$friendUid').remove();
+
+        // Clean any mailbox entries we sent to the friend (the original FR)
+        // MUST happen BEFORE pushing the statusCode=8 notification — otherwise
+        // the cleanup loop would delete the retraction notification it just wrote.
+        String? myNormalized;
+        final String? myEmail2 = currentUser?.email;
+        if (myEmail2 != null && myEmail2.isNotEmpty) {
+          myNormalized = normalizeEmailForPath(myEmail2.toLowerCase());
+        }
+        if (friendNormalized != null && friendNormalized.isNotEmpty) {
+          // Remove entries from friend's mailbox that came from us
+          final DataSnapshot mbSnap = await FirebaseDatabase.instance
+              .ref('users_by_email/$friendNormalized/requests')
+              .get();
+          if (mbSnap.exists && mbSnap.value is Map) {
+            final Map<dynamic, dynamic> mbMap =
+                Map<dynamic, dynamic>.from(mbSnap.value as Map);
+            for (final dynamic key in mbMap.keys) {
+              final dynamic val = mbMap[key];
+              if (val is Map) {
+                final Map<dynamic, dynamic> v =
+                    Map<dynamic, dynamic>.from(val);
+                if (v['fromUid']?.toString() == me) {
+                  await FirebaseDatabase.instance
+                      .ref('users_by_email/$friendNormalized/requests/$key')
+                      .remove();
+                }
+              }
+            }
+          }
+        }
+
+        // Now send statusCode=8 to pk1's mailbox so their FR-WANTED becomes "declined"
+        if (friendNormalized != null && friendNormalized.isNotEmpty) {
+          final String myEmail = currentUser?.email ?? me;
+          final DatabaseReference notificationRef = FirebaseDatabase.instance
+              .ref('users_by_email/$friendNormalized/requests')
+              .push();
+          await notificationRef.set(<String, dynamic>{
+            'statusCode': 8,
+            'fromUid': me,
+            'type': 'friend_request_retracted',
+            'email': myEmail,
+            'createdAt': nowIso,
+            'clientRequestId': notificationRef.key ?? nowIso,
+          });
+        }
+        if (myNormalized != null && myNormalized.isNotEmpty) {
+          // Remove entries in our own mailbox that came from the friend
+          final DataSnapshot myMbSnap = await FirebaseDatabase.instance
+              .ref('users_by_email/$myNormalized/requests')
+              .get();
+          if (myMbSnap.exists && myMbSnap.value is Map) {
+            final Map<dynamic, dynamic> myMbMap =
+                Map<dynamic, dynamic>.from(myMbSnap.value as Map);
+            for (final dynamic key in myMbMap.keys) {
+              final dynamic val = myMbMap[key];
+              if (val is Map) {
+                final Map<dynamic, dynamic> v =
+                    Map<dynamic, dynamic>.from(val);
+                if (v['fromUid']?.toString() == friendUid) {
+                  await FirebaseDatabase.instance
+                      .ref('users_by_email/$myNormalized/requests/$key')
+                      .remove();
+                }
+              }
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _friendByUid.remove(friendUid);
+            _friends
+              ..clear()
+              ..addAll(_friendByUid.values);
+            _selectedUid = null;
+            _deleting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStr.deleteSuccessPending)),
+          );
+        } else {
+          _deleting = false;
+        }
+      } catch (e) {
+        appLog('Error retracting friend request: $e');
+        if (mounted) {
+          setState(() { _deleting = false; });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStr.deleteFailed)),
+          );
+        } else {
+          _deleting = false;
+        }
+      }
+      return;
+    }
+
     // PHASE 3: Different confirmation messages for instigator (statusCode=9) vs recipient (statusCode=8)
-    debugPrint('DELETE DEBUG: selected.fsc=${selected.fsc}, statusFriendDeleted=$statusFriendDeleted, statusDeclined=$statusDeclined');
+    appLog('DELETE DEBUG: selected.fsc=${selected.fsc}, statusFriendDeleted=$statusFriendDeleted, statusDeclined=$statusDeclined');
     String confirmationMessage;
     if (selected.fsc == statusFriendDeleted) {
       // statusCode=9: Instigator of decline (you declined this friend)
-      debugPrint('DELETE DEBUG: Matched statusCode=9 (instigator)');
+      appLog('DELETE DEBUG: Matched statusCode=9 (instigator)');
       confirmationMessage = AppStr.deleteDeclinedFriendInstigator;
     } else if (selected.fsc == statusDeclined) {
       // statusCode=8: Recipient of decline (the friend declined your request)
-      debugPrint('DELETE DEBUG: Matched statusCode=8 (recipient)');
+      appLog('DELETE DEBUG: Matched statusCode=8 (recipient)');
       confirmationMessage = AppStr.deleteDeclinedFriendRecipient;
     } else {
       // Fallback (should not reach here due to button logic)
-      debugPrint('DELETE DEBUG: Matched fallback condition');
-      confirmationMessage = 'Are you sure you want to delete this friend relationship?';
+      appLog('DELETE DEBUG: Matched fallback condition');
+      confirmationMessage = AppStr.deleteRelationshipFallback;
     }
-    debugPrint('DELETE DEBUG: Using message: $confirmationMessage');
+    appLog('DELETE DEBUG: Using message: $confirmationMessage');
 
     // Show confirmation dialog
     final bool? confirmed = await showDialog<bool>(
@@ -1658,13 +1804,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
               onPressed: () {
                 Navigator.pop(context, false);
               },
-              child: Text('No', style: AppFonts.standard),
+              child: Text(AppStr.noLabel, style: AppFonts.standard),
             ),
             TextButton(
               onPressed: () {
                 Navigator.pop(context, true);
               },
-              child: Text('Yes', style: AppFonts.standard),
+              child: Text(AppStr.yes, style: AppFonts.standard),
             ),
           ],
         );
@@ -1784,7 +1930,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               auditEventId = friendSnap.value as String;
             }
           } catch (e) {
-            debugPrint('Error reading auditEventId: $e');
+            appLog('Error reading auditEventId: $e');
           }
 
           // If auditEventId exists, update the audit record to mark completion
@@ -1799,14 +1945,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 'status': 'completed',
               });
             } catch (e) {
-              debugPrint('Warning: Could not update audit record: $e');
+              appLog('Warning: Could not update audit record: $e');
             }
           }
 
-          // Delete your own friend stub
-          await FirebaseDatabase.instance
-              .ref('users/$me/friends/$friendUid')
-              .remove();
+          // Delete both stubs atomically so the friend's list updates immediately.
+          // Firebase rules allow the actor to delete their counterpart's entry
+          // because auth.uid === $friendUid for the friend's path.
+          await FirebaseDatabase.instance.ref().update(<String, dynamic>{
+            'users/$me/friends/$friendUid': null,
+            'users/$friendUid/friends/$me': null,
+          });
           parentDeleteSucceeded = true;
 
           // PHASE 3: Write audit event using new audit system
@@ -1849,7 +1998,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               });
             } catch (e) {
               // Non-fatal, continue with deletion
-              debugPrint('Warning: Could not send deletion notification: $e');
+              appLog('Warning: Could not send deletion notification: $e');
             }
           }
         }
@@ -1959,14 +2108,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
       return;
     }
 
-    debugPrint(
-      'DEBUG: _onAddFriendPressed - selected.fsc = ${selected.fsc}, statusRvWants = $statusRvWants',
-    );
+    appLog('DEBUG: _onAddFriendPressed - selected.fsc = ${selected.fsc}, statusRvWants = $statusRvWants');
 
     // If the selected friend is a recipient-side RV-WANTS request,
     // show the review request details screen instead of the normal flow.
     if (selected.fsc == statusRvWants) {
-      debugPrint('DEBUG: Navigating to review-request-details screen');
+      appLog('DEBUG: Navigating to review-request-details screen');
       // Pass the FriendEntry to the details screen. The details screen can fetch additional raw data if required.
       Navigator.pushNamed(
         context,
@@ -1978,9 +2125,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     // Only allow statusCode=1 (FRIEND - accepted friends)
     if (selected.fsc != statusAccepted) {
-      debugPrint(
-        'DEBUG: Early return - selected.fsc (${selected.fsc}) != statusAccepted (1)',
-      );
+      appLog('DEBUG: Early return - selected.fsc (${selected.fsc}) != statusAccepted (1)');
       return;
     }
 
@@ -2030,13 +2175,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     String addButtonLabel;
     if (_selectedUid == null) {
-      addButtonLabel = '+Friend';
+      addButtonLabel = AppStr.addFriend;
     } else {
       final FriendEntry? sel = _friendByUid[_selectedUid];
       if (sel != null && sel.fsc == statusRvWants) {
-        addButtonLabel = 'RV-REQUEST';
+        addButtonLabel = AppStr.rvRequestLabel;
       } else {
-        addButtonLabel = '+Reviews';
+        addButtonLabel = AppStr.addReviewsLabel;
       }
     }
 
@@ -2047,7 +2192,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           '${AppStr.friendsTitle}: ($accepted)',
-          style: AppFonts.title.copyWith(color: Colors.white),
+          style: AppFonts.title.copyWith(color: AppColors.white),
         ),
       ),
       body: Column(

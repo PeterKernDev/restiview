@@ -12,6 +12,7 @@ import 'services/db_utils.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'constants/restiview_constants.dart';
 import 'friends_screen.dart';
 
 class CountryNode {
@@ -42,6 +43,7 @@ class ReviewRequestScreen extends StatefulWidget {
 
 class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
   bool _loading = true;
+  bool _loadError = false;
   bool _sending = false;
   final TextEditingController _commentCtl = TextEditingController();
 
@@ -197,10 +199,11 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
 
       await _loadProviderProfile();
     } catch (e) {
-      debugPrint('[ReviewRequestScreen] Error loading review_info: $e');
+      appLog('[ReviewRequestScreen] Error loading review_info: $e');
       if (mounted) {
         setState(() {
           _loading = false;
+          _loadError = true;
         });
       }
     }
@@ -545,20 +548,18 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
       if (!mounted) {
         return;
       }
+      appLog('sendReviewRequest FirebaseException: ${fe.message ?? fe.code}');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${AppStr.requestSendFailed}: ${fe.message ?? fe.code}',
-          ),
-        ),
+        const SnackBar(content: Text(AppStr.requestSendFailed)),
       );
       return;
     } catch (e) {
       if (!mounted) {
         return;
       }
+      appLog('sendReviewRequest error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStr.requestSendFailed}: $e')),
+        const SnackBar(content: Text(AppStr.requestSendFailed)),
       );
       return;
     } finally {
@@ -659,7 +660,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           AppStr.requestReviewsTitle,
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         centerTitle: true,
       ),
@@ -714,7 +715,9 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
                               padding: const EdgeInsets.all(20.0),
                               child: Center(
                                 child: Text(
-                                  AppStr.noReviewsAvailable,
+                                  _loadError
+                                      ? AppStr.reviewLoadError
+                                      : AppStr.noReviewsAvailable,
                                   style: AppFonts.standard.copyWith(
                                     fontSize: 16,
                                     color: AppColors.grey,
@@ -735,7 +738,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: Colors.transparent,
+              color: AppColors.transparent,
               child: Row(
                 children: <Widget>[
                   Expanded(
@@ -750,7 +753,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.ochre,
-                          foregroundColor: Colors.black,
+                          foregroundColor: AppColors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           minimumSize: const Size(0, 44),
                           textStyle: AppFonts.bold,
@@ -779,17 +782,17 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
                           backgroundColor: sendEnabled
                               ? AppColors.darkGreen
                               : AppColors.grey,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           minimumSize: const Size(0, 44),
                           textStyle: AppFonts.bold,
                         ),
                         child: Text(
-                          'REQUEST',
+                          AppStr.requestBtnLabel,
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                           softWrap: false,
-                          style: AppFonts.bold.copyWith(color: Colors.white),
+                          style: AppFonts.bold.copyWith(color: AppColors.white),
                         ),
                       ),
                     ),
@@ -810,7 +813,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
         ? AppColors.ochre.withValues(alpha: 0.6)
         : hasCitySelections
             ? AppColors.ochre.withValues(alpha: 0.3)
-            : Colors.transparent;
+            : AppColors.transparent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,7 +863,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
             );
             final Color cityBgColor = isCitySelected
                 ? AppColors.ochre.withValues(alpha: 0.3)
-                : Colors.transparent;
+                : AppColors.transparent;
 
             return Container(
               margin: const EdgeInsets.only(left: 40, top: 4),

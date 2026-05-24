@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'constants/restiview_constants.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
+import 'constants/fonts.dart';
 
 class GoodForFilterScreen extends StatefulWidget {
   final List<String> initialSelection;
@@ -67,12 +68,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
 
     // Shared button style for consistent label sizes
     final ButtonStyle actionBtnBase = ElevatedButton.styleFrom(
-      textStyle: const TextStyle(
-        fontFamily: 'Gelica',
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 0.4,
-      ),
+      textStyle: AppFonts.bold.copyWith(letterSpacing: 0.4),
       padding: const EdgeInsets.symmetric(vertical: 12),
       minimumSize: const Size(0, 44),
     );
@@ -84,13 +80,9 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
       backgroundColor: AppColors.beige,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
+        title: Text(
           AppStr.goodForFilterTitle,
-          style: TextStyle(
-            fontFamily: 'Gelica',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
@@ -103,13 +95,9 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     AppStr.goodForFilterPrompt,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Gelica',
-                    ),
+                    style: AppFonts.bold.copyWith(fontSize: 18),
                   ),
                   const SizedBox(height: 24),
 
@@ -144,17 +132,17 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                                 height: tileHeight,
                                 decoration: BoxDecoration(
                                   color: checked
-                                      ? Colors.yellow.shade100
-                                      : Colors.white,
+                                      ? AppColors.yellowShade100
+                                      : AppColors.white,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: checked
-                                        ? Colors.black54
+                                        ? AppColors.black54
                                         : AppColors.greyShade300,
                                   ),
                                   boxShadow: const [
                                     BoxShadow(
-                                      color: Colors.black12,
+                                      color: AppColors.black12,
                                       blurRadius: 2,
                                       offset: Offset(0, 1),
                                     ),
@@ -168,10 +156,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                                     Expanded(
                                       child: Text(
                                         label,
-                                        style: const TextStyle(
-                                          fontFamily: 'Gelica',
-                                          fontSize: 14,
-                                        ),
+                                        style: AppFonts.standard,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -182,7 +167,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                                           : Icons.check_box_outline_blank,
                                       size: 18,
                                       color: checked
-                                          ? Colors.black87
+                                          ? AppColors.black87
                                           : AppColors.grey,
                                     ),
                                   ],
@@ -215,7 +200,7 @@ class _GoodForFilterScreenState extends State<GoodForFilterScreen> {
                             AppColors.ochre,
                           ),
                           foregroundColor: WidgetStateProperty.all(
-                            Colors.black,
+                            AppColors.black,
                           ),
                         ),
                         child: Text(

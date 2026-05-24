@@ -19,7 +19,7 @@ class TandCScreen extends StatelessWidget {
         backgroundColor: AppColors.darkGreen,
         title: Text(
           'Terms & Conditions',
-          style: AppFonts.bold.copyWith(color: Colors.white),
+          style: AppFonts.bold.copyWith(color: AppColors.white),
         ),
         centerTitle: true,
       ),
@@ -30,7 +30,7 @@ class TandCScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
                 TandCText.terms,
-                style: AppFonts.standard.copyWith(fontSize: 14, color: Colors.black87),
+                style: AppFonts.standard.copyWith(fontSize: 14, color: AppColors.black87),
               ),
             ),
           ),
@@ -40,12 +40,12 @@ class TandCScreen extends StatelessWidget {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.ochre,
-                  foregroundColor: Colors.black,
+                  foregroundColor: AppColors.black,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pop(context),
-                child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: Colors.black)),
+                child: Text(AppStr.back, style: AppFonts.standard.copyWith(color: AppColors.black)),
               ),
             ),
           ),

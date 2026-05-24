@@ -23,6 +23,7 @@ import 'services/user_setup.dart'; // ensureUserSetup helper
 import 'services/location_restaurant_helper.dart'; // normalizeCountryName helper
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'services/network_utils.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -162,6 +163,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordController.text.trim();
 
     _toggleLoading(true);
+    if (!await hasInternetConnection()) {
+      _toggleLoading(false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStr.networkError)),
+      );
+      return;
+    }
     String detectedCountry = _homeCountry;
     debugPrint('Initial _homeCountry: $_homeCountry');
     try {
@@ -205,18 +214,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final uid = userCredential.user?.uid;
       if (uid != null) {
-        await FirebaseDatabase.instance.ref('users/$uid').set({
-          'userName': name,
-          'userEmail': email,
-          'userSettings1': 'Name',
-          'userSettings2': detectedCountry,
-          'baseCountry': detectedCountry,
-          'userSettings3': _allowLocation,
-          'userSettings4': _allowPhotos,
-          'userSettings5': 50,
-          'userSettings6': false,
-          'userSettings7': _allowFriends, // persisted toggle
-        });
+        try {
+          await FirebaseDatabase.instance.ref('users/$uid').set({
+            'userName': name,
+            'userEmail': email,
+            'userSettings1': 'Name',
+            'userSettings2': detectedCountry,
+            'baseCountry': detectedCountry,
+            'userSettings3': _allowLocation,
+            'userSettings4': _allowPhotos,
+            'userSettings5': 50,
+            'userSettings6': false,
+            'userSettings7': _allowFriends, // persisted toggle
+          });
+        } catch (dbErr) {
+          // DB write failed — delete the orphaned Auth user to avoid inconsistent state
+          appLog('Register: DB write failed, deleting orphaned Auth user: $dbErr');
+          try {
+            await userCredential.user!.delete();
+          } catch (deleteErr) {
+            appLog('Register: failed to delete orphaned Auth user: $deleteErr');
+          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppStr.registrationDbError)),
+          );
+          return;
+        }
 
         await userCredential.user!.updateDisplayName(name);
 
@@ -246,10 +270,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.pushReplacementNamed(context, '/main', arguments: name);
       }
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStr.registrationFailed}: ${e.message}')),
-      );
+      appLog('Register: FirebaseAuthException [${e.code}]: ${e.message}');
+      final bool isNetworkError =
+          e.code == 'network-request-failed' ||
+          e.message?.toLowerCase().contains('network') == true ||
+          e.message?.toLowerCase().contains('recaptcha') == true;
+      if (isNetworkError) {
+        // Retry once after a short delay, matching sign-in behaviour
+        await Future<void>.delayed(const Duration(seconds: 1));
+        try {
+          final retryCredential = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
+          // Retry succeeded — re-enter the success path via recursive call
+          // by re-triggering the outer flow is complex, so just proceed inline
+          final uid = retryCredential.user?.uid;
+          if (uid != null && mounted) {
+            Navigator.pushReplacementNamed(context, '/main', arguments: _nameController.text.trim());
+          }
+          return;
+        } catch (_) {
+          // Retry also failed — fall through to show network error
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.networkError)),
+        );
+      } else {
+        if (!mounted) return;
+        String message;
+        switch (e.code) {
+          case 'email-already-in-use':
+            message = AppStr.emailAlreadyInUse;
+            break;
+          case 'weak-password':
+            message = AppStr.weakPassword;
+            break;
+          default:
+            message = AppStr.registrationFailed;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
     } finally {
       _toggleLoading(false);
     }

@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
       title: AppStr.appTitle,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        fontFamily: 'Gelica',
+        fontFamily: 'Literata',
         scaffoldBackgroundColor: AppColors.beige,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.darkGreen),
         useMaterial3: true,
@@ -106,9 +106,9 @@ class MyApp extends StatelessWidget {
             });
           default:
             return MaterialPageRoute(
-              builder: (_) => const Scaffold(
-                body: Center(
-                  child: Text(AppStr.pageNotFound, style: TextStyle(fontFamily: 'Gelica')),
+              builder: (_) => Scaffold(
+                body: const Center(
+                  child: Text(AppStr.pageNotFound),
                 ),
               ),
             );

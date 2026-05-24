@@ -270,7 +270,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
               DropdownButtonFormField<String>(
                 initialValue: _selectedFR,
                 items: [
-                  const DropdownMenuItem(value: 'ALL', child: Text('ALL')),
+                  DropdownMenuItem(value: AppStr.filterAllFriends, child: Text(AppStr.filterAllFriends)),
                   ...widget.friendsMap.entries.map((e) {
                     final displayText = '${e.key}(${e.value})';
                     return DropdownMenuItem(
@@ -328,7 +328,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                 ),
                 if (_selectedCY != null)
                   IconButton(
-                    icon: Text('<C>', style: AppFonts.standard.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+                    icon: Text(AppStr.clearIcon, style: AppFonts.standard.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
                     tooltip: 'Clear city',
                     onPressed: () {
                       if (!mounted) return;
@@ -362,7 +362,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                 ),
                 if (_selectedCZ != null)
                   IconButton(
-                    icon: Text('<C>', style: AppFonts.standard.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+                    icon: Text(AppStr.clearIcon, style: AppFonts.standard.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
                     tooltip: 'Clear cuisine',
                     onPressed: () {
                       if (!mounted) return;
@@ -381,7 +381,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                   onPressed: _handleBack,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.greyShade300,
-                    foregroundColor: Colors.black,
+                    foregroundColor: AppColors.black,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     textStyle: AppFonts.standard,
@@ -392,7 +392,7 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                   onPressed: _handleReset,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.grey,
-                    foregroundColor: Colors.black87,
+                    foregroundColor: AppColors.black87,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     textStyle: AppFonts.standard,
@@ -403,12 +403,12 @@ class _SortFilterPanelState extends State<SortFilterPanel> {
                   onPressed: _handleApply,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.darkGreen,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     minimumSize: const Size(100, 48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textStyle: AppFonts.standard.copyWith(color: Colors.white),
+                    textStyle: AppFonts.standard.copyWith(color: AppColors.white),
                   ),
-                  child: Text(AppStr.apply, style: AppFonts.standard.copyWith(color: Colors.white)),
+                  child: Text(AppStr.apply, style: AppFonts.standard.copyWith(color: AppColors.white)),
                 ),
               ],
             ),

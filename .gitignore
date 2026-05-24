@@ -53,3 +53,9 @@ android/app/**/kernel_blob.bin
 *.aab
 *.so
 *.keystore
+
+# Firebase service account key — never commit this
+*-sa.json
+service-account*.json
+firebase-adminsdk*.json
+DBIC.bat
