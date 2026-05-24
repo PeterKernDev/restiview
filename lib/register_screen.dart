@@ -60,22 +60,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.initState();
 
     if (SessionCache.deviceCountryCode.isEmpty) {
-      // locale.countryCode can be null on iOS 26+ — scan all locales for a match
-      String? localeCode = PlatformDispatcher.instance.locale.countryCode;
-      if (localeCode == null || localeCode.isEmpty) {
-        for (final loc in PlatformDispatcher.instance.locales) {
-          if (loc.countryCode != null && loc.countryCode!.isNotEmpty) {
-            localeCode = loc.countryCode;
-            appLog('Register: primary locale had no countryCode, using ${loc.languageCode}_${loc.countryCode}');
-            break;
-          }
-        }
-      }
-      SessionCache.deviceCountryCode = localeCode ?? 'US';
-      appLog('Register: deviceCountryCode set to ${SessionCache.deviceCountryCode}');
+      final localeCode = PlatformDispatcher.instance.locale.countryCode ?? 'US';
+      SessionCache.deviceCountryCode = localeCode;
     }
 
     _homeCountry = _getDeviceCountryName();
+    _detectCountryFromLocation();
   }
 
   Future<void> _detectCountryFromLocation() async {
