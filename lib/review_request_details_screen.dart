@@ -61,6 +61,7 @@ class _ReviewRequestDetailsScreenState
     super.initState();
     _requesterEmail = widget.friendEntry.email;
     _requesterUsername = widget.friendEntry.username;
+    _applyFriendEntryFallback();
     _loadReviewSubnode();
   }
 
@@ -143,6 +144,27 @@ class _ReviewRequestDetailsScreenState
     return parsedFilters;
   }
 
+  void _applyFriendEntryFallback() {
+    final ReviewRequestData? fallback = widget.friendEntry.reviewRequest;
+    if (fallback == null) {
+      return;
+    }
+
+    _requestComment ??= fallback.requestComment;
+    _country ??= fallback.filterCountry;
+    _city ??= fallback.filterCity;
+    _exCount ??= fallback.exCount ?? 0;
+    _exKeys ??= fallback.exKeys != null
+        ? List<String>.from(fallback.exKeys!)
+        : <String>[];
+
+    if (_filters.isEmpty && fallback.filters != null && fallback.filters!.isNotEmpty) {
+      _filters = List<Map<String, String?>>.from(fallback.filters!);
+    }
+
+    _rvCount ??= widget.friendEntry.rvCount;
+  }
+
   Future<void> _loadReviewSubnode() async {
     if (myUid.isEmpty) {
       return;
@@ -217,16 +239,10 @@ class _ReviewRequestDetailsScreenState
         }
         _filterCounts = counts;
       } else {
-        _country = null;
-        _city = null;
-        _requestComment = null;
-        _rvCount = null;
-        _exCount = 0;
-        _exKeys = <String>[];
-        _includePhotos = false;
+        _applyFriendEntryFallback();
       }
     } catch (_) {
-      // keep defaults
+      _applyFriendEntryFallback();
     }
 
     if (!mounted) {
