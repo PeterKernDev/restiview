@@ -56,12 +56,28 @@ class _ReviewRequestDetailsScreenState
   String get myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
   String get friendUid => widget.friendEntry.uid;
 
+  void _logCurrentState(String stage) {
+    appLog(
+      'DEBUG: ReviewRequestDetails[$stage] '
+      'friendUid=$friendUid requesterEmail=$_requesterEmail '
+      'rvCount=$_rvCount exCount=$_exCount includePhotos=$_includePhotos '
+      'country=$_country city=$_city filters=$_filters exKeys=$_exKeys '
+      'comment=$_requestComment filterCounts=$_filterCounts',
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _requesterEmail = widget.friendEntry.email;
     _requesterUsername = widget.friendEntry.username;
+    appLog(
+      'DEBUG: ReviewRequestDetails init friendEntry uid=$friendUid '
+      'rvCount=${widget.friendEntry.rvCount} '
+      'reviewRequest=${widget.friendEntry.reviewRequest != null}',
+    );
     _applyFriendEntryFallback();
+    _logCurrentState('after-fallback-init');
     _loadReviewSubnode();
   }
 
@@ -147,8 +163,20 @@ class _ReviewRequestDetailsScreenState
   void _applyFriendEntryFallback() {
     final ReviewRequestData? fallback = widget.friendEntry.reviewRequest;
     if (fallback == null) {
+      appLog('DEBUG: ReviewRequestDetails fallback missing on friendEntry');
       return;
     }
+
+    appLog(
+      'DEBUG: Applying friendEntry fallback '
+      'rvCount=${widget.friendEntry.rvCount} '
+      'comment=${fallback.requestComment} '
+      'filters=${fallback.filters} '
+      'legacyCountry=${fallback.filterCountry} '
+      'legacyCity=${fallback.filterCity} '
+      'exCount=${fallback.exCount} '
+      'exKeys=${fallback.exKeys}',
+    );
 
     _requestComment ??= fallback.requestComment;
     _country ??= fallback.filterCountry;
@@ -167,6 +195,7 @@ class _ReviewRequestDetailsScreenState
 
   Future<void> _loadReviewSubnode() async {
     if (myUid.isEmpty) {
+      appLog('DEBUG: ReviewRequestDetails load aborted because myUid is empty');
       return;
     }
     if (!mounted) {
@@ -183,8 +212,13 @@ class _ReviewRequestDetailsScreenState
         'users/$myUid/friends/$friendUid/review_request',
       );
       final DataSnapshot snap = await ref.get();
+      appLog(
+        'DEBUG: review_request snapshot exists=${snap.exists} '
+        'type=${snap.value.runtimeType} value=${snap.value}',
+      );
       if (snap.exists && snap.value is Map) {
         reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
+        appLog('DEBUG: review_request map keys=${reviewMap.keys.toList()}');
       }
 
       if (reviewMap != null) {
@@ -218,6 +252,10 @@ class _ReviewRequestDetailsScreenState
         } catch (_) {
           // parsing error — keep parsedFilters empty
         }
+        appLog(
+          'DEBUG: Parsed review_request filters raw=${reviewMap['filters']} '
+          'parsed=$parsedFilters',
+        );
         // Legacy fallback: if no filters array, build from single country/city fields
         if (parsedFilters.isEmpty && (_country != null || _city != null)) {
           parsedFilters.add(<String, String?>{'country': _country, 'city': _city});
@@ -238,11 +276,16 @@ class _ReviewRequestDetailsScreenState
           counts.add(c);
         }
         _filterCounts = counts;
+        _logCurrentState('after-live-read');
       } else {
+        appLog('DEBUG: review_request live read returned null map; using friendEntry fallback');
         _applyFriendEntryFallback();
+        _logCurrentState('after-null-live-read');
       }
-    } catch (_) {
+    } catch (e) {
+      appLog('DEBUG: review_request live read threw error: $e');
       _applyFriendEntryFallback();
+      _logCurrentState('after-live-read-error');
     }
 
     if (!mounted) {

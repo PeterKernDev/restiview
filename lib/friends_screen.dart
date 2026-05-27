@@ -2114,6 +2114,15 @@ child: Text(AppStr.noLabel, style: AppFonts.standard),
     // show the review request details screen instead of the normal flow.
     if (selected.fsc == statusRvWants) {
       appLog('DEBUG: Navigating to review-request-details screen');
+      appLog(
+        'DEBUG: Review request handoff uid=${selected.uid} rvCount=${selected.rvCount} '
+        'comment=${selected.reviewRequest?.requestComment} '
+        'filters=${selected.reviewRequest?.filters} '
+        'legacyCountry=${selected.reviewRequest?.filterCountry} '
+        'legacyCity=${selected.reviewRequest?.filterCity} '
+        'exCount=${selected.reviewRequest?.exCount} '
+        'exKeys=${selected.reviewRequest?.exKeys}',
+      );
       // Pass the FriendEntry to the details screen. The details screen can fetch additional raw data if required.
       Navigator.pushNamed(
         context,
