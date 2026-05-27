@@ -804,7 +804,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
           target: widget.context.reviewKey ?? '',
         );
       } catch (e) {
-        debugPrint('Failed to write audit info: $e');
+        appLog('Failed to write audit info: $e');
       }
 
       // Delete review from Firebase
@@ -823,10 +823,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
               deletedCount++;
             }
           } catch (e) {
-            debugPrint('Failed to delete photo $photoPath: $e');
+            appLog('Failed to delete photo $photoPath: $e');
           }
         }
-        debugPrint('Deleted $deletedCount of ${uniquePhotoPaths.length} photo files');
+        appLog('Deleted $deletedCount of ${uniquePhotoPaths.length} photo files');
       }
       
       if (!mounted) return;

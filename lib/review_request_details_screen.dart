@@ -69,6 +69,80 @@ class _ReviewRequestDetailsScreenState
     super.dispose();
   }
 
+  int? _parseIntValue(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
+  List<String> _parseStringCollection(dynamic value) {
+    if (value is List) {
+      return List<dynamic>.from(value)
+          .map((dynamic e) => e?.toString() ?? '')
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    if (value is Map) {
+      final Map<dynamic, dynamic> mapValue = Map<dynamic, dynamic>.from(value);
+      return mapValue.entries
+          .map((MapEntry<dynamic, dynamic> entry) {
+            final dynamic collectionValue = entry.value;
+            if (collectionValue == null) {
+              return entry.key?.toString() ?? '';
+            }
+            if (collectionValue is bool) {
+              return collectionValue ? (entry.key?.toString() ?? '') : '';
+            }
+            final String text = collectionValue.toString();
+            return text;
+          })
+          .where((String s) => s.isNotEmpty)
+          .toList();
+    }
+    return <String>[];
+  }
+
+  List<Map<String, String?>> _parseFilters(dynamic rawFilters) {
+    final List<Map<String, String?>> parsedFilters = <Map<String, String?>>[];
+
+    Iterable<dynamic> items = const <dynamic>[];
+    if (rawFilters is List) {
+      items = rawFilters;
+    } else if (rawFilters is Map) {
+      final Map<dynamic, dynamic> mapFilters = Map<dynamic, dynamic>.from(rawFilters);
+      items = mapFilters.values;
+    }
+
+    for (final dynamic filterItem in items) {
+      if (filterItem is! Map) {
+        continue;
+      }
+
+      final Map<dynamic, dynamic> fm = Map<dynamic, dynamic>.from(filterItem);
+      final String? fc =
+          (fm['country'] is String && (fm['country'] as String).trim().isNotEmpty)
+          ? (fm['country'] as String).trim()
+          : null;
+      final String? fci =
+          (fm['city'] is String && (fm['city'] as String).trim().isNotEmpty)
+          ? (fm['city'] as String).trim()
+          : null;
+
+      if (fc != null || fci != null) {
+        parsedFilters.add(<String, String?>{'country': fc, 'city': fci});
+      }
+    }
+
+    return parsedFilters;
+  }
+
   Future<void> _loadReviewSubnode() async {
     if (myUid.isEmpty) {
       return;
@@ -109,72 +183,16 @@ class _ReviewRequestDetailsScreenState
             ? reviewMap['requestComment'] as String
             : null;
 
-        if (reviewMap['rvCount'] is int) {
-          _rvCount = reviewMap['rvCount'] as int;
-        } else if (reviewMap['rvCount'] is String) {
-          _rvCount = int.tryParse(reviewMap['rvCount'] as String);
-        }
-
-        if (reviewMap['exCount'] is int) {
-          _exCount = reviewMap['exCount'] as int;
-        } else if (reviewMap['exCount'] is String) {
-          _exCount = int.tryParse(reviewMap['exCount'] as String);
-        } else {
-          _exCount = 0;
-        }
-
-        if (reviewMap['exKeys'] is List) {
-          try {
-            _exKeys = List<dynamic>.from(reviewMap['exKeys'] as List)
-                .map((e) => e?.toString() ?? '')
-                .where((s) => s.isNotEmpty)
-                .toList();
-          } catch (_) {
-            _exKeys = <String>[];
-          }
-        } else if (reviewMap['exKeys'] is Map) {
-          final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(
-            reviewMap['exKeys'] as Map,
-          );
-          _exKeys = <String>[];
-          m.forEach((dynamic k, dynamic v) {
-            if (k != null) {
-              final String ks = k.toString();
-              if (ks.isNotEmpty) {
-                _exKeys!.add(ks);
-              }
-            }
-          });
-        } else {
-          _exKeys = <String>[];
-        }
+        _rvCount = _parseIntValue(reviewMap['rvCount']);
+        _exCount = _parseIntValue(reviewMap['exCount']) ?? 0;
+        _exKeys = _parseStringCollection(reviewMap['exKeys']);
 
         _includePhotos = reviewMap['includePhotos'] == true;
 
         // Parse filters array for per-filter count display
         final List<Map<String, String?>> parsedFilters = <Map<String, String?>>[];
         try {
-          if (reviewMap['filters'] is List) {
-            final List<dynamic> filtersList = reviewMap['filters'] as List;
-            for (final dynamic filterItem in filtersList) {
-              if (filterItem is Map) {
-                final Map<dynamic, dynamic> fm = Map<dynamic, dynamic>.from(
-                  filterItem,
-                );
-                final String? fc =
-                    (fm['country'] is String &&
-                        (fm['country'] as String).trim().isNotEmpty)
-                    ? (fm['country'] as String).trim()
-                    : null;
-                final String? fci =
-                    (fm['city'] is String &&
-                        (fm['city'] as String).trim().isNotEmpty)
-                    ? (fm['city'] as String).trim()
-                    : null;
-                parsedFilters.add(<String, String?>{'country': fc, 'city': fci});
-              }
-            }
-          }
+          parsedFilters.addAll(_parseFilters(reviewMap['filters']));
         } catch (_) {
           // parsing error — keep parsedFilters empty
         }

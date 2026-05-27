@@ -8,7 +8,7 @@
 // Calls are best-effort and non-blocking for callers (errors are logged).
 
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
+import '/constants/restiview_constants.dart';
 import '/services/db_utils.dart';
 
 Future<void> ensureUserSetup({
@@ -18,7 +18,7 @@ Future<void> ensureUserSetup({
   required bool acceptsFriends,
 }) async {
   if (uid.isEmpty) {
-    debugPrint('ensureUserSetup: empty uid, skipping');
+    appLog('ensureUserSetup: empty uid, skipping');
     return;
   }
 
@@ -37,26 +37,26 @@ Future<void> ensureUserSetup({
 
     if (!snap.exists) {
       shouldWrite = true;
-      debugPrint('ensureUserSetup: mapping missing for $normalized (will write)');
+      appLog('ensureUserSetup: mapping missing for $normalized (will write)');
     } else {
       final Object? v = snap.value;
       if (v is String) {
         if (v != uid) {
           shouldWrite = true;
-          debugPrint('ensureUserSetup: legacy mapping string differs ($v != $uid), will overwrite');
+          appLog('ensureUserSetup: legacy mapping string differs ($v != $uid), will overwrite');
         }
       } else if (v is Map) {
         final Map<dynamic, dynamic> m = Map<dynamic, dynamic>.from(v);
         final Object? existingUid = m['uid'];
         if (existingUid == null || existingUid.toString().isEmpty || existingUid.toString() != uid) {
           shouldWrite = true;
-          debugPrint('ensureUserSetup: mapping uid mismatch existing=$existingUid -> will overwrite');
+          appLog('ensureUserSetup: mapping uid mismatch existing=$existingUid -> will overwrite');
         } else {
-          debugPrint('ensureUserSetup: mapping already correct for $normalized -> $uid');
+          appLog('ensureUserSetup: mapping already correct for $normalized -> $uid');
         }
       } else {
         shouldWrite = true;
-        debugPrint('ensureUserSetup: mapping present but unexpected type -> will overwrite');
+        appLog('ensureUserSetup: mapping present but unexpected type -> will overwrite');
       }
     }
 
@@ -75,19 +75,19 @@ Future<void> ensureUserSetup({
       while (true) {
         attempt++;
         try {
-          debugPrint('ensureUserSetup: writing mapping attempt $attempt -> users_by_email/$normalized');
+          appLog('ensureUserSetup: writing mapping attempt $attempt -> users_by_email/$normalized');
           await emailMapRef.set(mapping);
-          debugPrint('ensureUserSetup: mapping written for $normalized');
+          appLog('ensureUserSetup: mapping written for $normalized');
           break;
         } catch (e, st) {
-          debugPrint('ensureUserSetup: mapping write failed attempt $attempt: $e\n$st');
+          appLog('ensureUserSetup: mapping write failed attempt $attempt: $e\n$st');
           if (attempt >= maxAttempts) rethrow;
           await Future<void>.delayed(Duration(milliseconds: 200 * (1 << (attempt - 1))));
         }
       }
     }
   } catch (e, st) {
-    debugPrint('ensureUserSetup: error ensuring mapping for $normalized: $e\n$st');
+    appLog('ensureUserSetup: error ensuring mapping for $normalized: $e\n$st');
   }
 
   // 2) Ensure public_profiles/<uid> exists/updated (best-effort)
@@ -98,9 +98,9 @@ Future<void> ensureUserSetup({
       'updatedAt': DateTime.now().toIso8601String(),
     };
     await publicProfileRef.set(pub);
-    debugPrint('ensureUserSetup: public_profiles/$uid written/updated');
+    appLog('ensureUserSetup: public_profiles/$uid written/updated');
   } catch (e, st) {
-    debugPrint('ensureUserSetup: failed to write public_profiles/$uid: $e\n$st');
+    appLog('ensureUserSetup: failed to write public_profiles/$uid: $e\n$st');
   }
 
   // 3) Ensure users/$uid/userSettings7 exists (set true if missing)
@@ -108,11 +108,11 @@ Future<void> ensureUserSetup({
     final DataSnapshot s = await userSettings7Ref.get();
     if (!s.exists) {
       await userSettings7Ref.set(true);
-      debugPrint('ensureUserSetup: userSettings7 created for uid=$uid');
+      appLog('ensureUserSetup: userSettings7 created for uid=$uid');
     } else {
-      debugPrint('ensureUserSetup: userSettings7 already present for uid=$uid');
+      appLog('ensureUserSetup: userSettings7 already present for uid=$uid');
     }
   } catch (e, st) {
-    debugPrint('ensureUserSetup: failed to ensure userSettings7 for uid=$uid: $e\n$st');
+    appLog('ensureUserSetup: failed to ensure userSettings7 for uid=$uid: $e\n$st');
   }
 }

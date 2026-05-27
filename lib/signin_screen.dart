@@ -28,6 +28,32 @@ import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/restiview_constants.dart';
 
+Future<DataSnapshot> _readOwnUserSnapshotWithRetry(String uid, User user) async {
+  final DatabaseReference userRef = FirebaseDatabase.instance.ref('users/$uid');
+  FirebaseException? lastPermissionError;
+
+  for (int attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await user.getIdToken(attempt > 1);
+      return await userRef.get();
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied' || attempt == 4) {
+        rethrow;
+      }
+      lastPermissionError = e;
+      appLog('Sign-in users/$uid read denied on attempt $attempt, retrying');
+      await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+    }
+  }
+
+  throw lastPermissionError ??
+      FirebaseException(
+        plugin: 'firebase_database',
+        code: 'permission-denied',
+        message: 'Unable to read users/$uid after sign-in',
+      );
+}
+
 List<String> getSystemCountryNames([BuildContext? context]) {
   String? code;
   try {
@@ -268,10 +294,10 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
+    final User user = userCredential.user!;
+
     // Ensure /users/$uid exists (heal orphaned profile)
-    final DataSnapshot snapshot = await FirebaseDatabase.instance
-        .ref('users/$uid')
-        .get();
+    final DataSnapshot snapshot = await _readOwnUserSnapshotWithRetry(uid, user);
 
     if (!snapshot.exists) {
       final String defaultCountry = getSystemCountryNames().first;

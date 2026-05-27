@@ -236,7 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             acceptsFriends: _allowFriends,
           );
         } catch (e, st) {
-          debugPrint('Register.ensureUserSetup failed for uid=$uid: $e\n$st');
+          appLog('Register.ensureUserSetup failed for uid=$uid: $e\n$st');
           // non-blocking: continue registration even if helper fails
         }
 
@@ -370,7 +370,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: systemCountries.any((c) => c['name'] == _homeCountry)
+                    initialValue: systemCountries.any((c) => c['name'] == _homeCountry)
                         ? _homeCountry
                         : null,
                     items: ([...systemCountries]

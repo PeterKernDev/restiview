@@ -244,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error loading allowFriends: $e');
+      appLog('Error loading allowFriends: $e');
     }
   }
 
@@ -409,7 +409,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               deletedCount++;
             } catch (e) {
-              debugPrint('Error deleting friend $friendUid: $e');
+              appLog('Error deleting friend $friendUid: $e');
               // Continue with other deletions
             }
           }

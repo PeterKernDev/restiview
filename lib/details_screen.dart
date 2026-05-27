@@ -15,6 +15,7 @@ import 'sub_preview_screen/review_context.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
 import 'constants/strings.dart';
+import 'constants/restiview_constants.dart';
 import 'services/session_cache.dart';
 import 'widgets/full_screen_image.dart';
 import 'widgets/thumbnail.dart';
@@ -185,7 +186,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         await Gal.putImage(newPath, album: 'RestiView');
       } catch (e) {
         // Gallery save failed, but we still have the app copy
-        debugPrint('Failed to save to gallery: $e');
+        appLog('Failed to save to gallery: $e');
       }
       
       setState(() {

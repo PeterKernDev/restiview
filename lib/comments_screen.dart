@@ -20,6 +20,7 @@ import 'services/session_cache.dart';
 import 'constants/strings.dart';
 import 'constants/colors.dart';
 import 'constants/fonts.dart';
+import 'constants/restiview_constants.dart';
 import 'details_screen.dart';
 import 'sub_preview_screen/review_formatter.dart' as formatter;
 import 'services/draft_cache.dart';
@@ -178,7 +179,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
         await Gal.putImageBytes(resized, album: 'RestiView');
       } catch (e) {
         // Gallery save failed, but we still have the temp file
-        debugPrint('Failed to save to gallery: $e');
+        appLog('Failed to save to gallery: $e');
       }
 
       if (!mounted) return;
