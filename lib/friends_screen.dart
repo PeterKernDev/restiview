@@ -502,6 +502,37 @@ class _FriendsScreenState extends State<FriendsScreen> {
     scheduleNext();
   }
 
+  Map<dynamic, dynamic>? _extractReviewRequestMap(
+    dynamic rawValue,
+    String friendUid,
+  ) {
+    if (rawValue is! Map) {
+      return null;
+    }
+
+    final Map<dynamic, dynamic> asMap = Map<dynamic, dynamic>.from(rawValue);
+
+    if (asMap.containsKey('filters') ||
+        asMap.containsKey('filterCountry') ||
+        asMap.containsKey('requestComment') ||
+        asMap.containsKey('rvCount')) {
+      return asMap;
+    }
+
+    final dynamic nestedFriend = asMap[friendUid];
+    if (nestedFriend is Map) {
+      final Map<dynamic, dynamic> friendMap = Map<dynamic, dynamic>.from(
+        nestedFriend,
+      );
+      final dynamic nestedRequest = friendMap['review_request'];
+      if (nestedRequest is Map) {
+        return Map<dynamic, dynamic>.from(nestedRequest);
+      }
+    }
+
+    return asMap;
+  }
+
   Future<void> _resolveOneRvCount(
     String myUid,
     String friendUid,
@@ -522,9 +553,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return;
       }
 
-      final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(
-        reviewRequestSnap.value as Map,
+      final Map<dynamic, dynamic>? requestData = _extractReviewRequestMap(
+        reviewRequestSnap.value,
+        friendUid,
       );
+
+      if (requestData == null) {
+        return;
+      }
 
       // Read filters array from review_request structure
       final List<Map<String, String?>> filters = <Map<String, String?>>[];
@@ -891,9 +927,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
           throw Exception('Review request data not found');
         }
 
-        final Map<dynamic, dynamic> requestData = Map<dynamic, dynamic>.from(
-          reviewRequestSnap.value as Map,
+        final Map<dynamic, dynamic>? requestData = _extractReviewRequestMap(
+          reviewRequestSnap.value,
+          selected.uid,
         );
+
+        if (requestData == null) {
+          throw Exception('Review request data not found');
+        }
 
         // Read filters array from review_request structure
         final List<Map<String, String?>> filters = <Map<String, String?>>[];
@@ -2108,21 +2149,9 @@ child: Text(AppStr.noLabel, style: AppFonts.standard),
       return;
     }
 
-    appLog('DEBUG: _onAddFriendPressed - selected.fsc = ${selected.fsc}, statusRvWants = $statusRvWants');
-
     // If the selected friend is a recipient-side RV-WANTS request,
     // show the review request details screen instead of the normal flow.
     if (selected.fsc == statusRvWants) {
-      appLog('DEBUG: Navigating to review-request-details screen');
-      appLog(
-        'DEBUG: Review request handoff uid=${selected.uid} rvCount=${selected.rvCount} '
-        'comment=${selected.reviewRequest?.requestComment} '
-        'filters=${selected.reviewRequest?.filters} '
-        'legacyCountry=${selected.reviewRequest?.filterCountry} '
-        'legacyCity=${selected.reviewRequest?.filterCity} '
-        'exCount=${selected.reviewRequest?.exCount} '
-        'exKeys=${selected.reviewRequest?.exKeys}',
-      );
       // Pass the FriendEntry to the details screen. The details screen can fetch additional raw data if required.
       Navigator.pushNamed(
         context,

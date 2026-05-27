@@ -102,6 +102,7 @@ flutter build appbundle --release --dart-define=PLACES_API_KEY=AIzaSyDphPAK5es8v
 | **`AppMode`** | `test` for dev, `production` for release. Set in `lib/constants/restiview_constants.dart`. |
 | **`AppStr`** constants | All user-visible strings live in `lib/constants/strings.dart`. Never put raw strings in SnackBars. |
 | **`is Map` guards** | Never use `as Map` on a Firebase snapshot. Check `if (snapshot.value is! Map) return;` first. |
+| **Nested RTDB reads** | For child reads like `.../review_request`, also verify expected keys. On iOS, a `Map` snapshot may sometimes be the parent friends map, so unwrap the nested child before parsing. |
 | **Atomic writes** | Use `ref.update({multiPath: value, ...})` instead of serial `.set()` loops. |
 | **`mounted` check** | After every `await`, add `if (!mounted) return;` before using `context`. |
 | **No Cloud Functions** | Do not propose or use Firebase Cloud Functions. |

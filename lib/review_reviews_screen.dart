@@ -82,6 +82,34 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
     return null;
   }
 
+  Map<dynamic, dynamic>? _extractReviewRequestMap(dynamic rawValue) {
+    if (rawValue is! Map) {
+      return null;
+    }
+
+    final Map<dynamic, dynamic> asMap = Map<dynamic, dynamic>.from(rawValue);
+
+    if (asMap.containsKey('filters') ||
+        asMap.containsKey('filterCountry') ||
+        asMap.containsKey('requestComment') ||
+        asMap.containsKey('rvCount')) {
+      return asMap;
+    }
+
+    final dynamic nestedFriend = asMap[widget.friendUid];
+    if (nestedFriend is Map) {
+      final Map<dynamic, dynamic> friendMap = Map<dynamic, dynamic>.from(
+        nestedFriend,
+      );
+      final dynamic nestedRequest = friendMap['review_request'];
+      if (nestedRequest is Map) {
+        return Map<dynamic, dynamic>.from(nestedRequest);
+      }
+    }
+
+    return asMap;
+  }
+
   // Build fallback filters from passed widget params.
   // Prefers widget.filtersList (multi-filter) over the legacy widget.filters (single map).
   List<Map<String, String?>> _buildFallbackFilters() {
@@ -120,12 +148,14 @@ class _ReviewReviewsScreenState extends State<ReviewReviewsScreen> {
         'users/$myUid/friends/${widget.friendUid}/review_request',
       );
       final DataSnapshot friendSnap = await friendReviewRef.get();
+      Map<dynamic, dynamic>? friendReview;
       if (friendSnap.exists &&
           friendSnap.value != null &&
           friendSnap.value is Map) {
-        final Map<dynamic, dynamic> friendReview = Map<dynamic, dynamic>.from(
-          friendSnap.value as Map,
-        );
+        friendReview = _extractReviewRequestMap(friendSnap.value);
+      }
+
+      if (friendReview != null) {
 
         // Read filters array from review_request structure
         if (friendReview['filters'] is List) {

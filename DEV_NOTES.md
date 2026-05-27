@@ -23,7 +23,8 @@ This document is a concise developer-oriented overview of the RestiView Flutter 
 - `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated; avoid using them.
 - Put the file name and a brief description at the top of every `*.dart` file as a comment. Preserve any existing file header comments and add missing ones where appropriate.
 - Do not use `return` inside a `finally` clause.
-- Prefer `debugPrint` over `kDebugMode` checks for in-code debug messages.
+- Prefer `appLog()` for app-level debug logging; it is silent in `AppMode.production`.
+- For nested RTDB reads such as `users/<uid>/friends/<friendUid>/review_request`, `value is Map` is not sufficient on its own. Verify expected keys and be prepared to unwrap the nested child if iOS returns the parent friends map.
 - Release build command used by the project:
   - `flutter build appbundle --release`
 
@@ -43,7 +44,7 @@ This document is a concise developer-oriented overview of the RestiView Flutter 
 - Remember `addScopedWillPopCallback` and `removeScopedWillPopCallback` are deprecated.
 - Remember we put the file name and a brief description in a comment at the top of every `*.dart` file. Preserve existing comments and add them if they are missing.
 - Don't use `return` in a `finally` clause.
-- Don't use `kDebugMode`; use `debugPrint` instead.
+- Don't use `kDebugMode`; use `appLog()` for app logging.
 
 NOTE: The code in `lib/review_request_details_screen.dart` contained three occurrences where `BuildContext` could be used across async gaps; these were corrected to guard with `mounted`. Follow the same pattern elsewhere when you find similar issues.
 
@@ -588,6 +589,7 @@ Reviews are stored flat at `users/<uid>/requested_reviews/<reviewKey>` rather th
 **Data Flow:**
 - Read from: `users/<providerUid>/friends/<requesterUid>/review_request`
 - Write to: `users/<providerUid>/friends/<requesterUid>/review_request/providerComment`
+- Defensive note: on iOS, a read aimed at the `review_request` child may occasionally return the parent friends map. The screen now validates the map shape and unwraps `friends/<requesterUid>/review_request` before parsing.
 
 ### Review Exclusion System (IMPLEMENTED)
 
