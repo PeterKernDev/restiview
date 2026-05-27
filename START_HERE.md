@@ -63,6 +63,149 @@ That bat file calls `flutter run` with the required `PLACES_API_KEY` dart-define
 
 ---
 
+## How to Reconnect to the Mac After a Windows Restart
+
+Use this exact checklist if Windows has restarted and you need to get back onto the Mac to run the iOS simulator.
+
+### 1. Open PowerShell on Windows
+
+Open Windows Terminal or PowerShell as your normal user.
+
+```powershell
+whoami
+```
+
+You should see your normal Windows username.
+
+### 2. Confirm the SSH key and config still exist
+
+```powershell
+Test-Path $env:USERPROFILE\.ssh\id_ed25519
+Test-Path $env:USERPROFILE\.ssh\config
+Get-Content $env:USERPROFILE\.ssh\config -ErrorAction SilentlyContinue
+```
+
+- If `id_ed25519` is missing, restore the private key from backup.
+- If `config` is missing, recreate it exactly like this:
+
+```powershell
+New-Item -ItemType Directory -Path $env:USERPROFILE\.ssh -Force
+@"
+Host my-mac
+  HostName 192.168.1.25
+  User carol
+  IdentityFile C:\Users\Denve\.ssh\id_ed25519
+  ServerAliveInterval 60
+"@ | Out-File -FilePath $env:USERPROFILE\.ssh\config -Encoding ascii
+```
+
+### 3. Start `ssh-agent` and load the key
+
+```powershell
+Start-Service ssh-agent
+ssh-add $env:USERPROFILE\.ssh\id_ed25519
+ssh-add -l
+```
+
+Expected result: `ssh-add -l` lists the key fingerprint.
+
+### 4. Test the SSH alias
+
+```powershell
+ssh my-mac
+```
+
+Expected result: you land at the Mac prompt without a password prompt, for example:
+
+```bash
+MacBook-Air-3:~ carol$
+```
+
+If SSH asks for a password, run:
+
+```powershell
+ssh -v my-mac
+```
+
+and inspect the last 10-12 lines.
+
+### 5. If passwordless SSH is not working
+
+Try the following in order.
+
+Force the identity file:
+
+```powershell
+ssh -i C:\Users\Denve\.ssh\id_ed25519 carol@192.168.1.25 -v
+```
+
+Reinstall the public key on the Mac one time if needed:
+
+```powershell
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh carol@192.168.1.25 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+```
+
+If VS Code keeps prompting for a password, confirm it is using the same SSH config file:
+
+- `F1 -> Remote-SSH: Open Configuration File`
+- choose `C:\Users\Denve\.ssh\config`
+- verify the `IdentityFile` path is correct
+
+### 6. Connect from VS Code with Remote-SSH
+
+- Open VS Code on Windows.
+- Make sure the Remote-SSH extension is installed.
+- Run `F1 -> Remote-SSH: Connect to Host...`
+- Choose `my-mac`.
+- Allow VS Code to install the remote server if prompted.
+- In the remote VS Code window, open the Mac project folder.
+
+### 7. Start the iOS simulator and run RestiView on the Mac
+
+In the Mac terminal or the VS Code remote terminal:
+
+```bash
+cd ~/restiview
+git checkout master
+git pull origin master
+open -a Simulator
+flutter devices
+flutter pub get
+flutter run
+```
+
+If you need to target a specific simulator device, use:
+
+```bash
+flutter run -d <device-id>
+```
+
+### 8. Useful simulator troubleshooting
+
+If Flutter cannot see the simulator:
+
+```bash
+xcrun simctl list devices
+open -a Simulator
+flutter devices
+```
+
+If the build behaves strangely on the Mac, reset the Flutter build state:
+
+```bash
+cd ~/restiview
+flutter clean
+flutter pub get
+flutter run
+```
+
+### 9. Clean disconnect
+
+- In the SSH shell, run `exit` or press `Ctrl+D`.
+- In VS Code, run `F1 -> Remote-SSH: Close Remote Connection`.
+
+---
+
 ## How to Build a Release AAB
 
 1. Open `lib/constants/restiview_constants.dart`
