@@ -160,6 +160,33 @@ class _ReviewRequestDetailsScreenState
     return parsedFilters;
   }
 
+  Map<dynamic, dynamic>? _extractReviewRequestMap(dynamic rawValue) {
+    if (rawValue is! Map) {
+      return null;
+    }
+
+    final Map<dynamic, dynamic> asMap = Map<dynamic, dynamic>.from(rawValue);
+
+    if (asMap.containsKey('filters') ||
+        asMap.containsKey('filterCountry') ||
+        asMap.containsKey('requestComment') ||
+        asMap.containsKey('rvCount')) {
+      return asMap;
+    }
+
+    final dynamic nestedFriend = asMap[friendUid];
+    if (nestedFriend is Map) {
+      final Map<dynamic, dynamic> friendMap = Map<dynamic, dynamic>.from(nestedFriend);
+      final dynamic nestedRequest = friendMap['review_request'];
+      if (nestedRequest is Map) {
+        appLog('DEBUG: review_request snapshot was parent friends map; unwrapping nested review_request for $friendUid');
+        return Map<dynamic, dynamic>.from(nestedRequest);
+      }
+    }
+
+    return asMap;
+  }
+
   void _applyFriendEntryFallback() {
     final ReviewRequestData? fallback = widget.friendEntry.reviewRequest;
     if (fallback == null) {
@@ -217,31 +244,41 @@ class _ReviewRequestDetailsScreenState
         'type=${snap.value.runtimeType} value=${snap.value}',
       );
       if (snap.exists && snap.value is Map) {
-        reviewMap = Map<dynamic, dynamic>.from(snap.value as Map);
-        appLog('DEBUG: review_request map keys=${reviewMap.keys.toList()}');
+        reviewMap = _extractReviewRequestMap(snap.value);
+        appLog('DEBUG: review_request map keys=${reviewMap?.keys.toList()}');
       }
 
       if (reviewMap != null) {
         // Read filter criteria from review_request structure
-        _country = (reviewMap['filterCountry'] is String)
+        final String? liveCountry = (reviewMap['filterCountry'] is String)
             ? reviewMap['filterCountry'] as String
             : null;
-        _city = (reviewMap['filterCity'] is String)
+        final String? liveCity = (reviewMap['filterCity'] is String)
             ? reviewMap['filterCity'] as String
             : null;
+
+        _country = liveCountry ?? _country;
+        _city = liveCity ?? _city;
 
         // Convert 'none' to null for display
         if (_city == 'none') _city = null;
 
-        _requestComment =
+        final String? liveRequestComment =
             (reviewMap['requestComment'] is String &&
                 (reviewMap['requestComment'] as String).isNotEmpty)
             ? reviewMap['requestComment'] as String
             : null;
+        _requestComment = liveRequestComment ?? _requestComment;
 
-        _rvCount = _parseIntValue(reviewMap['rvCount']);
-        _exCount = _parseIntValue(reviewMap['exCount']) ?? 0;
-        _exKeys = _parseStringCollection(reviewMap['exKeys']);
+        _rvCount = _parseIntValue(reviewMap['rvCount']) ?? _rvCount;
+        _exCount = _parseIntValue(reviewMap['exCount']) ?? _exCount ?? 0;
+
+        final List<String> parsedExKeys = _parseStringCollection(reviewMap['exKeys']);
+        if (parsedExKeys.isNotEmpty) {
+          _exKeys = parsedExKeys;
+        } else {
+          _exKeys ??= <String>[];
+        }
 
         _includePhotos = reviewMap['includePhotos'] == true;
 
@@ -260,7 +297,9 @@ class _ReviewRequestDetailsScreenState
         if (parsedFilters.isEmpty && (_country != null || _city != null)) {
           parsedFilters.add(<String, String?>{'country': _country, 'city': _city});
         }
-        _filters = parsedFilters;
+        if (parsedFilters.isNotEmpty) {
+          _filters = parsedFilters;
+        }
 
         // Compute per-filter review counts
         final List<int> counts = <int>[];
