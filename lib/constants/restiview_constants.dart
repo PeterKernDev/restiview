@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 // Change this ONE line before building a production release.
 // ---------------------------------------------------------------------------
 enum AppMode { test, production }
-const AppMode appMode = AppMode.test;
+const AppMode appMode = AppMode.production;
 
 // ---------------------------------------------------------------------------
 // MODE-DEPENDENT SETTINGS
