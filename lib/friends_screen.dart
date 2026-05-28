@@ -1990,13 +1990,18 @@ child: Text(AppStr.noLabel, style: AppFonts.standard),
             }
           }
 
-          // Delete both stubs atomically so the friend's list updates immediately.
-          // Firebase rules allow the actor to delete their counterpart's entry
-          // because auth.uid === $friendUid for the friend's path.
-          await FirebaseDatabase.instance.ref().update(<String, dynamic>{
+          // For pending requests (statusCode=0), delete both stubs atomically
+          // so the withdrawn request disappears from both sides immediately.
+          // For declined stubs (statusCode=8 or 9), only delete the actor's own
+          // stub — the other user retains their declined stub so they can see
+          // why the relationship disappeared and delete it themselves.
+          final Map<String, dynamic> deleteUpdate = <String, dynamic>{
             'users/$me/friends/$friendUid': null,
-            'users/$friendUid/friends/$me': null,
-          });
+          };
+          if (selected.fsc != statusDeclined && selected.fsc != statusFriendDeleted) {
+            deleteUpdate['users/$friendUid/friends/$me'] = null;
+          }
+          await FirebaseDatabase.instance.ref().update(deleteUpdate);
           parentDeleteSucceeded = true;
 
           // PHASE 3: Write audit event using new audit system
