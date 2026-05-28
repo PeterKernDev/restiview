@@ -6,7 +6,7 @@
     "users_by_email": {
       "$normalizedEmail": {
         ".read": "auth != null",
-        ".write": "auth != null && newData.child('uid').val() === auth.uid",
+        ".write": "auth != null && newData.child('uid').val() === auth.uid && (!data.exists() || data.child('uid').val() === auth.uid)",
 
         "uid": { ".read": "auth != null", ".write": false },
         "email": { ".read": "auth != null", ".write": false },
@@ -74,8 +74,8 @@
     },
 
     "requests_by_email": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": false,
+      ".write": false
     },
 
     "friend_accept_audit": {
@@ -196,7 +196,7 @@
         "$eventId": {
           ".read": "auth != null",
           ".write": "auth != null",
-          ".validate": "newData.hasChildren(['timestamp','eventType','actorUid','targetUid']) &&\n             newData.child('timestamp').isString() &&\n             newData.child('eventType').isString() &&\n             newData.child('actorUid').isString() &&\n             newData.child('targetUid').isString()"
+          ".validate": "newData.hasChildren(['timestamp','eventType','actorUid','targetUid']) &&\n             newData.child('timestamp').isString() &&\n             newData.child('eventType').isString() &&\n             newData.child('actorUid').isString() &&\n             newData.child('actorUid').val() === auth.uid &&\n             newData.child('targetUid').isString()"
         }
       }
     }
