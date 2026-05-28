@@ -4,48 +4,65 @@ Read this first every time you restart. It tells you the current state of the pr
 
 ---
 
-## Current State (as of 2026-05-18)
+## Current State (as of 2026-05-28)
 
 **Working toward v1.8.1+37. Not yet released.**  
 `appMode` is currently `AppMode.test` ✅ correct for dev.  
-Branch: `master` — many files modified, NOT yet committed. Safe backup: `backup-before-upgrades`.
+Branch: `master` — all recent changes committed and pushed. Safe backup tag: `pre-review-request-hardening-20260527` (commit `de9a590`).
 
-### Next target: iOS version
-We are about to start working on the iOS version of the app.
+### Current focus: iOS testing on Mac simulator
+App is being tested on the iOS simulator via SSH from a Windows Surface Pro 11.  
+See the **How to Reconnect to the Mac** section below for the full reconnection workflow.
 
 ### Play Store closed testing status
 - **12 testers** recruited and installed ✅ (needed 12 for 14-day qualification period)
 - 14-day clock started **2026-05-18** → earliest production application date: **2026-06-01**
-- Romania added as a distribution country — awaiting Google approval (usually a few hours)
-- Google's 3 requirements confirmed met: closed test published ✅, 12+ testers opted in ✅, 14-day run in progress ⏳
-- After 2026-06-01: go to Play Console → Testing → Closed testing → Apply for production access (answer the questionnaire about your closed test)
+- Romania added as a distribution country ✅
+- After 2026-06-01: go to Play Console → Testing → Closed testing → Apply for production access
 
-### What was done since v1.7.9+35 was released (post-release polish)
+### iOS bug fixed 2026-05-27 — Firebase nested snapshot shape (iOS vs Android)
 
-All of the following changes have been made but **not yet released** — the next build will be v1.8.1+37.
+**Root cause:** On iOS, `FirebaseDatabase.instance.ref('users/$myUid/friends/$friendUid/review_request').get()` was intermittently returning the parent friends map instead of the `review_request` child node. Android never exhibited this. The code was checking `value is Map` (which passed) but then parsing expected keys that did not exist at that depth, causing the review-request details screen, review list screen, and rvCount resolver to silently fail or show empty data on iOS.
+
+**Fix:** Added `_extractReviewRequestMap()` to each affected screen/service. The method checks for expected keys first; if they are absent it attempts to unwrap one level down via `[friendUid]['review_request']` before returning the map. All three reading paths are now hardened:
+
+| File | Path affected |
+|---|---|
+| `lib/review_request_details_screen.dart` | `_loadReviewSubnode()` |
+| `lib/review_reviews_screen.dart` | `_loadMatchingReviews()` |
+| `lib/friends_screen.dart` | `_resolveOneRvCount()` and provider-accept flow |
+
+**Convention added:** See the **Nested RTDB reads** row in Key Conventions below. Also documented in [DEV_NOTES.md](DEV_NOTES.md).
+
+**Rollback:** `git revert 6b0b0d0` or restore tag `pre-review-request-hardening-20260527`.
+
+### All committed changes since v1.7.9+35
 
 | Area | Change |
 |---|---|
-| `lib/constants/fonts.dart` | Replaced Gelica font with Literata. Renamed `gelica` constant to `systemFont`. Reduced `standard` and `bold` font sizes from 14 → 13. |
+| `lib/constants/fonts.dart` | Replaced Gelica font with Literata. Renamed `gelica` → `systemFont`. Reduced font sizes 14 → 13. |
 | `lib/main.dart` | Updated `fontFamily` to `'Literata'`. |
-| `pubspec.yaml` | Replaced Gelica font declarations with full Literata family (Regular, Italic, Medium, SemiBold, Bold + italics). Moved `fonts:` block inside `flutter:` section (was incorrectly outside — caused font to be ignored). |
-| `fonts/` folder | Added 8 Literata `.ttf` files (Regular, Italic, Medium, MediumItalic, SemiBold, SemiBoldItalic, Bold, BoldItalic). |
-| `review_request_details_screen.dart` | Bug fix: `_onReview()` now passes `filtersList: _filters` (full multi-filter list) to `ReviewReviewsScreen`. Removed unused local `filters` variable. |
-| `review_reviews_screen.dart` | Added `filtersList` param; added `_buildFallbackFilters()` helper; fallback now correctly uses full multi-filter list instead of single-entry map. |
-| `preview_screen.dart` | Added clipboard copy buttons next to address and telephone fields. Added `_copyToClipboard()` helper. Added `import 'package:flutter/services.dart'`. |
+| `pubspec.yaml` | Replaced Gelica with full Literata family. Moved `fonts:` inside `flutter:` section. |
+| `fonts/` folder | Added 8 Literata `.ttf` files. |
+| `review_request_details_screen.dart` | iOS fix: `_extractReviewRequestMap()` added; `_onReview()` now passes `filtersList: _filters`. |
+| `review_reviews_screen.dart` | iOS fix: `_extractReviewRequestMap()` added; added `filtersList` param and `_buildFallbackFilters()`. |
+| `friends_screen.dart` | iOS fix: `_extractReviewRequestMap()` added to `_resolveOneRvCount()` and provider-accept flow. |
+| `preview_screen.dart` | Added clipboard copy buttons next to address and telephone fields. |
 | `constants/strings.dart` | Added `copiedToClipboard = 'Copied to clipboard'`. |
+| `START_HERE.md` | Added Mac reconnection workflow section. Added iOS bug documentation. |
+| `DEV_NOTES.md` | Updated logging convention; documented iOS nested RTDB snapshot behavior. |
 
 ### Still pending (before next release)
 
-- [ ] L-04: `File.existsSync()` sync I/O — deferred post-release
-- [x] Bug fixed: `_onReview()` filter bug — `filtersList` now passed correctly ✅
+- [ ] Continue iOS simulator testing — work through [TESTING_CHECKLIST_REMAINING.md](TESTING_CHECKLIST_REMAINING.md)
 - [ ] `flutter analyze` pass + audit for `print()` calls
 - [ ] Firebase security rules audit (`database.rules.json`)
 - [ ] 4 unit tests
 - [ ] Full manual test run (49+ scenarios across Authentication, Reviews, Friends, Review Requests, Settings, App Lifecycle)
 - [x] Play Store: privacy policy URL → https://www.restiview.com/Privacy.php ✅
-- [ ] Play Store: content rating questionnaire (Play Console → Policy → App content → Ratings) — ~5 mins, expect PEGI 3/Everyone
-- [ ] Play Store: data safety form (Play Console → Policy → App content → Data safety) — email ✓, display name ✓, location ✓, app interactions ✓, photos = local only
+- [ ] Play Store: content rating questionnaire (Play Console → Policy → App content → Ratings)
+- [ ] Play Store: data safety form (Play Console → Policy → App content → Data safety)
+- [ ] L-04: `File.existsSync()` sync I/O — deferred post-release
 
 **⚠️ When building next release:**
 - Change `appMode` → `AppMode.production` in `lib/constants/restiview_constants.dart`
