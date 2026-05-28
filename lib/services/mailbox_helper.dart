@@ -103,43 +103,7 @@ Future<Map<String, String>> resolveCanonicalProfile(
   return {'email': email, 'username': username};
 }
 
-/// Writes audit record for request processing event
-Future<void> _writeRequestAuditEvent({
-  required String eventType,
-  required String fromUid,
-  required String toUid,
-  String? details,
-}) async {
-  try {
-    final String? eventId = FirebaseDatabase.instance
-        .ref('audit_info/request_events')
-        .push()
-        .key;
 
-    if (eventId == null) {
-      appLog('_writeRequestAuditEvent: push() returned null key, skipping audit write');
-      return;
-    }
-
-    final Map<String, dynamic> auditData = <String, dynamic>{
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'eventType': eventType,
-      'fromUid': fromUid,
-      'toUid': toUid,
-    };
-
-    if (details != null && details.isNotEmpty) {
-      auditData['details'] = details;
-    }
-
-    await FirebaseDatabase.instance
-        .ref('audit_info/request_events/$eventId')
-        .set(auditData);
-  } catch (e) {
-    // Best-effort audit logging, don't fail on audit errors
-    appLog('Error writing audit event: $e');
-  }
-}
 
 // Main mailbox processing function
 // Processes all pending requests in users_by_email/<normalizedMailbox>/requests
@@ -344,10 +308,10 @@ Future<MailboxProcessResult> processUserMailbox(
           await FirebaseDatabase.instance.ref().update(atomic);
 
           // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Friend request declined',
-            fromUid: fromUid,
-            toUid: myUid,
+          await writeFriendEvent(
+            eventType: 'friend_request_declined',
+            actorUid: fromUid,
+            targetUid: myUid,
           );
 
           notificationsProcessed++;
@@ -624,10 +588,10 @@ Future<MailboxProcessResult> processUserMailbox(
           await FirebaseDatabase.instance.ref().update(atomic);
 
           // Write audit event
-          await _writeRequestAuditEvent(
-            eventType: 'Review request declined',
-            fromUid: fromUid,
-            toUid: myUid,
+          await writeFriendEvent(
+            eventType: 'review_request_declined',
+            actorUid: fromUid,
+            targetUid: myUid,
           );
 
           notificationsProcessed++;
