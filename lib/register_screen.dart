@@ -157,6 +157,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return false;
     }
 
+    if (password.length < 8) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.weakPassword)),
+        );
+      }
+      return false;
+    }
+
+    final hasNumberOrSymbol = RegExp(r'[0-9!@#\$%^&*()_+\-=\[\]{}|;:,.<>?]').hasMatch(password);
+    if (!hasNumberOrSymbol) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStr.weakPassword)),
+        );
+      }
+      return false;
+    }
+
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
       if (mounted) {
@@ -345,6 +364,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: AppStr.passwordLabel,
                       labelStyle: AppFonts.standard,
                       border: const UnderlineInputBorder(),
+                      helperText: AppStr.passwordHint,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _showPassword

@@ -329,6 +329,7 @@ This section documents how friend requests and friend records are created, deliv
   - On acceptance, both stubs are updated to `statusCode: 1` (FR-ACCEPTED) and `accepted: true` (plus `updatedAt` and `processedAt` fields), and mailbox entry is either removed or marked processed depending on ownership/claim rules.
   - On decline/reject, stubs are updated to `statusCode: 8` (FR-DECLINED) and mailbox may be marked processed or removed.
   - On **retraction** (sender pk3 deletes their own FR-ASKED stub before recipient acts): pk3's stub is deleted, a statusCode=8 mailbox notification is sent to pk1 so pk1's FR-WANTED stub becomes declined. pk1 can then only Delete that stub. The retraction flow is implemented in `_handleDelete()` in `friends_screen.dart` (the `statusRequesterSent` branch).
+  - On **declined-stub deletion** (statusCode=8 or 9): deleting a declined stub only removes the actor's own stub. The other user's stub is preserved so they can see the declined status and delete it themselves when ready. This prevents the relationship silently disappearing for one side. (For pending request retraction, statusCode=0, both stubs are still deleted atomically.)
 
 - Atomic updates & mailbox removal
   - The client composes a single multi-path `.update()` map to create mailbox + both friend stubs atomically. This avoids partial state where a mailbox exists but stubs don't.
@@ -775,6 +776,89 @@ Implemented functionality allowing users to view, filter, and manage reviews the
 - After successful save or update, `hasChanges` is reset to `false`
 - Prevents false warnings after data is safely persisted
 - Applied in both `saveReview()` and `updateReview()` methods
+
+---
+
+## CLI Tools — `tool/`
+
+### `tool/dbic.dart` — DB Integrity Checker (DBIC)
+
+Standalone Dart CLI that validates the live Firebase RTDB against the current app structure.
+
+**Run:**
+```
+dart run tool/dbic.dart check <service-account.json>
+```
+Or use `DBIC.bat` in the project root:
+```
+DBIC check
+```
+
+**What it checks (6 sections):**
+| Section | Node | What it validates |
+|---|---|---|
+| A | `users_by_email` | User registry — uid, email, displayName, updatedAt, statusCode |
+| B | `public_profiles` | Display names match `users_by_email`; email back-reference present |
+| C | `users_by_email/<id>/requests` (mailbox) | StatusCodes valid {0,1,3,5,6,8,9}; no stale entries |
+| D | `audit_info/request_events` | Event log fields: eventType, actorUid/fromUid, targetUid/toUid, timestamp |
+| E | `audit_info/deletions`, `/account_deletions`, `/other` | Deletion audit sub-nodes; required fields: timestamp, userId, type, target |
+| F | `users/<uid>` tree | Reviews (field validity), friends (statusCodes {0-6,8-10,99}), custom values, received reviews |
+
+**Valid status code sets (confirmed against lib/ code):**
+- Friend statusCodes: `{0,1,2,3,4,5,6,8,9,10,99}` — code 10 is default/fallback in `settings_screen.dart`; 99 is legacy (WARN only)
+- Mailbox statusCodes: `{0,1,3,5,6,8,9}` — code 2 only appears in friend stubs, not mailbox entries
+
+**Session 2026-05-30 fixes:**
+- Replaced 4 legacy Section E nodes (`friend_accept_audit` etc. — no longer written) with active `audit_info` sub-nodes
+- Removed `pendingDeleteBy`/`pendingDeleteAt` field checks (fields absent from current code); statusCode=99 now emits WARN only
+- Updated stats section in `_printReport` to show `auditDeletions`, `auditAccountDeletions`, `auditOtherEvents`
+- `dart analyze` — **No issues found**
+
+---
+
+### `tool/report.dart` — Activity Reporter
+
+Standalone Dart CLI that fetches user and activity data from Firebase RTDB and prints a formatted report. Always ends with a full DBIC run.
+
+**Run:**
+```
+dart run tool/report.dart full   <service-account.json>
+dart run tool/report.dart weekly <service-account.json>
+```
+Or use `REPORT.bat` in the project root:
+```
+REPORT full
+REPORT weekly
+```
+
+**Modes:**
+- `full` — All registered users sorted by registration date, with: Display Name, Email, Registered date, Home Country, Own Reviews count, Friend Reviews count, Last Activity timestamp
+- `weekly` — Two tables: (1) new users registered in last 7 days; (2) existing users with review or audit activity in last 7 days
+
+**Data sources per user:**
+| Field | RTDB path |
+|---|---|
+| User list | `users_by_email` (single GET) |
+| Own reviews | `users/<uid>/reviews` (per-user GET) |
+| Friend reviews | `users/<uid>/reviews_requested` shallow (per-user GET) |
+| Home country | `users/<uid>/baseCountry` (per-user GET) |
+| Last activity / audit events | `audit_info/request_events` (single GET, scanned by actorUid) |
+
+**File output:**
+- Reports saved to `Reports/` folder (created if absent) as `report_{mode}_{YYYYMMDD}_{HHMMSS}.txt`
+- All `print()` output is tee'd to both stdout and the file via `runZoned` + `ZoneSpecification`
+- DBIC subprocess stdout is written explicitly to both
+
+**Session 2026-05-30 changes:**
+- Fixed doc comment angle-bracket paths (wrapped in backticks)
+- Converted string concatenation (`+`) to adjacent string literals / interpolation
+- Added timestamped file output to `Reports/` folder
+- Added **Home Country** column to all three table layouts (full, weekly new-users, weekly active-users); reads `users/<uid>/baseCountry`
+- `dart analyze` — **No issues found**
+
+**Confirmed live run results (2026-05-30):**
+- 22 users, 147 own reviews, 78 friend reviews, 114 audit events, 18/22 home countries populated
+- DBIC: 0 errors, 165 warnings (all expected legacy data)
 
 ### Files Modified
 

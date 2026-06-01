@@ -126,7 +126,8 @@ class AppStr {
   static const String registrationDbError = 'Registration could not be completed. Please try again.';
   static const String networkError = 'No internet connection. Please check your network and try again.';
   static const String emailAlreadyInUse = 'An account already exists for that email address. Please sign in instead.';
-  static const String weakPassword = 'Password is too weak. Please choose a stronger password (at least 6 characters).';
+  static const String weakPassword = 'Password must be at least 8 characters and contain at least one number or symbol.';
+  static const String passwordHint = 'Min: 8 characters + at least one number or symbol';
   static const String removePhoto = 'Remove';
   static const String removeButton = 'REMOVE';
   static const String restaurantLabel = 'Restaurant';

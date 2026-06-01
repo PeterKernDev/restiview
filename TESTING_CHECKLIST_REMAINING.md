@@ -66,11 +66,14 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done
 - [ ] pk1's stub receives the statusCode=8 retraction — if already declined/deleted, no orphan stubs remain
 
 **Delete established friend (statusCode=1)**
-- [ ] pk3 deletees an accepted friend — pk3 stub becomes statusCode=9; pk1 receives statusCode=9 mailbox; on next sign-in pk1's stub becomes statusCode=8; both can then Delete their stubs
-- [ ] Ghost-row check: after both users delete, sign each back in — no phantom rows appear
+- [ ] pk3 declines an accepted friend — pk3 stub becomes statusCode=9; pk1 stub set to statusCode=8; pk1 receives statusCode=8 mailbox notification; on next sign-in pk1's stub shows declined
+- [ ] Ghost-row check: after both users independently delete their own declined stubs, sign each back in — no phantom rows appear
 
 **Decline established friend (statusCode=1)**
-- [ ] pk3 declines an established friend — pk3 stub becomes statusCode=9; pk1 receives statusCode=8; pk1 stub becomes statusCode=8
+- [x] pk3 declines an established friend — pk3 stub becomes statusCode=9; pk1 stub directly set to statusCode=8; pk1 receives statusCode=8 mailbox notification
+- [x] pk3 deletes their statusCode=9 stub — only pk3's stub is removed; pk1's statusCode=8 stub remains so pk1 can see they were declined
+- [x] pk1 signs in after pk3 has deleted — pk1 still sees the declined (statusCode=8) stub
+- [x] pk1 deletes their statusCode=8 stub — only pk1's stub is removed; no ghost rows on either side
 
 **Stale notification guard**
 - [ ] Sign pk3 out, have pk1 delete their stub, then sign pk3 back in — mailbox statusCode=9 notification arrives but pk3 stub is already gone — no ghost row created
