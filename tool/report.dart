@@ -95,6 +95,8 @@ Future<void> main(List<String> args) async {
         ['run', 'tool/dbic.dart', 'check', saPath],
         workingDirectory: Directory.current.path,
         runInShell: true,
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8,
       );
       final dbicOut = dbicResult.stdout as String;
       stdout.write(dbicOut);
@@ -327,13 +329,25 @@ class ActivityReporter {
     print('  $total friend reviews loaded.');
   }
 
+  // ISO 3166-1 alpha-2 codes that the app has historically written to baseCountry.
+  // Maps raw code → display name used elsewhere in the app.
+  static const Map<String, String> _isoToCountry = {
+    'GB': 'United Kingdom',
+    'BR': 'Brazil',
+    'US': 'USA',
+    'AU': 'Australia',
+    'DE': 'Germany',
+    'FR': 'France',
+    'RO': 'Romania',
+  };
+
   Future<void> _loadHomeCountries(List<_User> users) async {
     print('Loading home countries...');
     int found = 0;
     for (final user in users) {
       final raw = await _get('users/${user.uid}/baseCountry');
       if (raw is String && raw.isNotEmpty) {
-        user.homeCountry = raw;
+        user.homeCountry = _isoToCountry[raw.toUpperCase()] ?? raw;
         found++;
       }
     }
@@ -445,7 +459,14 @@ class ActivityReporter {
     }
 
     print(sep);
-    print('Total: ${users.length} users');
+
+    final totalOwn    = users.fold(0, (s, u) => s + u.ownReviews);
+    final totalFriend = users.fold(0, (s, u) => s + u.friendReviews);
+    final withCountry = users.where((u) => u.homeCountry != null).length;
+    print('Total : ${users.length} users  |  '
+          '$totalOwn own reviews  |  '
+          '$totalFriend friend reviews  |  '
+          '$withCountry/${users.length} home countries set');
     print('');
   }
 
