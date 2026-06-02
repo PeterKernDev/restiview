@@ -1127,3 +1127,17 @@ End of Stage 8 documentation (2026-03-20).
 - Published to Play Store Internal Testing track on 2026-03-21
 - Required fix: install Android SDK Command-line Tools (cmdline-tools/latest) — was missing, caused Flutter's post-build symbol-strip verification to fail
 - `appMode` is currently set to `AppMode.production` — **change back to `AppMode.test` before next dev session**
+
+---
+
+## Release: v2.0.3+42 (2026-06-01)
+
+- Built with `flutter build appbundle --release --dart-define=PLACES_API_KEY=...`
+- Commit: `e23d63d` on branch `master`
+- **Android nav bar overlap fix**: `MainActivity.kt` overrides `onCreate` to call
+  `WindowCompat.setDecorFitsSystemWindows(window, true)` after `super.onCreate`.
+  Flutter 3.22+ enables edge-to-edge by default, causing the 3-button navigation bar
+  on older devices (e.g. Motorola G6) to draw over app content. This restores prior behaviour.
+- CLI tools added to `tool/`: `dbic.dart` (DB integrity checker), `report.dart` (activity reporter)
+- `REPORT.bat` wrapper added to project root
+- `appMode` set to `AppMode.production` for build

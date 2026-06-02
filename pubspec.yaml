@@ -4,7 +4,7 @@ name: restiview
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 2.0.3+42
+version: 2.0.4+43
 
 environment:
   sdk: ^3.9.2
@@ -45,7 +45,14 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   googleapis_auth: ^2.0.0
+  flutter_launcher_icons: ^0.14.3
   
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/restiview_icon_V4_yg.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
