@@ -4,6 +4,46 @@ Read this first every time you restart. It tells you the current state of the pr
 
 ---
 
+## Current State (as of 2026-06-02)
+
+**v2.0.3+42** | `appMode = AppMode.production` | Branch: `master`
+
+### Platform status
+- **Android**: Google Play production access application submitted **2026-06-02 at 9:32 AM**. Awaiting approval (up to 7 days). Once approved: Play Console → Release → Production.
+- **iOS**: v2.0.2+41 submitted to App Store Review (in review). Build v2.0.3+42 also uploaded (correct RestiView icon) — ready to use if 2.0.2 is rejected or as follow-up update.
+
+### Changes made 2026-06-02
+| Area | Change |
+|---|---|
+| `assets/` | RestiView launcher icons generated for Android + iOS via `flutter_launcher_icons` |
+| `android/app/src/main/res/mipmap-*/ic_launcher.png` | Replaced default Flutter icon with RestiView icon (all densities) |
+| `ios/Runner/Assets.xcassets/AppIcon.appiconset/` | Replaced default Flutter icon with RestiView icon (all sizes) |
+| `pubspec.yaml` | Added `flutter_launcher_icons: ^0.14.3` dev dependency; added `flutter_launcher_icons:` config block |
+| `pubspec.yaml` | Version bumped to `2.0.4+43` (user had already set this) |
+| Google Play | Production access application submitted — answered closed test questionnaire |
+
+### Mac SSH config
+Mac IP changed from `192.168.1.25` → `192.168.1.17`. SSH config updated on Windows.
+If Mac IP changes again: `notepad $env:USERPROFILE\.ssh\config` → update `HostName`.
+
+---
+
+## ⚠️ Rule: Mac is build-only — never commit from the Mac
+
+**Windows = development machine.** All code changes and commits happen here only.  
+**Mac = build-only machine.** It only pulls and builds. Never `git commit` or `git push` from the Mac.
+
+If the Mac has local changes when pulling, always stash them:
+```bash
+git stash
+git pull --rebase origin master
+git stash pop
+```
+
+This prevents divergent branches and merge conflicts in `pubspec.yaml`.
+
+---
+
 ## Current State (as of 2026-05-28)
 
 **Working toward v1.8.1+37. Not yet released.**  
