@@ -53,5 +53,7 @@
 	<string>Restiview saves review photos to your photo library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Restiview uses your location to find nearby restaurants when creating a review.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Restiview uses your location to find nearby restaurants when creating a review.</string>
 </dict>
 </plist>
