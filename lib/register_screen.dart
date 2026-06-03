@@ -9,6 +9,7 @@
 // - Passes acceptsFriends flag to ensureUserSetup.
 // - Kept screen scrollable by keeping the main form inside SingleChildScrollView (buttons remain in SafeArea).
 
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -227,6 +228,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'userSettings5': 50,
             'userSettings6': false,
             'userSettings7': _allowFriends, // persisted toggle
+            'platform': Platform.isAndroid ? 'android' : 'ios',
           });
         } catch (dbErr) {
           // DB write failed — delete the orphaned Auth user to avoid inconsistent state

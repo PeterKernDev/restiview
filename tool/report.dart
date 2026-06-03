@@ -201,6 +201,7 @@ class _User {
   int     friendReviews     = 0;
   String? lastActivity;         // latest ISO timestamp across reviews + audit events
   String? homeCountry;          // baseCountry from users/$uid
+  String  platform          = 'android'; // 'android' or 'ios'; default android for legacy users
   // Weekly-only extras
   int ownReviewsThisWeek  = 0;
   int auditEventsThisWeek = 0;
@@ -354,6 +355,20 @@ class ActivityReporter {
     print('  $found home countries loaded.');
   }
 
+  Future<void> _loadPlatforms(List<_User> users) async {
+    print('Loading platforms...');
+    int iosCount = 0;
+    for (final user in users) {
+      final raw = await _get('users/${user.uid}/platform');
+      if (raw is String && raw.trim().toLowerCase() == 'ios') {
+        user.platform = 'ios';
+        iosCount++;
+      }
+      // Absent or any other value defaults to 'android' (set at field initialiser)
+    }
+    print('  $iosCount iOS users; rest default to android.');
+  }
+
   Future<void> _loadAuditEvents(List<_User> users) async {
     print('Loading audit events...');
     final uidIndex = {for (final u in users) u.uid: u};
@@ -387,6 +402,7 @@ class ActivityReporter {
     await _loadFriendReviews(users);
     await _loadAuditEvents(users);
     await _loadHomeCountries(users);
+    await _loadPlatforms(users);
     print('');
 
     // ── Report banner (printed here so user count is known) ─────────────────
@@ -426,6 +442,7 @@ class ActivityReporter {
     const emailW  = 28;
     const regW    = 12;
     const cntryW  = 16;
+    const platW   = 9;
     const revW    = 9;
     const frW     = 11;
 
@@ -435,6 +452,7 @@ class ActivityReporter {
         '${'Email'.padRight(emailW)}'
         '${'Registered'.padRight(regW)}'
         '${'Country'.padRight(cntryW)}'
+        '${'Platform'.padRight(platW)}'
         '${'Reviews'.padRight(revW)}'
         '${'Frnd Revs'.padRight(frW)}'
         'Last Activity';
@@ -452,6 +470,7 @@ class ActivityReporter {
         '${_trunc(u.email, emailW - 1).padRight(emailW)}'
         '${_fmtDate(u.registeredAt).padRight(regW)}'
         '${_trunc(u.homeCountry ?? '---', cntryW - 1).padRight(cntryW)}'
+        '${u.platform.padRight(platW)}'
         '${u.ownReviews.toString().padRight(revW)}'
         '${u.friendReviews.toString().padRight(frW)}'
         '${_fmtDateTime(u.lastActivity)}',
@@ -463,10 +482,12 @@ class ActivityReporter {
     final totalOwn    = users.fold(0, (s, u) => s + u.ownReviews);
     final totalFriend = users.fold(0, (s, u) => s + u.friendReviews);
     final withCountry = users.where((u) => u.homeCountry != null).length;
+    final iosCount    = users.where((u) => u.platform == 'ios').length;
     print('Total : ${users.length} users  |  '
           '$totalOwn own reviews  |  '
           '$totalFriend friend reviews  |  '
-          '$withCountry/${users.length} home countries set');
+          '$withCountry/${users.length} home countries set  |  '
+          '$iosCount iOS / ${users.length - iosCount} Android');
     print('');
   }
 
@@ -491,6 +512,7 @@ class ActivityReporter {
       const emailW = 28;
       const regW   = 12;
       const cntryW = 16;
+      const platW  = 9;
       const revW   = 9;
 
       final hdr =
@@ -499,6 +521,7 @@ class ActivityReporter {
           '${'Email'.padRight(emailW)}'
           '${'Registered'.padRight(regW)}'
           '${'Country'.padRight(cntryW)}'
+          '${'Platform'.padRight(platW)}'
           '${'Reviews'.padRight(revW)}'
           'Frnd Revs';
       print(hdr);
@@ -511,6 +534,7 @@ class ActivityReporter {
           '${_trunc(u.email, emailW - 1).padRight(emailW)}'
           '${_fmtDate(u.registeredAt).padRight(regW)}'
           '${_trunc(u.homeCountry ?? '---', cntryW - 1).padRight(cntryW)}'
+          '${u.platform.padRight(platW)}'
           '${u.ownReviews.toString().padRight(revW)}'
           '${u.friendReviews}',
         );
@@ -540,6 +564,7 @@ class ActivityReporter {
       const nameW  = 22;
       const emailW = 28;
       const cntryW = 16;
+      const platW  = 9;
       const revWkW = 14;
       const evWkW  = 13;
 
@@ -548,6 +573,7 @@ class ActivityReporter {
           '${'Display Name'.padRight(nameW)}'
           '${'Email'.padRight(emailW)}'
           '${'Country'.padRight(cntryW)}'
+          '${'Platform'.padRight(platW)}'
           '${'Reviews (wk)'.padRight(revWkW)}'
           '${'Events (wk)'.padRight(evWkW)}'
           'Last Activity';
@@ -560,6 +586,7 @@ class ActivityReporter {
           '${_trunc(u.displayName, nameW - 1).padRight(nameW)}'
           '${_trunc(u.email, emailW - 1).padRight(emailW)}'
           '${_trunc(u.homeCountry ?? '---', cntryW - 1).padRight(cntryW)}'
+          '${u.platform.padRight(platW)}'
           '${u.ownReviewsThisWeek.toString().padRight(revWkW)}'
           '${u.auditEventsThisWeek.toString().padRight(evWkW)}'
           '${_fmtDateTime(u.lastActivity)}',
