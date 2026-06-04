@@ -4,13 +4,37 @@ Read this first every time you restart. It tells you the current state of the pr
 
 ---
 
-## Current State (as of 2026-06-02)
+## Current State (as of 2026-06-04)
 
-**v2.0.3+42** | `appMode = AppMode.production` | Branch: `master`
+**v2.0.5+44** | `appMode = AppMode.production` | Branch: `master`
 
 ### Platform status
-- **Android**: Google Play production access application submitted **2026-06-02 at 9:32 AM**. Awaiting approval (up to 7 days). Once approved: Play Console → Release → Production.
-- **iOS**: v2.0.2+41 submitted to App Store Review (in review). Build v2.0.3+42 also uploaded (correct RestiView icon) — ready to use if 2.0.2 is rejected or as follow-up update.
+- **Android**: v2.0.4+43 — awaiting Google Play approval for production.
+- **iOS**: v2.0.3+42 — approved by Apple 2026-06-04; set to auto-release.
+- **Next release**: v2.0.5+44 — built from this version. Includes platform (android/ios) capture at registration.
+
+### ⚠️ iOS icon fix — CRITICAL Mac build step
+v2.0.3 shipped with the Flutter icon on device despite `flutter_launcher_icons` having been run. Root cause: `git stash/pop` on Mac left the icon PNG files in a dirty state.
+
+**For all future Mac builds, before building:**
+```bash
+git fetch origin
+git reset --hard origin/master
+flutter pub get
+flutter build ipa --release --dart-define=PLACES_API_KEY=...
+```
+Use `git reset --hard` (not stash) to guarantee the icon files from the repo are used.
+
+### Changes made 2026-06-04
+| Area | Change |
+|---|---|
+| `pubspec.yaml` | Version bumped to `2.0.5+44` |
+
+### Changes made 2026-06-03 (commit f98b22c)
+| Area | Change |
+|---|---|
+| `lib/register_screen.dart` | Captures `platform` (android/ios) at registration, writes to `users/$uid/platform` in RTDB |
+| `tool/report.dart` | Added Platform column to full and weekly report layouts; footer shows iOS/Android count |
 
 ### Changes made 2026-06-02
 | Area | Change |
@@ -19,7 +43,7 @@ Read this first every time you restart. It tells you the current state of the pr
 | `android/app/src/main/res/mipmap-*/ic_launcher.png` | Replaced default Flutter icon with RestiView icon (all densities) |
 | `ios/Runner/Assets.xcassets/AppIcon.appiconset/` | Replaced default Flutter icon with RestiView icon (all sizes) |
 | `pubspec.yaml` | Added `flutter_launcher_icons: ^0.14.3` dev dependency; added `flutter_launcher_icons:` config block |
-| `pubspec.yaml` | Version bumped to `2.0.4+43` (user had already set this) |
+| `pubspec.yaml` | Version bumped to `2.0.4+43` |
 | Google Play | Production access application submitted — answered closed test questionnaire |
 
 ### Mac SSH config
@@ -33,14 +57,16 @@ If Mac IP changes again: `notepad $env:USERPROFILE\.ssh\config` → update `Host
 **Windows = development machine.** All code changes and commits happen here only.  
 **Mac = build-only machine.** It only pulls and builds. Never `git commit` or `git push` from the Mac.
 
-If the Mac has local changes when pulling, always stash them:
+**Do NOT use `git stash/pop` on the Mac** — stash/pop can leave binary icon files in a dirty state, causing the wrong app icon to be embedded in the IPA (this caused the Flutter icon bug in v2.0.3).
+
+Instead, always use:
 ```bash
-git stash
-git pull --rebase origin master
-git stash pop
+git fetch origin
+git reset --hard origin/master
+flutter pub get
 ```
 
-This prevents divergent branches and merge conflicts in `pubspec.yaml`.
+This guarantees a byte-for-byte clean copy of the repo before every build.
 
 ---
 
