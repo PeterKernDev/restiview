@@ -1206,7 +1206,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
                           const SizedBox(height: 16),
                           TextField(
                             controller: _dinersController,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
                             decoration: const InputDecoration(
                               labelText: AppStr.dinersLabel,
                             ),

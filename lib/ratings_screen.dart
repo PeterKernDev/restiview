@@ -164,7 +164,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
       child: Row(
         children: [
           SizedBox(
-            width: 90,
+            width: 110,
             child: Text(
               label,
               style: AppFonts.standard.copyWith(
@@ -346,7 +346,9 @@ class _RatingsScreenState extends State<RatingsScreen> {
                       Expanded(
                         child: TextField(
                           controller: _costController,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => FocusScope.of(context).unfocus(),
                           decoration: const InputDecoration(
                             labelText: AppStr.amountLabel,
                             isDense: true,

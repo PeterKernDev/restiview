@@ -4,14 +4,47 @@ Read this first every time you restart. It tells you the current state of the pr
 
 ---
 
-## Current State (as of 2026-06-04)
+## Release Information
+
+### Current versions
+| Platform | Version | Build | Status |
+|---|---|---|---|
+| iOS (App Store) | 2.0.5 | 44 | ✅ Approved 2026-06-08 |
+| Android (Google Play) | 2.0.5 | 44 | ⏳ In review 2026-06-08 |
+
+### App store IDs
+- **Apple App Store**: App ID `6774648603` — https://apps.apple.com/app/restiview-restaurant-reviews/id6774648603
+- **Google Play**: Package `com.restiview.app`
+- **Apple Team ID**: `T8FMJ6A9VW`
+- **Apple Developer**: peterkern@btinternet.com
+
+### Release history
+| Version | Build | Date | Notes |
+|---|---|---|---|
+| 2.0.5 | 44 | 2026-06-08 | GoogleService-Info.plist fix (iOS blank screen on launch); platform capture at registration |
+| 2.0.4 | 43 | 2026-06-02 | RestiView launcher icons (Android + iOS) |
+| 2.0.3 | 42 | 2026-06-03 | iOS approved; nav bar overlap fix; location always permission fix |
+| 2.0.2 | 41 | 2026-05-29 | First iOS App Store submission |
+
+### Release countries (45) — same list on Apple & Android
+**Europe (19):** Austria, Belgium, Bulgaria, Croatia, Cyprus, Czech Republic, Denmark, Germany, Greece, Ireland, Italy, Luxembourg, Malta, Netherlands, Poland, Portugal, Romania, Spain, Sweden
+
+**Americas (17):** Antigua and Barbuda, Argentina, Bahamas, Barbados, Bermuda, Brazil, British Virgin Islands, Canada, Cayman Islands, Chile, St. Kitts and Nevis, St. Lucia, St. Vincent and the Grenadines, Trinidad and Tobago, Turks and Caicos Islands, United States, Uruguay
+
+**Rest of world (9):** Australia, Hong Kong, Iceland, Jamaica, Japan, Lebanon, New Zealand, Norway, South Africa, Switzerland, United Arab Emirates, United Kingdom
+
+---
+
+## Current State (as of 2026-06-08)
 
 **v2.0.5+44** | `appMode = AppMode.production` | Branch: `master`
 
 ### Platform status
-- **Android**: v2.0.4+43 — awaiting Google Play approval for production.
-- **iOS**: v2.0.3+42 — approved by Apple 2026-06-04; set to auto-release.
-- **Next release**: v2.0.5+44 — built from this version. Includes platform (android/ios) capture at registration.
+- **iOS**: v2.0.5+44 — **APPROVED by Apple 2026-06-08** ✅
+- **Android**: v2.0.5+44 — **submitted to Google Play production review 2026-06-08** ⏳
+
+### Next steps
+- **Android**: Wait for Google Play review approval (typically a few hours to 2 days)
 
 ### ⚠️ iOS icon fix — CRITICAL Mac build step
 v2.0.3 shipped with the Flutter icon on device despite `flutter_launcher_icons` having been run. Root cause: `git stash/pop` on Mac left the icon PNG files in a dirty state.
@@ -47,8 +80,53 @@ Use `git reset --hard` (not stash) to guarantee the icon files from the repo are
 | Google Play | Production access application submitted — answered closed test questionnaire |
 
 ### Mac SSH config
-Mac IP changed from `192.168.1.25` → `192.168.1.17`. SSH config updated on Windows.
+Mac IP changed from `192.168.1.25` → `192.168.1.17` → `192.168.68.119`. SSH config updated on Windows.
 If Mac IP changes again: `notepad $env:USERPROFILE\.ssh\config` → update `HostName`.
+
+---
+
+## How to build and submit an iOS release (IPA)
+
+### Prerequisites (one-time checks)
+- `ios/Runner/GoogleService-Info.plist` must be committed to git (tracked since 2026-06-06).
+- Signing team must be set in Xcode: open `ios/Runner.xcworkspace` → select Runner target → Signing & Capabilities → set Team to `T8FMJ6A9VW`.
+- Mac SSH alias: `Host my-mac` → `HostName <current IP>`, User `carol`. Check/update with `notepad $env:USERPROFILE\.ssh\config` on Windows.
+
+### Find the Mac's current IP (if needed)
+- On Windows: `ping 192.168.68.119` (or check router DHCP table)
+- Update SSH config: `notepad $env:USERPROFILE\.ssh\config` → change `HostName`
+- Update `START_HERE.md` Mac SSH config line too
+
+### Step 1 — Sync the Mac from Windows (always do this first)
+```bash
+ssh my-mac
+cd ~/restiview
+git fetch origin
+git reset --hard origin/master
+flutter pub get
+```
+**Never use `git stash/pop`** — it corrupts binary icon files.
+
+### Step 2 — Unlock the keychain (required every SSH session before building)
+```bash
+security unlock-keychain ~/Library/Keychains/login.keychain-db
+```
+Enter Carol's Mac login password when prompted. This is required because codesigning over SSH cannot access a locked keychain (`errSecInternalComponent` error). If this fails, run the build from a terminal **directly on the Mac** (GUI session always has the keychain unlocked).
+
+### Step 3 — Build the IPA
+```bash
+flutter build ipa --release --dart-define=PLACES_API_KEY=AIzaSyDphPAK5es8vB9XfT28T4JBtByXynFmq-4
+```
+Output: `build/ios/ipa/restiview.ipa`
+
+### Step 4 — Upload to App Store Connect
+```bash
+xcrun altool --upload-app -f build/ios/ipa/restiview.ipa -t ios -u peterkern@btinternet.com -p <app-specific-password>
+```
+Or use Xcode Organizer / Transporter app on the Mac.
+
+### Step 5 — Resubmit on App Store Connect
+Go to App Store Connect → your app → the new version → select the new build → Submit for Review.
 
 ---
 
