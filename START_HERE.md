@@ -10,7 +10,9 @@ Read this first every time you restart. It tells you the current state of the pr
 | Platform | Version | Build | Status |
 |---|---|---|---|
 | iOS (App Store) | 2.0.5 | 44 | ✅ Approved 2026-06-08 |
+| iOS (App Store) | 2.0.6 | 45 | ⏳ In review 2026-06-08 |
 | Android (Google Play) | 2.0.5 | 44 | ⏳ In review 2026-06-08 |
+| Android (Google Play) | 2.0.6 | 45 | ⏳ In review 2026-06-08 |
 
 ### App store IDs
 - **Apple App Store**: App ID `6774648603` — https://apps.apple.com/app/restiview-restaurant-reviews/id6774648603
@@ -21,6 +23,7 @@ Read this first every time you restart. It tells you the current state of the pr
 ### Release history
 | Version | Build | Date | Notes |
 |---|---|---|---|
+| 2.0.6 | 45 | 2026-06-08 | Fix numeric keyboard dismiss (diners + cost fields); fix Ambiance label wrapping on ratings screen |
 | 2.0.5 | 44 | 2026-06-08 | GoogleService-Info.plist fix (iOS blank screen on launch); platform capture at registration |
 | 2.0.4 | 43 | 2026-06-02 | RestiView launcher icons (Android + iOS) |
 | 2.0.3 | 42 | 2026-06-03 | iOS approved; nav bar overlap fix; location always permission fix |

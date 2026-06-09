@@ -58,4 +58,12 @@ android/app/**/kernel_blob.bin
 *-sa.json
 service-account*.json
 firebase-adminsdk*.json
+
+# Python virtual environment
+.venv/
+
+# Reports and temp files
+Reports/
+tmp_*/
+build_verbose.txt
 DBIC.bat
