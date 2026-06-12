@@ -48,6 +48,8 @@ class _GeneralScreenState extends State<GeneralScreen> {
   late String _selectedOccasion;
   DateTime _selectedDate = DateTime.now();
   List<NearbyRestaurant> _restaurantOptions = [];
+  bool _searchDoneNoResults = false;
+  NearbyRestaurant? _selectedGeoRestaurant;
 
   Future<void> checkCountryMismatch() async {
     if (_countryMismatchChecked) return;
@@ -544,6 +546,9 @@ class _GeneralScreenState extends State<GeneralScreen> {
       _newOccasionController.clear();
       _showAddCuisineField = false;
       _showAddOccasionField = false;
+      _restaurantOptions = [];
+      _searchDoneNoResults = false;
+      _selectedGeoRestaurant = null;
 
       final Map<String, dynamic> reviewMap = widget.context.reviewMap;
       reviewMap['restaurantName'] = '';
@@ -561,87 +566,49 @@ class _GeneralScreenState extends State<GeneralScreen> {
     });
   }
 
-  bool _hasUserEnteredData() {
-    return _restaurantController.text.trim().isNotEmpty ||
-        _cityController.text.trim().isNotEmpty ||
-        _dinersController.text.trim().isNotEmpty ||
-        _selectedCuisine.isNotEmpty;
-  }
-
-  void _showRestaurantSelector() async {
-    if (_hasUserEnteredData()) {
-      final bool? confirmed = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext ctx) {
-          return AlertDialog(
-            title: const Text(AppStr.multiOverwriteTitle),
-            content: const Text(AppStr.multiOverwriteBody),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text(AppStr.cancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text(AppStr.multiOverwriteConfirm),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed != true) {
-        return;
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final NearbyRestaurant? selected = await showDialog<NearbyRestaurant>(
+  Future<void> _changeSearchRadius() async {
+    int tempRadius = SessionCache.searchRadius;
+    final int? newRadius = await showDialog<int>(
       context: context,
       builder: (BuildContext ctx) {
-        return SimpleDialog(
-          title: Text(AppStr.selectRestaurant, style: AppFonts.bold),
-          children: _restaurantOptions.map((NearbyRestaurant rest) {
-            return SimpleDialogOption(
-              onPressed: () {
-                Navigator.pop(ctx, rest);
-              },
-              child: Text(rest.name),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Search Radius'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text('${tempRadius}m', style: AppFonts.bold),
+                  Slider(
+                    value: tempRadius.toDouble(),
+                    min: 10,
+                    max: 200,
+                    divisions: 19,
+                    label: '${tempRadius}m',
+                    onChanged: (double v) {
+                      setDialogState(() => tempRadius = v.round());
+                    },
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text(AppStr.cancel),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(tempRadius),
+                  child: const Text(AppStr.search),
+                ),
+              ],
             );
-          }).toList(),
+          },
         );
       },
     );
-
-    if (selected != null && mounted) {
-      final bool isValidCuisine = SessionCache.customCuisines.contains(
-        selected.cuisine,
-      );
-
-      // Check history cache first; fall back to keyword guess
-      final String cacheKey =
-          '${SessionCache.defaultCountry}|${selected.name.toLowerCase()}';
-      final String? cachedCuisine =
-          SessionCache.restaurantCuisineCache[cacheKey];
-      final String resolvedCuisine =
-          (cachedCuisine != null &&
-              SessionCache.customCuisines.contains(cachedCuisine))
-          ? cachedCuisine
-          : (isValidCuisine ? selected.cuisine : '');
-
-      setState(() {
-        widget.context.reviewMap['restaurantName'] = selected.name;
-        widget.context.reviewMap['restaddress'] = selected.address;
-        widget.context.reviewMap['restphone'] = selected.phone ?? '';
-        widget.context.reviewMap['city'] = selected.city;
-        widget.context.reviewMap['cuisine'] = resolvedCuisine;
-
-        _restaurantController.text = selected.name;
-        _cityController.text = selected.city;
-        _selectedCuisine = resolvedCuisine;
-      });
+    if (newRadius != null && mounted) {
+      SessionCache.searchRadius = newRadius;
+      await _autoFillRestaurantFromLocation();
     }
   }
 
@@ -734,6 +701,8 @@ class _GeneralScreenState extends State<GeneralScreen> {
           return;
         }
         setState(() {
+          _selectedGeoRestaurant = selected;
+          _searchDoneNoResults = false;
           widget.context.reviewMap['restaurantName'] = selected.name;
           widget.context.reviewMap['restaddress'] = selected.address;
           widget.context.reviewMap['restphone'] = selected.phone ?? '';
@@ -755,11 +724,16 @@ class _GeneralScreenState extends State<GeneralScreen> {
         if (!mounted) {
           return;
         }
-        // Only reset the form if the user hasn't manually entered anything.
-        // If they have data, leave it intact and just fall through to show
-        // the city and the "none found" snackbar.
-        if (!_hasUserEnteredData()) {
+        // Only reset the form if the restaurant name is currently empty
+        if (_restaurantController.text.trim().isEmpty) {
           _clearForm();
+        }
+        if (mounted) {
+          setState(() {
+            _restaurantOptions = [];
+            _searchDoneNoResults = true;
+            _selectedGeoRestaurant = null;
+          });
         }
         // No restaurants found, but we still have a location fix — use it to
         // back-fill the city field so the user doesn't have to type it manually.
@@ -946,29 +920,117 @@ class _GeneralScreenState extends State<GeneralScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          TextFormField(
-                            controller: _restaurantController,
-                            focusNode: _restaurantFocusNode,
-                            decoration: InputDecoration(
-                              labelText: AppStr.restaurantLabel,
-                              suffixIcon: _isLookingUpName
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
-                                    )
-                                  : null,
+                          if (_restaurantOptions.length > 1)
+                            DropdownButtonFormField<NearbyRestaurant>(
+                              value: _selectedGeoRestaurant,
+                              items: _restaurantOptions
+                                  .map(
+                                    (NearbyRestaurant r) =>
+                                        DropdownMenuItem<NearbyRestaurant>(
+                                          value: r,
+                                          child: Text(r.name),
+                                        ),
+                                  )
+                                  .toList(),
+                              onChanged: (NearbyRestaurant? selected) {
+                                if (selected == null || !mounted) return;
+                                final String cacheKey =
+                                    '${SessionCache.defaultCountry}|${selected.name.toLowerCase()}';
+                                final String? cachedCuisine =
+                                    SessionCache.restaurantCuisineCache[cacheKey];
+                                final bool isValidCuisine =
+                                    SessionCache.customCuisines.contains(
+                                      selected.cuisine,
+                                    );
+                                final String resolvedCuisine =
+                                    (cachedCuisine != null &&
+                                        SessionCache.customCuisines.contains(
+                                          cachedCuisine,
+                                        ))
+                                    ? cachedCuisine
+                                    : (isValidCuisine ? selected.cuisine : '');
+                                setState(() {
+                                  _selectedGeoRestaurant = selected;
+                                  widget.context.reviewMap['restaurantName'] =
+                                      selected.name;
+                                  widget.context.reviewMap['restaddress'] =
+                                      selected.address;
+                                  widget.context.reviewMap['restphone'] =
+                                      selected.phone ?? '';
+                                  widget.context.reviewMap['city'] =
+                                      selected.city;
+                                  widget.context.reviewMap['cuisine'] =
+                                      resolvedCuisine;
+                                  _restaurantController.text = selected.name;
+                                  _cityController.text = selected.city;
+                                  _selectedCuisine = resolvedCuisine;
+                                  widget.context.hasChanges = true;
+                                });
+                              },
+                              decoration: const InputDecoration(
+                                labelText: AppStr.restaurantLabel,
+                              ),
+                              validator: (NearbyRestaurant? value) {
+                                if (value == null) {
+                                  return AppStr.restaurantRequired;
+                                }
+                                return null;
+                              },
+                            )
+                          else if (_searchDoneNoResults)
+                            DropdownButtonFormField<String>(
+                              value: null,
+                              hint: const Text('No restaurants found nearby'),
+                              items: <DropdownMenuItem<String>>[
+                                const DropdownMenuItem<String>(
+                                  value: 'search_again',
+                                  child: Text('Search again'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'search_radius',
+                                  child: Text(
+                                    'Search radius (${SessionCache.searchRadius}m)',
+                                  ),
+                                ),
+                              ],
+                              onChanged: (String? value) async {
+                                if (value == 'search_again') {
+                                  await _autoFillRestaurantFromLocation();
+                                } else if (value == 'search_radius') {
+                                  await _changeSearchRadius();
+                                }
+                              },
+                              decoration: const InputDecoration(
+                                labelText: AppStr.restaurantLabel,
+                              ),
+                              validator: (_) => AppStr.restaurantRequired,
+                            )
+                          else
+                            TextFormField(
+                              controller: _restaurantController,
+                              focusNode: _restaurantFocusNode,
+                              decoration: InputDecoration(
+                                labelText: AppStr.restaurantLabel,
+                                suffixIcon: _isLookingUpName
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(12.0),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              validator: (String? value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return AppStr.restaurantRequired;
+                                }
+                                return null;
+                              },
                             ),
-                            validator: (String? value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return AppStr.restaurantRequired;
-                              }
-                              return null;
-                            },
-                          ),
                           const SizedBox(height: 8),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -1241,56 +1303,6 @@ class _GeneralScreenState extends State<GeneralScreen> {
                                   style: AppFonts.standard,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Text(
-                                AppStr.locationSearchLabel,
-                                style: AppFonts.standard,
-                              ),
-                              SessionCache.allowLocation
-                                  ? Expanded(
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: _restaurantOptions.length > 1
-                                            ? ElevatedButton(
-                                                onPressed:
-                                                    _showRestaurantSelector,
-                                                style: buttonStyle(
-                                                  Colors.amber,
-                                                  Colors.black,
-                                                ),
-                                                child: Text(
-                                                  AppStr.multi,
-                                                  style: AppFonts.standard,
-                                                ),
-                                              )
-                                            : ElevatedButton(
-                                                onPressed:
-                                                    _autoFillRestaurantFromLocation,
-                                                style: buttonStyle(
-                                                  AppColors.blue,
-                                                  Colors.white,
-                                                ),
-                                                child: Text(
-                                                  AppStr.search,
-                                                  style: AppFonts.standard
-                                                      .copyWith(
-                                                        color: Colors.white,
-                                                      ),
-                                                ),
-                                              ),
-                                      ),
-                                    )
-                                  : Text(
-                                      '(OFF)',
-                                      style: AppFonts.standard.copyWith(
-                                        color: AppColors.mutedText,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
                             ],
                           ),
                           const SizedBox(height: 36),
