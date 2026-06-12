@@ -359,6 +359,29 @@ class _TopScreenState extends State<TopScreen> {
     }
   }
 
+  Future<void> _confirmSignOut() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _signOut();
+    }
+  }
+
   Future<void> _signOut() async {
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
@@ -802,7 +825,7 @@ class _TopScreenState extends State<TopScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: _isSigningOut ? null : _signOut,
+                    onPressed: _isSigningOut ? null : _confirmSignOut,
                     child: _isSigningOut
                         ? const SizedBox(
                             height: 20,
