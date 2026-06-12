@@ -62,6 +62,9 @@ class AppColors {
   static const Color btnRegister = orange; // Orange / Black text
   static const Color btnText = black; // Standard button text color
 
+  // Redesign palette
+  static const Color rdLavender = Color(0xFFEBE0F5); // soft lilac background (Design 4)
+
   // Helper to construct overlay colors with variable alpha at runtime.
   // Not const because it returns a new Color instance computed from the alpha.
   static Color overlay({int alpha = 80}) => Color.fromARGB(alpha, 0, 0, 0);

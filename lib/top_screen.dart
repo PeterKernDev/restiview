@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'general_screen.dart';
+import 'test_general_screen.dart';
 import 'settings_screen.dart';
 import 'list_screen.dart';
 import 'sub_preview_screen/review_context.dart';
@@ -595,6 +596,20 @@ class _TopScreenState extends State<TopScreen> {
     });
   }
 
+  void _openTestScreen() {
+    final ReviewContext testContext = ReviewContext(
+      reviewMap: <String, dynamic>{},
+      isEditing: false,
+      reviewKey: null,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TestGeneralScreen(context: testContext),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String displayName = SessionCache.userName.isNotEmpty
@@ -652,6 +667,19 @@ class _TopScreenState extends State<TopScreen> {
                     ),
                     onPressed: _startNewReview,
                     child: Text(AppStr.addReview, style: AppFonts.standard),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9C27B0),
+                      foregroundColor: AppColors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: _openTestScreen,
+                    child: Text('Test', style: AppFonts.standard.copyWith(color: AppColors.white)),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
