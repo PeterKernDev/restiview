@@ -81,4 +81,22 @@ flutter:
         - asset: fonts/Literata-BoldItalic.ttf
           weight: 700
           style: italic
-    
+
+    - family: Faune
+      fonts:
+        - asset: fonts/Faune-TextRegular.otf
+        - asset: fonts/Faune-TextItalic.otf
+          style: italic
+        - asset: fonts/Faune-TextBold.otf
+          weight: 700
+        - asset: fonts/Faune-DisplayThin.otf
+          weight: 100
+        - asset: fonts/Faune-DisplayBlack.otf
+          weight: 900
+        - asset: fonts/Faune-DisplayBoldItalic.otf
+          weight: 700
+          style: italic
+
+    - family: FranklinGothicHeavy
+      fonts:
+        - asset: fonts/Franklin Gothic Heavy Regular.ttf
