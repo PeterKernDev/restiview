@@ -93,35 +93,14 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  bool _staySignedIn = false;
   bool _showPassword = false;
   bool _loading = false;
-  bool _initialSSI = false;
   bool _enableReset = false;
 
   @override
   void initState() {
     super.initState();
     _logEnvironmentHints();
-    SessionCache.getStaySignedIn().then((value) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _staySignedIn = value;
-        _initialSSI = value;
-        if (_staySignedIn) {
-          SessionCache.getSavedEmail().then((email) {
-            if (!mounted) return;
-            _emailController.text = email ?? '';
-          });
-          SessionCache.getSavedPassword().then((password) {
-            if (!mounted) return;
-            _passwordController.text = password ?? '';
-          });
-        }
-      });
-    });
   }
 
   @override
@@ -249,13 +228,6 @@ class _SignInScreenState extends State<SignInScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(message)));
-        if (mounted) {
-          setState(() {
-            _staySignedIn = false;
-          });
-        }
-        await SessionCache.setStaySignedIn(false);
-        await SessionCache.clearCredentials();
         return;
       } on FirebaseException catch (fe) {
         appLog('Sign-in FirebaseException [${fe.code}]: ${fe.message}');
@@ -430,13 +402,6 @@ class _SignInScreenState extends State<SignInScreen> {
       }
     }
 
-    await SessionCache.setStaySignedIn(_staySignedIn);
-    if (_staySignedIn) {
-      await SessionCache.setCredentials(email, password);
-    } else {
-      await SessionCache.clearCredentials();
-    }
-
     await runStartupTasks(
       uid: uid,
       userName: userName,
@@ -489,7 +454,6 @@ class _SignInScreenState extends State<SignInScreen> {
                 children: <Widget>[
                   TextField(
                     controller: _emailController,
-                    enabled: !_initialSSI || !_staySignedIn,
                     decoration: InputDecoration(
                       labelText: AppStr.emailLabel,
                       labelStyle: AppFonts.standard,
@@ -501,7 +465,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
-                    enabled: !_initialSSI || !_staySignedIn,
                     obscureText: !_showPassword,
                     decoration: InputDecoration(
                       labelText: AppStr.passwordLabel,
@@ -591,28 +554,6 @@ class _SignInScreenState extends State<SignInScreen> {
                         color: _enableReset ? AppColors.blue : AppColors.grey,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    title: Text(AppStr.staySignedIn, style: AppFonts.standard),
-                    value: _staySignedIn,
-                    onChanged: (bool value) async {
-                      if (!mounted) {
-                        return;
-                      }
-                      setState(() {
-                        _staySignedIn = value;
-                      });
-
-                      if (!value) {
-                        _emailController.clear();
-                        _passwordController.clear();
-                        await SessionCache.setStaySignedIn(false);
-                        await SessionCache.clearCredentials();
-                      }
-                    },
-                    activeThumbColor: AppColors.darkGreen,
-                    activeTrackColor: AppColors.ochre,
                   ),
                   const SizedBox(height: 24),
                   if (_loading)

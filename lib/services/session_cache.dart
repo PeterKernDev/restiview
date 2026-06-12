@@ -118,9 +118,6 @@ class SessionCache {
   static Map<String, Map<String, Set<String>>> indexedMatrix = {};
 
   // Secure storage keys
-  static const _keyStaySignedIn = 'staySignedIn';
-  static const _keySavedEmail = 'savedEmail';
-  static const _keySavedPassword = 'savedPassword';
   static const _keySortOption = 'sortOption';
   static const _keySavedDisplayName = 'savedDisplayName';
   static const _keySavedCountry = 'savedCountry'; // new
@@ -148,68 +145,6 @@ class SessionCache {
     'CN',
     'FR',
   ];
-
-  // Stay Signed In flag
-  static Future<void> setStaySignedIn(bool value) async {
-    try {
-      await _storage.write(key: _keyStaySignedIn, value: value.toString());
-    } catch (e) {
-      // Non-fatal: ignore storage write errors here.
-    }
-  }
-
-  static Future<bool> getStaySignedIn() async {
-    try {
-      final String? value = await _storage.read(key: _keyStaySignedIn);
-
-      return value == 'true';
-    } catch (e) {
-      // Non-fatal: ignore storage read errors and return default.
-      return false;
-    }
-  }
-
-  // Credentials
-  static Future<void> setCredentials(String email, String password) async {
-    try {
-      await _storage.write(key: _keySavedEmail, value: email);
-      await _storage.write(key: _keySavedPassword, value: password);
-    } catch (e) {
-      // Non-fatal: ignore storage errors when setting credentials.
-    }
-  }
-
-  static Future<void> clearCredentials() async {
-    try {
-      await _storage.delete(key: _keySavedEmail);
-      await _storage.delete(key: _keySavedPassword);
-      await _storage.delete(key: _keySavedDisplayName);
-    } catch (e) {
-      // Non-fatal: ignore errors when clearing credentials.
-    }
-  }
-
-  static Future<String?> getSavedEmail() async {
-    try {
-      final String? v = await _storage.read(key: _keySavedEmail);
-
-      return v;
-    } catch (e) {
-      // Non-fatal: ignore read errors and return null.
-      return null;
-    }
-  }
-
-  static Future<String?> getSavedPassword() async {
-    try {
-      final String? v = await _storage.read(key: _keySavedPassword);
-
-      return v;
-    } catch (e) {
-      // Non-fatal: ignore read errors and return null.
-      return null;
-    }
-  }
 
   // Display name helpers
   static Future<void> setSavedDisplayName(String displayName) async {
@@ -393,8 +328,7 @@ class SessionCache {
     indexedMatrix.clear();
 
     try {
-      await clearCredentials();
-      await setStaySignedIn(false);
+      // best-effort session cleanup
     } catch (e) {
       // Non-fatal: ignore errors during reset; best-effort only.
     }

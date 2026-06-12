@@ -460,9 +460,7 @@ class _ReviewRequestScreenState extends State<ReviewRequestScreen> {
     final String clientRequestId = DateTime.now().millisecondsSinceEpoch
         .toString();
     final String fromEmail =
-        (await SessionCache.getSavedEmail()) ??
-        FirebaseAuth.instance.currentUser?.email ??
-        '';
+        FirebaseAuth.instance.currentUser?.email ?? '';
     final String fromDisplayName =
         (await SessionCache.getSavedDisplayName()) ??
         (FirebaseAuth.instance.currentUser?.displayName ?? fromEmail);
