@@ -906,9 +906,12 @@ class _GeneralScreenState extends State<GeneralScreen> {
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
-      body: LayoutBuilder(
-        builder: (BuildContext ctx, BoxConstraints constraints) {
-          return Stack(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: LayoutBuilder(
+          builder: (BuildContext ctx, BoxConstraints constraints) {
+            return Stack(
             children: <Widget>[
               SingleChildScrollView(
                 child: ConstrainedBox(
@@ -1332,6 +1335,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
             ],
           );
         },
+      ),
       ),
       bottomNavigationBar: SafeArea(
         child: SizedBox(

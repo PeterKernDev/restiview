@@ -275,8 +275,11 @@ class _RatingsScreenState extends State<RatingsScreen> {
         backgroundColor: AppColors.darkGreen,
         centerTitle: true,
       ),
-      body: Column(
-        children: [
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -484,7 +487,6 @@ class _RatingsScreenState extends State<RatingsScreen> {
             ),
           ),
         ],
-      ),
-    );
+      ),      ),    );
   }
 }
