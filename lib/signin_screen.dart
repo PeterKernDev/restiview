@@ -17,7 +17,6 @@ import 'package:flutter/material.dart';
 // import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'services/session_cache.dart';
 import 'services/startup_tasks.dart';
 import 'services/db_utils.dart'; // normalizeEmailForPath helper
 import 'services/user_setup.dart'; // ensureUserSetup helper

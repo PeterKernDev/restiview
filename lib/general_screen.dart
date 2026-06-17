@@ -925,7 +925,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                         children: <Widget>[
                           if (_restaurantOptions.length > 1)
                             DropdownButtonFormField<NearbyRestaurant>(
-                              value: _selectedGeoRestaurant,
+                              initialValue: _selectedGeoRestaurant,
                               items: _restaurantOptions
                                   .map(
                                     (NearbyRestaurant r) =>
@@ -982,7 +982,7 @@ class _GeneralScreenState extends State<GeneralScreen> {
                             )
                           else if (_searchDoneNoResults)
                             DropdownButtonFormField<String>(
-                              value: null,
+                              initialValue: null,
                               hint: const Text('No restaurants found nearby'),
                               items: <DropdownMenuItem<String>>[
                                 const DropdownMenuItem<String>(
