@@ -15,6 +15,7 @@ import 'top_screen.dart';
 import 'services/session_cache.dart';
 import 'custom_values_screen.dart';
 import 'services/audit_info.dart';
+import 'services/db_utils.dart';
 import 'services/friend_event_audit.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -70,7 +71,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _deleteAccount([String? reason]) async {
     final user = FirebaseAuth.instance.currentUser;
     final uid = user?.uid;
-    final email = SessionCache.userEmail;
+    // Prefer the Auth object's email — it is authoritative and never stale.
+    // Fall back to SessionCache only if Auth email is somehow absent.
+    final email = (user?.email?.isNotEmpty == true)
+        ? user!.email!
+        : SessionCache.userEmail;
     if (uid == null || user == null) return;
 
     // Write audit record before deleting user
@@ -89,8 +94,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     try {
-      // Delete database node first
+      // Delete database nodes — users/, users_by_email/, public_profiles/
       await FirebaseDatabase.instance.ref('users/$uid').remove();
+      final normEmail = normalizeEmailForPath(email);
+      if (normEmail.isNotEmpty) {
+        await FirebaseDatabase.instance.ref('users_by_email/$normEmail').remove();
+      }
+      await FirebaseDatabase.instance.ref('public_profiles/$uid').remove();
 
       // Attempt to delete the auth user - may require re-authentication
       try {

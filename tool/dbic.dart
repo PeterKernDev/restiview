@@ -30,6 +30,7 @@ const String _dbUrl = 'https://restiview-bb851.firebaseio.com';
 const List<String> _scopes = [
   'https://www.googleapis.com/auth/firebase.database',
   'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/cloud-platform', // needed for Firebase Auth user lookup
 ];
 
 // ─── Good-for tag count (must match app constant) ────────────────────────────
@@ -119,6 +120,8 @@ class DbicChecker {
   final _normToUid  = <String, String>{};
   final _emailToUid = <String, String>{};
   Map<String, dynamic> _ubeRaw = {};
+  final _ppUids     = <String>{};    // UIDs seen in public_profiles
+  final _usersUids  = <String>{};    // UIDs seen in users/
 
   // Stats
   int ubeUsers = 0, publicProfiles = 0;
@@ -132,7 +135,7 @@ class DbicChecker {
 
   Future<void> run() async {
     if (!await _preflight()) return;
-    print('Running 6 check sections against the live database...');
+    print('Running 7 check sections against the live database...');
     print('');
     await _checkUsersbyEmail();
     await _checkPublicProfiles();
@@ -140,6 +143,7 @@ class DbicChecker {
     await _checkAuditInfo();
     await _checkFriendAuditNodes();
     await _checkAllUsersOwnData();
+    await _checkStaleUBE();
     print('');
     print('All sections complete.');
 
@@ -348,6 +352,7 @@ class DbicChecker {
     for (final e in data.entries) {
       publicProfiles++;
       final uid = e.key.toString();
+      _ppUids.add(uid);
       if (e.value is! Map) {
         _err('PUBLIC_PROFILES', 'public_profiles/$uid', 'Value is not a Map'); continue;
       }
@@ -489,6 +494,7 @@ class DbicChecker {
     }
     for (final entry in raw.entries) {
       final uid = entry.key.toString();
+      _usersUids.add(uid);
       if (entry.value is! Map) continue;
       final userData = Map<String, dynamic>.from(entry.value as Map);
       _checkUserSettings(uid, userData);
@@ -784,20 +790,213 @@ class DbicChecker {
     }
   }
 
-  // ── G. Apply auto-fixes (interactive) ──────────────────────────────────────
+  // ── G. Stale users_by_email ────────────────────────────────────────────────
+
+  Future<void> _checkStaleUBE() async {
+    _log('[G/7] users_by_email (stale) — cross-checking UBE against Auth and users/ tree...');
+
+    final authUids = await _lookupAuthUids(_knownUids.toList());
+    if (authUids == null) {
+      _log('   → Auth lookup unavailable — skipping stale UBE detection');
+      return;
+    }
+
+    // Collect emails whose UID lookup found no Auth match — look them up by email
+    // to catch cases where the UBE uid is stale/mismatched.
+    final emailsToRecheck = <String>[];
+    for (final entry in _ubeRaw.entries) {
+      if (entry.value is! Map) continue;
+      final data  = Map<String, dynamic>.from(entry.value as Map);
+      final uid   = data['uid']?.toString() ?? '';
+      final email = data['email']?.toString() ?? '';
+      if (uid.isEmpty || email.isEmpty) continue;
+      if (!authUids.contains(uid)) emailsToRecheck.add(email);
+    }
+    // emailToAuthUid: email (lowercase) → real Auth UID for accounts that exist
+    final emailToAuthUid = emailsToRecheck.isEmpty
+        ? <String, String>{}
+        : (await _lookupAuthByEmails(emailsToRecheck) ?? <String, String>{});
+
+    int ghostCount = 0, authOnlyCount = 0, dataOnlyCount = 0;
+    for (final entry in _ubeRaw.entries) {
+      final norm  = entry.key.toString();
+      if (entry.value is! Map) continue;
+      final data  = Map<String, dynamic>.from(entry.value as Map);
+      final uid   = data['uid']?.toString() ?? '';
+      final email = data['email']?.toString() ?? '';
+      if (uid.isEmpty) continue;
+
+      // Auth exists if UID matched directly OR email resolved to an Auth account
+      final authUidForEmail = emailToAuthUid[email.toLowerCase()];
+      final hasAuth = authUids.contains(uid) || authUidForEmail != null;
+      final hasUser = _usersUids.contains(uid);
+
+      // If Auth exists under a different UID, surface that mismatch in the message
+      final uidMismatch = authUidForEmail != null && authUidForEmail != uid
+          ? '  ⚠ UBE uid=$uid but Auth uid=$authUidForEmail'
+          : '';
+
+      final fixBase = {'norm': norm, 'uid': uid, 'email': email,
+                       'hasProfile': _ppUids.contains(uid).toString()};
+
+      if (!hasAuth && !hasUser) {
+        ghostCount++;
+        _err('STALE_UBE_GHOST', 'users_by_email/$norm',
+            'Ghost — no Auth account and no users/ record  (email=$email)',
+            fixable: true, fixAction: 'delete', fixData: fixBase);
+      } else if (hasAuth && !hasUser) {
+        authOnlyCount++;
+        _err('STALE_UBE_AUTH_ONLY', 'users_by_email/$norm',
+            'Auth account exists but no users/ data  (email=$email)$uidMismatch',
+            fixable: true, fixAction: 'delete', fixData: fixBase);
+      } else if (!hasAuth && hasUser) {
+        dataOnlyCount++;
+        _err('STALE_UBE_DATA_ONLY', 'users_by_email/$norm',
+            'users/ data exists but Auth account is gone — user locked out permanently  (email=$email)',
+            fixable: true, fixAction: 'delete', fixData: fixBase);
+      }
+    }
+    _log('   → $ghostCount ghost  |  $authOnlyCount auth-only  |  $dataOnlyCount data-only');
+  }
+
+  /// Batch-lookup UIDs in Firebase Auth via the Identity Toolkit REST API.
+  /// Returns the set of UIDs that exist in Auth, or null if the lookup failed
+  /// (to avoid false positives — callers should skip the check on null).
+  Future<Set<String>?> _lookupAuthUids(List<String> uids) async {
+    if (uids.isEmpty) return {};
+    const projectId = 'restiview-bb851';
+    const url       = 'https://identitytoolkit.googleapis.com/v1/projects/$projectId/accounts:lookup';
+    final found     = <String>{};
+
+    for (int i = 0; i < uids.length; i += 100) {
+      final chunk = uids.sublist(i, (i + 100).clamp(0, uids.length));
+      try {
+        final resp = await http.post(
+          Uri.parse(url),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: json.encode({'localId': chunk}),
+        ).timeout(const Duration(seconds: 25));
+
+        if (resp.statusCode == 200) {
+          final body = json.decode(resp.body) as Map<String, dynamic>;
+          final users = body['users'];
+          if (users is List) {
+            for (final u in users) {
+              if (u is Map) found.add(u['localId']?.toString() ?? '');
+            }
+          }
+          // A response with no 'users' key means none of the chunk UIDs exist — valid.
+        } else if (resp.statusCode == 401 || resp.statusCode == 403) {
+          _log('   WARN: Firebase Auth lookup — insufficient permissions (HTTP ${resp.statusCode}).');
+          _log('         The service account may need the "Firebase Authentication Admin" role.');
+          return null;
+        } else {
+          final snippet = resp.body.length > 200 ? resp.body.substring(0, 200) : resp.body;
+          _log('   WARN: Firebase Auth lookup — HTTP ${resp.statusCode}: $snippet');
+          return null;
+        }
+      } on TimeoutException {
+        _log('   WARN: Firebase Auth lookup timed out — skipping stale UBE check');
+        return null;
+      } on SocketException catch (e) {
+        _log('   WARN: Firebase Auth lookup network error — $e');
+        return null;
+      }
+    }
+    return found;
+  }
+
+  /// Batch-lookup emails in Firebase Auth.
+  /// Returns a map of lowercased email → Auth UID for accounts that exist,
+  /// or null if the lookup failed.
+  Future<Map<String, String>?> _lookupAuthByEmails(List<String> emails) async {
+    if (emails.isEmpty) return {};
+    const projectId = 'restiview-bb851';
+    const url       = 'https://identitytoolkit.googleapis.com/v1/projects/$projectId/accounts:lookup';
+    final found     = <String, String>{};
+
+    for (int i = 0; i < emails.length; i += 100) {
+      final chunk = emails.sublist(i, (i + 100).clamp(0, emails.length));
+      try {
+        final resp = await http.post(
+          Uri.parse(url),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: json.encode({'email': chunk}),
+        ).timeout(const Duration(seconds: 25));
+
+        if (resp.statusCode == 200) {
+          final body = json.decode(resp.body) as Map<String, dynamic>;
+          final users = body['users'];
+          if (users is List) {
+            for (final u in users) {
+              if (u is Map) {
+                final authUid   = u['localId']?.toString() ?? '';
+                final authEmail = u['email']?.toString().toLowerCase() ?? '';
+                if (authUid.isNotEmpty && authEmail.isNotEmpty) {
+                  found[authEmail] = authUid;
+                }
+              }
+            }
+          }
+        } else if (resp.statusCode == 401 || resp.statusCode == 403) {
+          _log('   WARN: Firebase Auth email lookup — insufficient permissions (HTTP ${resp.statusCode}).');
+          return null;
+        } else {
+          final snippet = resp.body.length > 200 ? resp.body.substring(0, 200) : resp.body;
+          _log('   WARN: Firebase Auth email lookup — HTTP ${resp.statusCode}: $snippet');
+          return null;
+        }
+      } on TimeoutException {
+        _log('   WARN: Firebase Auth email lookup timed out');
+        return null;
+      } on SocketException catch (e) {
+        _log('   WARN: Firebase Auth email lookup network error — $e');
+        return null;
+      }
+    }
+    return found;
+  }
 
   Future<void> _applyFixes() async {
     final fixable = _errors.where((e) => e.fixable && e.fixData != null).toList();
     if (fixable.isEmpty) { print('\nNo auto-fixable issues found — nothing to do.'); return; }
 
-    // Group by category
+    // ── Stale UBE — 3 phases, each entry offered individually ───────────────
+    const staleCategories = {'STALE_UBE_GHOST', 'STALE_UBE_AUTH_ONLY', 'STALE_UBE_DATA_ONLY'};
+    final others = fixable.where((e) => !staleCategories.contains(e.category)).toList();
+
+    await _processStaleUbePhase(
+      fixable.where((e) => e.category == 'STALE_UBE_GHOST').toList(),
+      'PHASE 1/3 — GHOST  (no Auth account, no users/ data)',
+      'These entries are completely dead — nothing exists for this UID anywhere.',
+      offerUsersNode: false,
+      warnAuthExists: false,
+    );
+    await _processStaleUbePhase(
+      fixable.where((e) => e.category == 'STALE_UBE_AUTH_ONLY').toList(),
+      'PHASE 2/3 — AUTH ONLY  (Auth account exists, no users/ data)',
+      'Partial signup — the Auth account still exists but no app data was written.',
+      offerUsersNode: false,
+      warnAuthExists: true,
+    );
+    await _processStaleUbePhase(
+      fixable.where((e) => e.category == 'STALE_UBE_DATA_ONLY').toList(),
+      'PHASE 3/3 — DATA ONLY  (users/ data exists, Auth account gone)',
+      'Auth account was deleted but DB data remains — this user can never log in again.',
+      offerUsersNode: true,
+      warnAuthExists: false,
+    );
+
+    // ── Other fixable errors — grouped by category ──────────────────────────
+    if (others.isEmpty) return;
+
     final byCategory = <String, List<_Error>>{};
-    for (final e in fixable) {
+    for (final e in others) {
       byCategory.putIfAbsent(e.category, () => []).add(e);
     }
 
     print('');
-    print('${fixable.length} fixable issue(s) across ${byCategory.length} category(ies).');
+    print('${others.length} other fixable issue(s) across ${byCategory.length} category(ies).');
     print('Answer y/n for each group:\n');
 
     for (final entry in byCategory.entries) {
@@ -821,6 +1020,64 @@ class DbicChecker {
       } else {
         print('  → Skipped.');
       }
+    }
+  }
+
+  /// Shows each stale UBE entry individually with a y/n prompt.
+  /// [offerUsersNode] — also prompt to delete `users/{uid}` (for DATA_ONLY phase).
+  /// [warnAuthExists] — print a notice that the Auth account is still live (AUTH_ONLY phase).
+  Future<void> _processStaleUbePhase(
+      List<_Error> items, String phaseTitle, String phaseNote,
+      {required bool offerUsersNode, required bool warnAuthExists}) async {
+    if (items.isEmpty) return;
+    print('');
+    print('─' * 62);
+    print('  $phaseTitle  (${items.length} entry(ies))');
+    print('  $phaseNote');
+    print('─' * 62);
+    for (final issue in items) {
+      final fd         = issue.fixData!;
+      final norm       = fd['norm']?.toString() ?? '';
+      final uid        = fd['uid']?.toString() ?? '';
+      final email      = fd['email']?.toString() ?? '';
+      final hasProfile = fd['hasProfile'] == 'true';
+      print('');
+      print('  Email : $email');
+      print('  UID   : $uid');
+      if (warnAuthExists) {
+        print('  ℹ  Auth account still exists — only DB-side data will be removed here.');
+      }
+      stdout.write('  Delete users_by_email/$norm? [y/n]: ');
+      final answer = stdin.readLineSync()?.trim().toLowerCase() ?? 'n';
+      if (answer != 'y') { print('  → Skipped.'); continue; }
+
+      final ok = await _delete('users_by_email/$norm');
+      _fixes.add(ok
+          ? 'DELETED: users_by_email/$norm  ($email)'
+          : 'FAILED:  DELETE users_by_email/$norm');
+
+      if (offerUsersNode) {
+        stdout.write('  Also delete users/$uid (all reviews, friends, data)? [y/n]: ');
+        final uAns = stdin.readLineSync()?.trim().toLowerCase() ?? 'n';
+        if (uAns == 'y') {
+          final uOk = await _delete('users/$uid');
+          _fixes.add(uOk
+              ? 'DELETED: users/$uid'
+              : 'FAILED:  DELETE users/$uid');
+        }
+      }
+
+      if (hasProfile) {
+        stdout.write('  Also delete public_profiles/$uid? [y/n]: ');
+        final ppAns = stdin.readLineSync()?.trim().toLowerCase() ?? 'n';
+        if (ppAns == 'y') {
+          final ppOk = await _delete('public_profiles/$uid');
+          _fixes.add(ppOk
+              ? 'DELETED: public_profiles/$uid'
+              : 'FAILED:  DELETE public_profiles/$uid');
+        }
+      }
+      print('  → Done.');
     }
   }
 

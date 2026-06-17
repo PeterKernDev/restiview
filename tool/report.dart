@@ -190,6 +190,23 @@ String? _maxIso(String? a, String? b) {
   return da.isAfter(db) ? a : b;
 }
 
+// ─── User record ──────────────────────────────────────────────────
+
+class _DeletedAccount {
+  final String deletedAt;   // ISO timestamp from audit record
+  final String displayName;
+  final String email;
+  final String uid;
+  final String comment;
+  _DeletedAccount({
+    required this.deletedAt,
+    required this.displayName,
+    required this.email,
+    required this.uid,
+    required this.comment,
+  });
+}
+
 // ─── User record ─────────────────────────────────────────────────────────────
 
 class _User {
@@ -369,6 +386,42 @@ class ActivityReporter {
     print('  $iosCount iOS users; rest default to android.');
   }
 
+  Future<List<_DeletedAccount>> _loadDeletedAccounts() async {
+    print('Loading deleted accounts...');
+    final raw = await _get('audit_info/account_deletions');
+    if (raw is! Map) { print('  (none found)'); return []; }
+    final result = <_DeletedAccount>[];
+    for (final ev in raw.values) {
+      if (ev is! Map) continue;
+      final m = Map<String, dynamic>.from(ev);
+      // timestamp may be int (ms) or ISO string
+      String deletedAt = '';
+      final ts = m['timestamp'];
+      if (ts is int) {
+        final dt = DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+        deletedAt = dt.toIso8601String();
+      } else if (ts is String && ts.isNotEmpty) {
+        deletedAt = ts;
+      }
+      final uid         = m['userId']?.toString()    ?? '';
+      final email       = m['userEmail']?.toString() ?? '';
+      final details     = m['details'] is Map ? Map<String, dynamic>.from(m['details'] as Map) : <String, dynamic>{};
+      final displayName = details['displayName']?.toString() ?? details['userName']?.toString() ?? '';
+      final comment     = details['reason']?.toString() ?? details['comment']?.toString() ?? details['note']?.toString() ?? '';
+      result.add(_DeletedAccount(
+        deletedAt:   deletedAt,
+        displayName: displayName,
+        email:       email,
+        uid:         uid,
+        comment:     comment,
+      ));
+    }
+    // Sort oldest deletion first
+    result.sort((a, b) => a.deletedAt.compareTo(b.deletedAt));
+    print('  ${result.length} deleted account record(s) found.');
+    return result;
+  }
+
   Future<void> _loadAuditEvents(List<_User> users) async {
     print('Loading audit events...');
     final uidIndex = {for (final u in users) u.uid: u};
@@ -403,6 +456,7 @@ class ActivityReporter {
     await _loadAuditEvents(users);
     await _loadHomeCountries(users);
     await _loadPlatforms(users);
+    final deletedAccounts = await _loadDeletedAccounts();
     print('');
 
     // ── Report banner (printed here so user count is known) ─────────────────
@@ -421,6 +475,7 @@ class ActivityReporter {
     } else {
       _printWeeklyReport(users);
     }
+    _printDeletedAccounts(deletedAccounts);
   }
 
   // ── Full report ──────────────────────────────────────────────────────────
@@ -593,6 +648,37 @@ class ActivityReporter {
         );
       }
     }
+    print('');
+  }
+
+  // ── Deleted accounts ──────────────────────────────────────────────
+
+  void _printDeletedAccounts(List<_DeletedAccount> accounts) {
+    _printSectionHeader('DELETED ACCOUNTS  (${accounts.length})');
+    if (accounts.isEmpty) {
+      print('   (none)');
+      print('');
+      return;
+    }
+    const dateW    = 13;
+    const nameW    = 22;
+    const emailW   = 34;
+    final header   = '${'Deleted'.padRight(dateW)}${'Display Name'.padRight(nameW)}${'Email'.padRight(emailW)}Comment';
+    final sep      = '─' * (header.length + 4);
+    print(sep);
+    print(header);
+    print(sep);
+    for (final a in accounts) {
+      final dateStr = a.deletedAt.isNotEmpty ? _fmtDate(a.deletedAt) : '---';
+      print(
+        '${dateStr.padRight(dateW)}'
+        '${_trunc(a.displayName.isNotEmpty ? a.displayName : '(unknown)', nameW - 1).padRight(nameW)}'
+        '${_trunc(a.email.isNotEmpty ? a.email : '(unknown)', emailW - 1).padRight(emailW)}'
+        '${a.comment}',
+      );
+      if (a.uid.isNotEmpty) print('${''.padRight(dateW + nameW)}UID: ${a.uid}');
+    }
+    print(sep);
     print('');
   }
 

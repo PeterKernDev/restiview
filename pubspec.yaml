@@ -4,7 +4,7 @@ name: restiview
 description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 2.0.6+46
+version: 2.0.9+49
 
 environment:
   sdk: ^3.9.2
@@ -81,22 +81,4 @@ flutter:
         - asset: fonts/Literata-BoldItalic.ttf
           weight: 700
           style: italic
-
-    - family: Faune
-      fonts:
-        - asset: fonts/Faune-TextRegular.otf
-        - asset: fonts/Faune-TextItalic.otf
-          style: italic
-        - asset: fonts/Faune-TextBold.otf
-          weight: 700
-        - asset: fonts/Faune-DisplayThin.otf
-          weight: 100
-        - asset: fonts/Faune-DisplayBlack.otf
-          weight: 900
-        - asset: fonts/Faune-DisplayBoldItalic.otf
-          weight: 700
-          style: italic
-
-    - family: FranklinGothicHeavy
-      fonts:
-        - asset: fonts/Franklin Gothic Heavy Regular.ttf
+    
